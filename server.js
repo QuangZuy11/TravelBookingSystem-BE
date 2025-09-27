@@ -12,6 +12,7 @@ app.use(express.json());
 app.get("/", (req, res) => {
   res.json({ message: "Hello from Express API 🚀" });
 });
+app.use('/api/auth', require('./routes/auth.routes'));
 
 mongoose
   .connect(process.env.MONGO_URI)
