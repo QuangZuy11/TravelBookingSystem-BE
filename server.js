@@ -13,6 +13,8 @@ app.get("/", (req, res) => {
   res.json({ message: "Hello from Express API 🚀" });
 });
 app.use('/api/auth', require('./routes/auth.routes'));
+app.use('/api/profiles', require('./routes/profile.routes'));
+
 
 mongoose
   .connect(process.env.MONGO_URI)
