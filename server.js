@@ -4,14 +4,28 @@ require("dotenv").config();
 
 const app = express();
 const mongoose = require("mongoose");
+
+// Import routes
+const tourRoutes = require('./routes/tourRoutes');
+const hotelRoutes = require('./routes/hotelRoutes');
+const flightRoutes = require('./routes/flightRoutes');
+const serviceProviderRoutes = require('./routes/serviceProviderRoutes');
+
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.get("/", (req, res) => {
   res.json({ message: "Hello from Express API 🚀" });
 });
+
+// Provider routes
+app.use('/api/tour', tourRoutes);
+app.use('/api/hotel', hotelRoutes);
+app.use('/api/flight', flightRoutes);
+app.use('/api/provider', serviceProviderRoutes);
 app.use('/api/auth', require('./routes/auth.routes'));
 app.use('/api/profiles', require('./routes/profile.routes'));
 
