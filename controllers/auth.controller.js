@@ -31,6 +31,8 @@ exports.register = async (req, res) => {
     }
 
     const defaultRole = await Role.findOne({ role_name: 'Traveler' });
+    console.log(defaultRole);
+    
     if (!defaultRole) {
       return res.status(500).json({ success: false, message: 'Default role not found' });
     }
@@ -102,6 +104,8 @@ exports.login = async (req, res) => {
       message: 'Đăng nhập thành công',
       data: {
         token,
+        role: user.role.role_name,
+        id: user.id,
         fullName: user.name,
         email: user.email,
       }
