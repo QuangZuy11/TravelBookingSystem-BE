@@ -9,10 +9,12 @@ const mongoose = require("mongoose");
 const tourRoutes = require('./routes/tourRoutes');
 const hotelRoutes = require('./routes/hotelRoutes');
 const flightRoutes = require('./routes/flightRoutes');
+const serviceProviderRoutes = require('./routes/serviceProviderRoutes');
 
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.get("/", (req, res) => {
@@ -23,6 +25,7 @@ app.get("/", (req, res) => {
 app.use('/api', tourRoutes);
 app.use('/api', hotelRoutes);
 app.use('/api', flightRoutes);
+app.use('/api', serviceProviderRoutes);
 app.use('/api/auth', require('./routes/auth.routes'));
 
 mongoose
