@@ -22,10 +22,10 @@ app.get("/", (req, res) => {
 });
 
 // Provider routes
-app.use('/api', tourRoutes);
-app.use('/api', hotelRoutes);
-app.use('/api', flightRoutes);
-app.use('/api', serviceProviderRoutes);
+app.use('/api/tour', tourRoutes);
+app.use('/api/hotel', hotelRoutes);
+app.use('/api/flight', flightRoutes);
+app.use('/api/provider', serviceProviderRoutes);
 app.use('/api/auth', require('./routes/auth.routes'));
 
 mongoose

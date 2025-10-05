@@ -5,6 +5,7 @@ const roomController = require('../controllers/roomController');
 
 // Provider hotel routes
 router.get('/provider/:providerId/hotels', hotelController.getProviderHotels);
+router.get('/provider/:providerId/hotels/:hotelId', hotelController.getHotelById);
 router.get('/provider/:providerId/hotel-statistics', hotelController.getHotelStatistics);
 router.post('/provider/:providerId/hotels', hotelController.createHotel);
 router.put('/provider/:providerId/hotels/:id', hotelController.updateHotel);

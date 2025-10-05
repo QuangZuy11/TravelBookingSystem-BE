@@ -20,6 +20,36 @@ exports.getProviderHotels = async (req, res) => {
     }
 };
 
+// Get hotel by ID
+exports.getHotelById = async (req, res) => {
+    try {
+        const hotel = await Hotel.findOne({
+            _id: req.params.hotelId,
+            providerId: req.params.providerId
+        }).populate({
+            path: 'reviews.userId',
+            select: 'name email'
+        });
+
+        if (!hotel) {
+            return res.status(404).json({
+                success: false,
+                error: 'Hotel not found'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: hotel
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: 'Server Error'
+        });
+    }
+};
+
 // Dashboard Statistics for Hotels
 exports.getHotelDashboardStats = async (req, res) => {
     try {
@@ -149,6 +179,8 @@ exports.getHotelStatistics = async (req, res) => {
 
 // Create new hotel
 exports.createHotel = async (req, res) => {
+    console.log(req.body);
+    
     try {
         const hotel = await Hotel.create({
             ...req.body,
