@@ -22,50 +22,57 @@ const hashPassword = async (password) => {
 // @desc    Register a new user
 // @route   POST /api/auth/register
 exports.register = async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, email, password, role_name } = req.body;
 
   try {
     let user = await User.findOne({ email });
     if (user) {
-      return res.status(400).json({ success: false, message: 'Người dùng đã tồn tại' });
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Người dùng đã tồn tại' 
+      });
     }
 
-    const defaultRole = await Role.findOne({ role_name: 'Traveler' });
-    if (!defaultRole) {
-      return res.status(500).json({ success: false, message: 'Default role not found' });
+    const role = await Role.findOne({ role_name: role_name || 'Traveler' });
+    if (!role) {
+      return res.status(500).json({ 
+        success: false, 
+        message: `Role ${role_name} không tồn tại` 
+      });
     }
     
     user = new User({
       name,
       email,
       password: await hashPassword(password),
-      role: defaultRole._id,
+      role: role._id,
     });
     await user.save();
     
     const token = generateToken({
       user: {
         id: user.id,
-        role: defaultRole.role_name
+        role: role.role_name
       }
     });
 
-    // Tạo user object để trả về (không bao gồm password)
-    const userObject = user.toObject();
-    delete userObject.password;
-    
-    res.status(201).json({
+    res.status(200).json({
       success: true,
       message: 'Đăng ký thành công',
       data: {
         token,
-        user: userObject
+        fullName: user.name,
+        email: user.email,
+        role: role.role_name
       }
     });
     
   } catch (err) {
     console.error(err.message);
-    res.status(500).json({ success: false, message: 'Lỗi máy chủ' });
+    res.status(500).json({ 
+      success: false, 
+      message: 'Lỗi máy chủ' 
+    });
   }
 };
 
@@ -93,7 +100,7 @@ exports.login = async (req, res) => {
       }
     });
 
-    // Tạo user object để trả về (không bao gồm password)
+  
     const userObject = user.toObject();
     delete userObject.password;
     
