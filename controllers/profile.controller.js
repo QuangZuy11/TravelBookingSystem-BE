@@ -32,34 +32,34 @@ exports.getMe = async (req, res) => {
   }
 };
 
-exports.updateMe = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { name, phone, email } = req.body;
+  exports.updateMe = async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const { name, phone, email } = req.body;
 
-    // Tìm user
-    let user = await User.findById(userId).select("-password").populate("role", "role_name");
-    if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      // Tìm user
+      let user = await User.findById(userId).select("-password").populate("role", "role_name");
+      if (!user) {
+        return res.status(404).json({ success: false, message: "User not found" });
+      }
+
+      // Cập nhật các trường
+      if (name) user.name = name;
+      if (phone) user.phone = phone;
+      if (email) user.email = email;
+
+      await user.save();
+
+      return res.status(200).json({
+        success: true,
+        message: "Cập nhật thông tin user thành công",
+        data: user,
+      });
+    } catch (err) {
+      console.error(err.message);
+      return res.status(500).json({ success: false, message: "Server Error" });
     }
-
-    // Cập nhật các trường
-    if (name) user.name = name;
-    if (phone) user.phone = phone;
-    if (email) user.email = email;
-
-    await user.save();
-
-    return res.status(200).json({
-      success: true,
-      message: "Cập nhật thông tin user thành công",
-      data: user,
-    });
-  } catch (err) {
-    console.error(err.message);
-    return res.status(500).json({ success: false, message: "Server Error" });
-  }
-};
+  };
 
 exports.updateMe = async (req, res) => {
   try {
