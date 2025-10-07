@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const hotelController = require('../controllers/hotelController');
-const roomController = require('../controllers/roomController');
+const hotelController = require('../controllers/service-provider/hotel/hotelController');
+const roomController = require('../controllers/service-provider/hotel/roomController');
 
 // Provider hotel routes
 router.get('/provider/:providerId/hotels', hotelController.getProviderHotels);
