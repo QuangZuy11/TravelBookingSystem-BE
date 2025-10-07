@@ -10,6 +10,7 @@ const tourRoutes = require('./routes/tourRoutes');
 const hotelRoutes = require('./routes/hotelRoutes');
 const flightRoutes = require('./routes/flightRoutes');
 const serviceProviderRoutes = require('./routes/serviceProviderRoutes');
+const travelerRoutes = require('./routes/traveler/hotel.routes');
 
 // Middleware
 app.use(cors());
@@ -20,6 +21,10 @@ app.use(express.urlencoded({ extended: true }));
 app.get("/", (req, res) => {
   res.json({ message: "Hello from Express API 🚀" });
 });
+
+/// Traveler routes
+app.use('/api/traveler', travelerRoutes);
+
 
 // Provider routes
 app.use('/api/tour', tourRoutes);
