@@ -1,94 +1,54 @@
 const mongoose = require("mongoose");
 
-const tourSchema = new mongoose.Schema({
-  provider_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "ServiceProvider",
-    required: true,
-  },
-  name: {
-    type: String,
-    required: true,
-  },
-  description: {
-    type: [String],
-    default: [],
-  },
-  destination: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Destination",
-    required: true,
-  },
-  duration: {
-    days: {
+const tourSchema = new mongoose.Schema(
+  {
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    description: {
+      type: [String],
+      required: true,
+    },
+    provider_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ServiceProvider",
+      required: true,
+    },
+    price: {
       type: Number,
       required: true,
     },
-    nights: {
-      type: Number,
+    duration_hours: {
+      type: String,
       required: true,
     },
-  },
-  price: {
-    type: Number,
-    required: true,
-  },
-  max_participants: {
-    type: Number,
-    required: true,
-  },
-  start_location: {
-    type: String,
-    required: true,
-  },
-  end_location: {
-    type: String,
-    required: true,
-  },
-  included_services: [
-    {
+    location: {
       type: String,
+      required: true,
+      trim: true,
     },
-  ],
-  itinerary: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Itinerary",
-  },
-  images: [
-    {
+    rating: {
       type: String,
+      default: "0",
     },
-  ],
-  rating: {
-    type: Number,
-    min: 0,
-    max: 5,
-    default: 0,
+    total_rating: {
+      type: String,
+      default: "0",
+    },
+    image: {
+      type: String,
+      required: true,
+    },
+    created_at: {
+      type: Date,
+      default: Date.now,
+    },
   },
-  status: {
-    type: String,
-    enum: ["active", "inactive", "cancelled"],
-    default: "active",
-  },
-  difficulty_level: {
-    type: String,
-    enum: ["easy", "moderate", "challenging"],
-    required: true,
-  },
-  tour_type: {
-    type: String,
-    enum: ["adventure", "cultural", "nature", "city", "beach", "mountain"],
-    required: true,
-  },
-  special_notes: String,
-  created_at: {
-    type: Date,
-    default: Date.now,
-  },
-  updated_at: {
-    type: Date,
-    default: Date.now,
-  },
-});
+  {
+    collection: "tours",
+  }
+);
 
 module.exports = mongoose.model("Tour", tourSchema);
