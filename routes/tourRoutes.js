@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const tourController = require('../controllers/tourController');
+const tourController = require('../controllers/service-provider/tour/tourController');
 
 // Provider Dashboard
 router.get('/provider/:providerId/dashboard', tourController.getProviderDashboardStats);

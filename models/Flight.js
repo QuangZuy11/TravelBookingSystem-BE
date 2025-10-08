@@ -1,126 +1,96 @@
 const mongoose = require('mongoose');
 
 const flightSchema = new mongoose.Schema({
-    providerId: {
+    service_provider_id: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'ServiceProvider',
         required: true
     },
-    flightNumber: {
+    flight_number: {
         type: String,
         required: true,
         unique: true
     },
-    airline: {
-        name: String,
-        code: String,
-        logo: String
+    airline_code: {
+        type: String,
+        required: true
     },
-    departure: {
-        airport: {
-            type: String,
-            required: true
-        },
-        city: {
-            type: String,
-            required: true
-        },
-        terminal: String,
-        date: {
-            type: Date,
-            required: true
-        },
-        time: {
-            type: String,
-            required: true
-        }
+    airline_name: {
+        type: String,
+        required: true
     },
-    arrival: {
-        airport: {
-            type: String,
-            required: true
-        },
-        city: {
-            type: String,
-            required: true
-        },
-        terminal: String,
-        date: {
-            type: Date,
-            required: true
-        },
-        time: {
-            type: String,
-            required: true
-        }
+    aircraft_type: {
+        type: String,
+        required: true
+    },
+    departure_airport: {
+        type: String,
+        required: true
+    },
+    arrival_airport: {
+        type: String,
+        required: true
+    },
+    departure_terminal: {
+        type: String
+    },
+    arrival_terminal: {
+        type: String
+    },
+    departure_time: {
+        type: Date,
+        required: true
+    },
+    arrival_time: {
+        type: Date,
+        required: true
     },
     duration: {
         type: String,
         required: true
     },
-    aircraft: {
+    flight_type: {
         type: String,
+        enum: ['domestic', 'international'],
         required: true
     },
-    capacity: {
-        economy: {
-            total: Number,
-            available: Number,
-            price: Number
+    days_of_week: [{
+        type: String,
+        enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    }],
+    baggage_policy: {
+        cabin: {
+            weight: Number,
+            dimensions: String
         },
-        business: {
-            total: Number,
-            available: Number,
-            price: Number
-        },
-        firstClass: {
-            total: Number,
-            available: Number,
-            price: Number
+        checked: {
+            weight: Number,
+            dimensions: String,
+            pieces: Number
         }
+    },
+    meal_service: {
+        type: Boolean,
+        default: false
+    },
+    wifi_available: {
+        type: Boolean,
+        default: false
+    },
+    entertainment_system: {
+        type: Boolean,
+        default: false
     },
     status: {
         type: String,
         enum: ['scheduled', 'delayed', 'cancelled', 'completed'],
         default: 'scheduled'
     },
-    amenities: [{
-        type: String
-    }],
-    baggageAllowance: {
-        carryOn: {
-            weight: Number,
-            unit: String
-        },
-        checked: {
-            weight: Number,
-            unit: String
-        }
-    },
-    mealOptions: [{
-        type: String
-    }],
-    bookings: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Booking'
-    }],
-    reviews: [{
-        userId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User'
-        },
-        rating: Number,
-        comment: String,
-        date: {
-            type: Date,
-            default: Date.now
-        }
-    }],
-    createdAt: {
+    created_at: {
         type: Date,
         default: Date.now
     },
-    updatedAt: {
+    updated_at: {
         type: Date,
         default: Date.now
     }

@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const Tour = require('../models/Tour');
+const Tour = require('../../../models/Tour');
 
 // Dashboard Statistics
 exports.getProviderDashboardStats = async (req, res) => {
