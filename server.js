@@ -6,11 +6,12 @@ const app = express();
 const mongoose = require("mongoose");
 
 // Import routes
-const tourRoutes = require('./routes/tourRoutes');
-const hotelRoutes = require('./routes/hotelRoutes');
-const flightRoutes = require('./routes/flightRoutes');
-const serviceProviderRoutes = require('./routes/serviceProviderRoutes');
-const travelerRoutes = require('./routes/traveler/hotel.routes');
+const tourRoutes = require("./routes/tourRoutes");
+const hotelRoutes = require("./routes/hotelRoutes");
+const flightRoutes = require("./routes/flightRoutes");
+const serviceProviderRoutes = require("./routes/serviceProviderRoutes");
+const travelerRoutes = require("./routes/traveler/hotel.routes");
+const adBookingRoutes = require("./routes/adBooking.routes");
 
 // Middleware
 app.use(cors());
@@ -23,17 +24,16 @@ app.get("/", (req, res) => {
 });
 
 /// Traveler routes
-app.use('/api/traveler', travelerRoutes);
-
-
+app.use("/api/traveler", travelerRoutes);
+//AD_booking
+app.use("/api/ad-bookings", adBookingRoutes);
 // Provider routes
-app.use('/api/tour', tourRoutes);
-app.use('/api/hotel', hotelRoutes);
-app.use('/api/flight', flightRoutes);
-app.use('/api/provider', serviceProviderRoutes);
-app.use('/api/auth', require('./routes/auth.routes'));
-app.use('/api/profiles', require('./routes/profile.routes'));
-
+app.use("/api/tour", tourRoutes);
+app.use("/api/hotel", hotelRoutes);
+app.use("/api/flight", flightRoutes);
+app.use("/api/provider", serviceProviderRoutes);
+app.use("/api/auth", require("./routes/auth.routes"));
+app.use("/api/profiles", require("./routes/profile.routes"));
 
 mongoose
   .connect(process.env.MONGO_URI)
