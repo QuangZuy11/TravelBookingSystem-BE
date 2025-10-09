@@ -18,6 +18,17 @@ const userSchema = new mongoose.Schema({
   phone: {
     type: String,
   },
+  gender: {
+    type: String,
+    enum: ['Nam', 'Nữ', 'Khác'],
+    default: 'Khác',
+  },
+  date_of_birth: {
+    type: Date,
+  },
+  city: {
+    type: String,
+  },
   role: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Role',

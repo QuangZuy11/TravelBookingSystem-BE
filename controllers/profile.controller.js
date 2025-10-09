@@ -64,18 +64,19 @@ exports.updateMe = async (req, res) => {
 exports.updateMe = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { name, phone, email } = req.body;
+    const { name, phone, email, gender, date_of_birth, city } = req.body;
 
-    // Tìm user
     let user = await User.findById(userId).select("-password").populate("role", "role_name");
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    // Cập nhật các trường
     if (name) user.name = name;
     if (phone) user.phone = phone;
     if (email) user.email = email;
+    if (gender) user.gender = gender;
+    if (city) user.city = city;
+    if (date_of_birth) user.date_of_birth = new Date(date_of_birth);
 
     await user.save();
 
