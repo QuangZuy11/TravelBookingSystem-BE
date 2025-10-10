@@ -24,7 +24,7 @@ app.get("/", (req, res) => {
 });
 
 /// Traveler routes
-app.use("/api/traveler-hotel", travelerRoutes);
+app.use("/api/traveler/hotels", travelerRoutes);
 //AD_booking
 app.use("/api/ad-bookings", adBookingRoutes);
 // Provider routes
