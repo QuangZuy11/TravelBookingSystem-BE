@@ -1,0 +1,388 @@
+/**
+ * Budget Breakdown Controller
+ * Quản lý chi tiết ngân sách cho tours
+ */
+
+const BudgetBreakdown = require('../../../models/budget-breakdown.model');
+const Tour = require('../../../models/tour.model');
+
+/**
+ * @route   POST /api/budget-breakdowns
+ * @desc    Tạo budget breakdown mới cho tour
+ * @access  Private (Provider)
+ */
+exports.createBudgetBreakdown = async (req, res) => {
+    try {
+        const {
+            itinerary_id,
+            category,
+            item_name,
+            unit_price,
+            quantity,
+            description,
+            is_included,
+            is_optional,
+            day_number,
+            activity_id,
+            supplier,
+            notes
+        } = req.body;
+
+        // Validate required fields
+        if (!itinerary_id || !category || !item_name || unit_price === undefined || !day_number) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp đầy đủ thông tin',
+                error: 'Missing required fields: itinerary_id, category, item_name, unit_price, day_number'
+            });
+        }
+
+        const Itinerary = require('../../../models/itinerary.model');
+        
+        // Validate itinerary exists
+        const itinerary = await Itinerary.findById(itinerary_id);
+        if (!itinerary) {
+            return res.status(404).json({
+                success: false,
+                message: 'Không tìm thấy lịch trình',
+                error: 'Itinerary not found'
+            });
+        }
+
+        // Create budget breakdown (total_price will be auto-calculated by pre-save hook)
+        const budgetBreakdown = new BudgetBreakdown({
+            itinerary_id,
+            category,
+            item_name,
+            unit_price,
+            quantity: quantity || 1,
+            total_price: (quantity || 1) * unit_price, // Will be recalculated by pre-save
+            description,
+            is_included: is_included !== undefined ? is_included : true,
+            is_optional: is_optional || false,
+            day_number,
+            activity_id: activity_id || null,
+            supplier: supplier || null,
+            notes
+        });
+
+        await budgetBreakdown.save();
+
+        console.log(`✅ Budget breakdown created: ${budgetBreakdown._id} for itinerary ${itinerary_id}`);
+
+        res.status(201).json({
+            success: true,
+            message: 'Tạo mục ngân sách thành công',
+            data: budgetBreakdown
+        });
+
+    } catch (error) {
+        console.error('❌ Error creating budget breakdown:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi server khi tạo ngân sách',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * @route   GET /api/budget-breakdowns/tour/:tourId
+ * @desc    Lấy danh sách budget breakdown của tour
+ * @access  Public
+ */
+exports.getTourBudgetBreakdown = async (req, res) => {
+    try {
+        const { tourId } = req.params;
+
+        // Validate tour exists
+        const tour = await Tour.findById(tourId);
+        if (!tour) {
+            return res.status(404).json({
+                success: false,
+                message: 'Không tìm thấy tour',
+                error: 'Tour not found'
+            });
+        }
+
+        // Get all budget items for this tour
+        const budgetItems = await BudgetBreakdown.find({ tour_id: tourId })
+            .sort({ category: 1, created_at: 1 });
+
+        // Calculate summary
+        const summary = {
+            total_cost: 0,
+            by_category: {
+                accommodation: 0,
+                transportation: 0,
+                meals: 0,
+                activities: 0,
+                guide: 0,
+                insurance: 0,
+                other: 0
+            },
+            included_cost: 0,
+            optional_cost: 0,
+            item_count: budgetItems.length
+        };
+
+        budgetItems.forEach(item => {
+            summary.total_cost += item.total_cost;
+            summary.by_category[item.category] += item.total_cost;
+            
+            if (item.is_included) {
+                summary.included_cost += item.total_cost;
+            } else {
+                summary.optional_cost += item.total_cost;
+            }
+        });
+
+        res.status(200).json({
+            success: true,
+            message: 'Lấy thông tin ngân sách thành công',
+            data: {
+                items: budgetItems,
+                summary
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error getting tour budget breakdown:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi server khi lấy thông tin ngân sách',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * @route   GET /api/budget-breakdowns/:id
+ * @desc    Lấy chi tiết một budget item
+ * @access  Public
+ */
+exports.getBudgetBreakdownById = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const budgetItem = await BudgetBreakdown.findById(id)
+            .populate('tour_id', 'title location duration_hours');
+
+        if (!budgetItem) {
+            return res.status(404).json({
+                success: false,
+                message: 'Không tìm thấy mục ngân sách',
+                error: 'Budget item not found'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: budgetItem
+        });
+
+    } catch (error) {
+        console.error('❌ Error getting budget breakdown:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi server',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * @route   PUT /api/budget-breakdowns/:id
+ * @desc    Cập nhật budget breakdown
+ * @access  Private (Provider)
+ */
+exports.updateBudgetBreakdown = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const {
+            category,
+            item_name,
+            cost_per_person,
+            quantity,
+            description,
+            is_included,
+            notes
+        } = req.body;
+
+        const budgetItem = await BudgetBreakdown.findById(id);
+        
+        if (!budgetItem) {
+            return res.status(404).json({
+                success: false,
+                message: 'Không tìm thấy mục ngân sách',
+                error: 'Budget item not found'
+            });
+        }
+
+        // Update fields
+        if (category) budgetItem.category = category;
+        if (item_name) budgetItem.item_name = item_name;
+        if (cost_per_person !== undefined) budgetItem.cost_per_person = cost_per_person;
+        if (quantity !== undefined) budgetItem.quantity = quantity;
+        if (description !== undefined) budgetItem.description = description;
+        if (is_included !== undefined) budgetItem.is_included = is_included;
+        if (notes !== undefined) budgetItem.notes = notes;
+
+        // Recalculate total cost
+        budgetItem.total_cost = budgetItem.cost_per_person * budgetItem.quantity;
+        budgetItem.updated_at = new Date();
+
+        await budgetItem.save();
+
+        console.log(`✅ Budget breakdown updated: ${id}`);
+
+        res.status(200).json({
+            success: true,
+            message: 'Cập nhật ngân sách thành công',
+            data: budgetItem
+        });
+
+    } catch (error) {
+        console.error('❌ Error updating budget breakdown:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi server khi cập nhật ngân sách',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * @route   DELETE /api/budget-breakdowns/:id
+ * @desc    Xóa budget breakdown
+ * @access  Private (Provider)
+ */
+exports.deleteBudgetBreakdown = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const budgetItem = await BudgetBreakdown.findById(id);
+        
+        if (!budgetItem) {
+            return res.status(404).json({
+                success: false,
+                message: 'Không tìm thấy mục ngân sách',
+                error: 'Budget item not found'
+            });
+        }
+
+        await BudgetBreakdown.findByIdAndDelete(id);
+
+        console.log(`✅ Budget breakdown deleted: ${id}`);
+
+        res.status(200).json({
+            success: true,
+            message: 'Xóa mục ngân sách thành công'
+        });
+
+    } catch (error) {
+        console.error('❌ Error deleting budget breakdown:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi server khi xóa ngân sách',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * @route   DELETE /api/budget-breakdowns/tour/:tourId
+ * @desc    Xóa tất cả budget items của tour
+ * @access  Private (Provider)
+ */
+exports.deleteTourBudgetBreakdown = async (req, res) => {
+    try {
+        const { tourId } = req.params;
+
+        const result = await BudgetBreakdown.deleteMany({ tour_id: tourId });
+
+        console.log(`✅ Deleted ${result.deletedCount} budget items for tour ${tourId}`);
+
+        res.status(200).json({
+            success: true,
+            message: `Đã xóa ${result.deletedCount} mục ngân sách`,
+            data: {
+                deletedCount: result.deletedCount
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error deleting tour budget breakdown:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi server khi xóa ngân sách',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * @route   GET /api/budget-breakdowns/tour/:tourId/summary
+ * @desc    Lấy tổng hợp ngân sách theo category
+ * @access  Public
+ */
+exports.getBudgetSummary = async (req, res) => {
+    try {
+        const { tourId } = req.params;
+
+        // Validate tour exists
+        const tour = await Tour.findById(tourId);
+        if (!tour) {
+            return res.status(404).json({
+                success: false,
+                message: 'Không tìm thấy tour',
+                error: 'Tour not found'
+            });
+        }
+
+        // Aggregate by category
+        const summary = await BudgetBreakdown.aggregate([
+            { $match: { tour_id: tour._id } },
+            {
+                $group: {
+                    _id: '$category',
+                    total_cost: { $sum: '$total_cost' },
+                    item_count: { $sum: 1 },
+                    items: {
+                        $push: {
+                            item_name: '$item_name',
+                            cost: '$total_cost',
+                            is_included: '$is_included'
+                        }
+                    }
+                }
+            },
+            { $sort: { total_cost: -1 } }
+        ]);
+
+        // Calculate grand total
+        const grandTotal = summary.reduce((sum, cat) => sum + cat.total_cost, 0);
+
+        res.status(200).json({
+            success: true,
+            message: 'Lấy tổng hợp ngân sách thành công',
+            data: {
+                tour_id: tourId,
+                tour_title: tour.title,
+                categories: summary,
+                grand_total: grandTotal,
+                total_items: summary.reduce((sum, cat) => sum + cat.item_count, 0)
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error getting budget summary:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi server',
+            error: error.message
+        });
+    }
+};
+
+module.exports = exports;

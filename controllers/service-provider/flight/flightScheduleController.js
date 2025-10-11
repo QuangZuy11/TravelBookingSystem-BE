@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
-const FlightSchedule = require('../../../models/FlightSchedule');
-const Flight = require('../../../models/Flight');
+const FlightSchedule = require('../../../models/flight-schedule.model');
+const Flight = require('../../../models/flight.model');
 
 // Get all schedules for a flight
 exports.getFlightSchedules = async (req, res) => {
