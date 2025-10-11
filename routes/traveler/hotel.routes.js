@@ -2,387 +2,99 @@ const express = require('express');
 const router = express.Router();
 const travelerHotel = require('../../controllers/traveler/hotel.controller');
 
-// ====================== ROUTES CHO FRONTEND SEARCH ======================
+/**
+ * Routes cho chức năng quản lý khách sạn - Traveler
+ * Base URL: /api/traveler/hotels
+ */
 
-// Route chính cho search và filter khách sạn (cho frontend)
-// GET /hotels/search?location=Hà Nội&checkIn=15/12/2024&checkOut=17/12/2024&adults=2&children=1&rooms=1&minPrice=500000&maxPrice=2000000&amenities=Spa,Wifi&category=4_star,5_star&page=1&limit=10&sortBy=rating&sortOrder=desc
+// =============================================================================
+// ROUTES CÔNG KHAI (Không cần authentication)
+// =============================================================================
+
+/**
+ * GET /api/traveler/hotels/search
+ * Tìm kiếm và lọc danh sách khách sạn
+ * Query params: location, checkIn, checkOut, guests, rooms, priceMin, priceMax, 
+ *               amenities, category, rating, page, limit, sortBy, sortOrder
+ */
 router.get('/search', travelerHotel.searchHotels);
 
-// Route để lấy các filter options cho sidebar (amenities, categories, price range)
-// GET /hotels/filter-options?location=Hà Nội
-router.get('/filter-options', travelerHotel.getFilterOptions);
+/**
+ * GET /api/traveler/hotels/featured
+ * Lấy danh sách khách sạn nổi bật
+ * Query params: limit (default: 6)
+ */
+router.get('/featured', travelerHotel.getFeaturedHotels);
 
-// Route để suggest locations khi user nhập vào ô search
-// GET /hotels/suggest?q=Hà
-router.get('/suggest', travelerHotel.suggestLocations);
+/**
+ * GET /api/traveler/hotels/amenities
+ * Lấy danh sách tất cả tiện nghi có sẵn (cho dropdown filter)
+ */
+router.get('/amenities', travelerHotel.getAvailableAmenities);
 
-// ====================== ROUTES CƠ BẢN ======================
+/**
+ * GET /api/traveler/hotels/locations
+ * Lấy danh sách địa điểm có sẵn (cho search suggestions)
+ */
+router.get('/locations', travelerHotel.getAvailableLocations);
 
-// Route để lấy tất cả khách sạn (không phân trang) - cho admin hoặc testing
-router.get('/all', travelerHotel.listHotels);
+/**
+ * GET /api/traveler/hotels/price-range
+ * Lấy khoảng giá min/max (cho price slider)
+ */
+router.get('/price-range', travelerHotel.getPriceRange);
 
-// Route để lấy danh sách khách sạn với phân trang cơ bản
-// GET /hotels?page=1&limit=10&category=5_star&status=active&city=hanoi&minRating=4
-router.get('/', travelerHotel.getHotelsWithPagination);
+/**
+ * GET /api/traveler/hotels/:hotelId
+ * Lấy chi tiết khách sạn theo ID
+ * Params: hotelId
+ */
+router.get('/:hotelId', travelerHotel.getHotelById);
 
-// Route để lấy thông tin chi tiết một khách sạn theo ID
-// GET /hotels/507f1f77bcf86cd799439011
-router.get('/:id', travelerHotel.getHotelById);
+// =============================================================================
+// ROUTES BẢO MẬT (Cần authentication) - Commented out for now
+// =============================================================================
 
-// ====================== ROUTES TÌM KIẾM NÂNG CAO ======================
+// Uncomment các routes này khi đã có authentication middleware
 
-// Route để tìm kiếm khách sạn theo từ khóa
-// GET /hotels/keyword/luxury?page=1&limit=10
-router.get('/keyword/:keyword', async (req, res) => {
-    try {
-        const { keyword } = req.params;
-        const { page = 1, limit = 10 } = req.query;
+// const authMiddleware = require('../../middleware/auth.middleware');
 
-        const filter = {
-            status: 'active',
-            $or: [
-                { name: new RegExp(keyword, 'i') },
-                { description: new RegExp(keyword, 'i') },
-                { 'address.city': new RegExp(keyword, 'i') },
-                { 'address.country': new RegExp(keyword, 'i') },
-                { amenities: new RegExp(keyword, 'i') }
-            ]
-        };
+/**
+ * POST /api/traveler/hotels/:hotelId/reviews
+ * Thêm đánh giá cho khách sạn
+ * Params: hotelId
+ * Body: { rating, comment }
+ * Require: Authentication
+ */
+// router.post('/:hotelId/reviews', authMiddleware, travelerHotel.addHotelReview);
 
-        const skip = (parseInt(page) - 1) * parseInt(limit);
-        const Hotel = require('../../models/hotel.model');
+/**
+ * GET /api/traveler/hotels/:hotelId/availability
+ * Kiểm tra phòng trống theo ngày
+ * Params: hotelId
+ * Query: checkIn, checkOut, rooms
+ * Require: Authentication
+ */
+// router.get('/:hotelId/availability', authMiddleware, travelerHotel.checkAvailability);
 
-        const totalHotels = await Hotel.countDocuments(filter);
-        const hotels = await Hotel.find(filter)
-            .populate('providerId', 'name email phone')
-            .sort({ rating: -1, bookingsCount: -1 })
-            .skip(skip)
-            .limit(parseInt(limit));
+/**
+ * POST /api/traveler/hotels/:hotelId/favorites
+ * Thêm khách sạn vào danh sách yêu thích
+ * Params: hotelId
+ * Require: Authentication
+ */
+// router.post('/:hotelId/favorites', authMiddleware, travelerHotel.addToFavorites);
 
-        const totalPages = Math.ceil(totalHotels / parseInt(limit));
+/**
+ * DELETE /api/traveler/hotels/:hotelId/favorites
+ * Xóa khách sạn khỏi danh sách yêu thích
+ * Params: hotelId
+ * Require: Authentication
+ */
+// router.delete('/:hotelId/favorites', authMiddleware, travelerHotel.removeFromFavorites);
 
-        res.status(200).json({
-            success: true,
-            message: `Tìm thấy ${totalHotels} khách sạn với từ khóa "${keyword}"`,
-            data: hotels,
-            pagination: {
-                currentPage: parseInt(page),
-                totalPages,
-                totalHotels,
-                hasNextPage: parseInt(page) < totalPages,
-                hasPrevPage: parseInt(page) > 1,
-                limit: parseInt(limit)
-            }
-        });
-
-    } catch (error) {
-        console.error('Lỗi khi tìm kiếm khách sạn:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Lỗi server khi tìm kiếm khách sạn',
-            error: error.message
-        });
-    }
-});
-
-// Route để lấy khách sạn theo thành phố
-// GET /hotels/city/hanoi?page=1&limit=10&category=4_star&minRating=4
-router.get('/city/:cityName', async (req, res) => {
-    try {
-        const { cityName } = req.params;
-        const { page = 1, limit = 10, category, minRating, sortBy = 'rating' } = req.query;
-
-        const filter = {
-            'address.city': new RegExp(cityName, 'i'),
-            status: 'active'
-        };
-
-        if (category) {
-            const categories = Array.isArray(category) ? category : category.split(',');
-            filter.category = { $in: categories };
-        }
-        if (minRating) filter.rating = { $gte: parseFloat(minRating) };
-
-        const skip = (parseInt(page) - 1) * parseInt(limit);
-        const Hotel = require('../../models/hotel.model');
-
-        // Tạo sort object
-        const sort = {};
-        switch (sortBy) {
-            case 'price':
-                sort['priceRange.min'] = 1;
-                break;
-            case 'priceDesc':
-                sort['priceRange.min'] = -1;
-                break;
-            case 'bookings':
-                sort.bookingsCount = -1;
-                break;
-            case 'rating':
-            default:
-                sort.rating = -1;
-                sort.bookingsCount = -1;
-                break;
-        }
-
-        const totalHotels = await Hotel.countDocuments(filter);
-        const hotels = await Hotel.find(filter)
-            .populate('providerId', 'name email phone')
-            .sort(sort)
-            .skip(skip)
-            .limit(parseInt(limit));
-
-        const totalPages = Math.ceil(totalHotels / parseInt(limit));
-
-        res.status(200).json({
-            success: true,
-            message: `Tìm thấy ${totalHotels} khách sạn tại ${cityName}`,
-            data: hotels,
-            pagination: {
-                currentPage: parseInt(page),
-                totalPages,
-                totalHotels,
-                hasNextPage: parseInt(page) < totalPages,
-                hasPrevPage: parseInt(page) > 1,
-                limit: parseInt(limit)
-            }
-        });
-
-    } catch (error) {
-        console.error('Lỗi khi lấy khách sạn theo thành phố:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Lỗi server khi lấy khách sạn theo thành phố',
-            error: error.message
-        });
-    }
-});
-
-// Route để lấy khách sạn theo danh mục (category/sao)
-// GET /hotels/category/5_star?page=1&limit=10&city=hanoi&minPrice=1000000&maxPrice=5000000
-router.get('/category/:categoryType', async (req, res) => {
-    try {
-        const { categoryType } = req.params;
-        const { page = 1, limit = 10, city, minPrice, maxPrice } = req.query;
-
-        // Kiểm tra category hợp lệ
-        const validCategories = ['1_star', '2_star', '3_star', '4_star', '5_star'];
-        if (!validCategories.includes(categoryType)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Danh mục khách sạn không hợp lệ. Phải là: ' + validCategories.join(', ')
-            });
-        }
-
-        const filter = {
-            category: categoryType,
-            status: 'active'
-        };
-
-        if (city) filter['address.city'] = new RegExp(city, 'i');
-        if (minPrice || maxPrice) {
-            filter['priceRange.min'] = {};
-            if (minPrice) filter['priceRange.min'].$gte = parseInt(minPrice);
-            if (maxPrice) filter['priceRange.min'].$lte = parseInt(maxPrice);
-        }
-
-        const skip = (parseInt(page) - 1) * parseInt(limit);
-        const Hotel = require('../../models/hotel.model');
-
-        const totalHotels = await Hotel.countDocuments(filter);
-        const hotels = await Hotel.find(filter)
-            .populate('providerId', 'name email phone')
-            .sort({ rating: -1, bookingsCount: -1 })
-            .skip(skip)
-            .limit(parseInt(limit));
-
-        const totalPages = Math.ceil(totalHotels / parseInt(limit));
-
-        res.status(200).json({
-            success: true,
-            message: `Tìm thấy ${totalHotels} khách sạn ${categoryType.replace('_', ' ')}`,
-            data: hotels,
-            pagination: {
-                currentPage: parseInt(page),
-                totalPages,
-                totalHotels,
-                hasNextPage: parseInt(page) < totalPages,
-                hasPrevPage: parseInt(page) > 1,
-                limit: parseInt(limit)
-            }
-        });
-
-    } catch (error) {
-        console.error('Lỗi khi lấy khách sạn theo danh mục:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Lỗi server khi lấy khách sạn theo danh mục',
-            error: error.message
-        });
-    }
-});
-
-// ====================== ROUTES ĐẶC BIỆT ======================
-
-// Route để lấy top khách sạn được đánh giá cao nhất
-// GET /hotels/top/rated?limit=10&city=hanoi
-router.get('/top/rated', async (req, res) => {
-    try {
-        const { limit = 10, city, category } = req.query;
-
-        const filter = {
-            status: 'active',
-            rating: { $gte: 4 } // Chỉ lấy khách sạn có rating >= 4
-        };
-
-        if (city) filter['address.city'] = new RegExp(city, 'i');
-        if (category) filter.category = category;
-
-        const Hotel = require('../../models/hotel.model');
-
-        const hotels = await Hotel.find(filter)
-            .populate('providerId', 'name email phone')
-            .sort({ rating: -1, bookingsCount: -1 })
-            .limit(parseInt(limit));
-
-        res.status(200).json({
-            success: true,
-            message: `Top ${hotels.length} khách sạn được đánh giá cao nhất`,
-            data: hotels
-        });
-
-    } catch (error) {
-        console.error('Lỗi khi lấy top khách sạn:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Lỗi server khi lấy top khách sạn',
-            error: error.message
-        });
-    }
-});
-
-// Route để lấy khách sạn phổ biến nhất (theo số lượng booking)
-// GET /hotels/top/popular?limit=10&city=hanoi
-router.get('/top/popular', async (req, res) => {
-    try {
-        const { limit = 10, city, category } = req.query;
-
-        const filter = {
-            status: 'active',
-            bookingsCount: { $gt: 0 }
-        };
-
-        if (city) filter['address.city'] = new RegExp(city, 'i');
-        if (category) filter.category = category;
-
-        const Hotel = require('../../models/hotel.model');
-
-        const hotels = await Hotel.find(filter)
-            .populate('providerId', 'name email phone')
-            .sort({ bookingsCount: -1, rating: -1 })
-            .limit(parseInt(limit));
-
-        res.status(200).json({
-            success: true,
-            message: `Top ${hotels.length} khách sạn phổ biến nhất`,
-            data: hotels
-        });
-
-    } catch (error) {
-        console.error('Lỗi khi lấy khách sạn phổ biến:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Lỗi server khi lấy khách sạn phổ biến',
-            error: error.message
-        });
-    }
-});
-
-// Route để lấy khách sạn mới nhất
-// GET /hotels/latest?limit=10
-router.get('/latest', async (req, res) => {
-    try {
-        const { limit = 10, city } = req.query;
-
-        const filter = { status: 'active' };
-        if (city) filter['address.city'] = new RegExp(city, 'i');
-
-        const Hotel = require('../../models/hotel.model');
-
-        const hotels = await Hotel.find(filter)
-            .populate('providerId', 'name email phone')
-            .sort({ createdAt: -1 })
-            .limit(parseInt(limit));
-
-        res.status(200).json({
-            success: true,
-            message: `${hotels.length} khách sạn mới nhất`,
-            data: hotels
-        });
-
-    } catch (error) {
-        console.error('Lỗi khi lấy khách sạn mới nhất:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Lỗi server khi lấy khách sạn mới nhất',
-            error: error.message
-        });
-    }
-});
-
-// ====================== ROUTES THỐNG KÊ ======================
-
-// Route để lấy thống kê tổng quan
-// GET /hotels/stats
-router.get('/stats/overview', async (req, res) => {
-    try {
-        const Hotel = require('../../models/hotel.model');
-
-        const stats = await Hotel.aggregate([
-            { $match: { status: 'active' } },
-            {
-                $group: {
-                    _id: null,
-                    totalHotels: { $sum: 1 },
-                    totalRooms: { $sum: '$totalRooms' },
-                    availableRooms: { $sum: '$availableRooms' },
-                    averageRating: { $avg: '$rating' },
-                    totalBookings: { $sum: '$bookingsCount' },
-                    totalRevenue: { $sum: '$revenue' }
-                }
-            }
-        ]);
-
-        const categoryStats = await Hotel.aggregate([
-            { $match: { status: 'active' } },
-            {
-                $group: {
-                    _id: '$category',
-                    count: { $sum: 1 },
-                    averagePrice: { $avg: '$priceRange.min' },
-                    averageRating: { $avg: '$rating' }
-                }
-            },
-            { $sort: { _id: 1 } }
-        ]);
-
-        res.status(200).json({
-            success: true,
-            message: 'Thống kê tổng quan khách sạn',
-            data: {
-                overview: stats[0] || {},
-                byCategory: categoryStats
-            }
-        });
-
-    } catch (error) {
-        console.error('Lỗi khi lấy thống kê:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Lỗi server khi lấy thống kê',
-            error: error.message
-        });
-    }
-});
+// =============================================================================
+// EXPORT ROUTER
+// =============================================================================
 
 module.exports = router;
