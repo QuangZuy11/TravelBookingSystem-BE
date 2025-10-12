@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const BookingPassenger = require('../../../models/BookingPassenger');
+const BookingPassenger = require('../../../models/booking-passenger.model');
 
 // Get all passengers for a booking
 exports.getBookingPassengers = async (req, res) => {

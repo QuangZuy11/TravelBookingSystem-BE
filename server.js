@@ -7,9 +7,13 @@ const mongoose = require("mongoose");
 
 // Import routes
 const tourRoutes = require("./routes/tourRoutes");
+const itineraryRoutes = require("./routes/itineraryRoutes");
+const budgetRoutes = require("./routes/budgetRoutes");
 const hotelRoutes = require("./routes/hotelRoutes");
 const flightRoutes = require("./routes/flightRoutes");
 const serviceProviderRoutes = require("./routes/serviceProviderRoutes");
+const serviceProviderAuthRoutes = require("./routes/serviceProviderAuthRoutes");
+const adminServiceProviderRoutes = require("./routes/admin/adminServiceProviderRoutes");
 const travelerRoutes = require("./routes/traveler/hotel.routes");
 const adBookingRoutes = require("./routes/adBooking.routes");
 
@@ -29,11 +33,17 @@ app.use("/api/traveler/hotels", travelerRoutes);
 app.use("/api/ad-bookings", adBookingRoutes);
 // Provider routes
 app.use("/api/tour", tourRoutes);
+app.use("/api/itineraries", itineraryRoutes);
+app.use("/api/budget-breakdowns", budgetRoutes);
 app.use("/api/hotel", hotelRoutes);
 app.use("/api/flight", flightRoutes);
 app.use("/api/provider", serviceProviderRoutes);
+// Auth routes
 app.use("/api/auth", require("./routes/auth.routes"));
+app.use("/api/auth/service-provider", serviceProviderAuthRoutes);
 app.use("/api/profiles", require("./routes/profile.routes"));
+// Admin routes
+app.use("/api/admin/service-providers", adminServiceProviderRoutes);
 
 mongoose
   .connect(process.env.MONGO_URI)

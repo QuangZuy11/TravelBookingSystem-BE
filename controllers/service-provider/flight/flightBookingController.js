@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
-const FlightBooking = require('../../../models/FlightBooking');
-const BookingPassenger = require('../../../models/BookingPassenger');
-const FlightSeat = require('../../../models/FlightSeat');
+const FlightBooking = require('../../../models/flight-booking.model');
+const BookingPassenger = require('../../../models/booking-passenger.model');
+const FlightSeat = require('../../../models/flight-seat.model');
 
 // Get all bookings for a flight
 exports.getFlightBookings = async (req, res) => {

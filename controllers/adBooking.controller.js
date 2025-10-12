@@ -1,5 +1,5 @@
-const AdBooking = require("../models/AdBooking");
-const Tour = require("../models/Tour");
+const AdBooking = require("../models/adbooking.model");
+const Tour = require("../models/tour.model");
 
 // Lấy danh sách quảng cáo đang active
 exports.getActiveAds = async (req, res) => {

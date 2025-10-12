@@ -1,0 +1,255 @@
+{
+  "serviceProviderRules": {
+    "description": "License rules cho Service Provider System",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-12",
+    
+    "serviceTypes": {
+      "hotel": {
+        "code": "hotel",
+        "name": "Khách sạn",
+        "icon": "🏨",
+        "maxLicenses": null,
+        "canAddLicense": true,
+        "description": "Có thể có nhiều licenses (mỗi khách sạn = 1 license)",
+        "validationMessage": "Hotel có thể có nhiều giấy phép"
+      },
+      "tour": {
+        "code": "tour",
+        "name": "Tour",
+        "icon": "🗺️",
+        "maxLicenses": 1,
+        "canAddLicense": false,
+        "description": "Chỉ có thể có 1 license duy nhất",
+        "validationMessage": "Tour chỉ được có 1 giấy phép duy nhất"
+      },
+      "flight": {
+        "code": "flight",
+        "name": "Hàng không",
+        "icon": "✈️",
+        "maxLicenses": 1,
+        "canAddLicense": false,
+        "description": "Chỉ có thể có 1 license duy nhất",
+        "validationMessage": "Flight chỉ được có 1 giấy phép duy nhất"
+      }
+    },
+    
+    "licenseStatuses": {
+      "pending": {
+        "code": "pending",
+        "label": "Chờ xác minh",
+        "color": "yellow",
+        "bgColor": "#fffbeb",
+        "borderColor": "#f59e0b",
+        "textColor": "#92400e",
+        "icon": "⏳",
+        "description": "Đang chờ admin xác minh"
+      },
+      "verified": {
+        "code": "verified",
+        "label": "Đã xác minh",
+        "color": "green",
+        "bgColor": "#f0fdf4",
+        "borderColor": "#10b981",
+        "textColor": "#065f46",
+        "icon": "✓",
+        "description": "Giấy phép đã được xác minh"
+      },
+      "rejected": {
+        "code": "rejected",
+        "label": "Bị từ chối",
+        "color": "red",
+        "bgColor": "#fef2f2",
+        "borderColor": "#ef4444",
+        "textColor": "#991b1b",
+        "icon": "✗",
+        "description": "Giấy phép bị từ chối"
+      }
+    },
+    
+    "apiEndpoints": {
+      "registration": {
+        "method": "POST",
+        "url": "/api/auth/service-provider/register",
+        "description": "Đăng ký Service Provider mới",
+        "bodyExample": {
+          "email": "company@example.com",
+          "password": "Pass123!",
+          "first_name": "John",
+          "last_name": "Doe",
+          "company_name": "ABC Travel",
+          "contact_person": "John Doe",
+          "company_email": "info@abc.com",
+          "company_phone": "0901234567",
+          "address": "123 Street, City",
+          "service_types": ["hotel", "tour"],
+          "licenses": [
+            {
+              "service_type": "hotel",
+              "license_number": "HTL-2024-001",
+              "documents": ["url1", "url2"]
+            },
+            {
+              "service_type": "tour",
+              "license_number": "TUR-2024-001",
+              "documents": ["url3"]
+            }
+          ]
+        }
+      },
+      "login": {
+        "method": "POST",
+        "url": "/api/auth/service-provider/login",
+        "description": "Đăng nhập Service Provider",
+        "bodyExample": {
+          "email": "company@example.com",
+          "password": "Pass123!"
+        }
+      },
+      "profile": {
+        "method": "GET",
+        "url": "/api/auth/service-provider/profile",
+        "description": "Lấy thông tin profile",
+        "requiresAuth": true
+      },
+      "addLicense": {
+        "method": "POST",
+        "url": "/api/admin/service-providers/:id/add-license",
+        "description": "Thêm license mới (CHỈ cho HOTEL)",
+        "requiresAuth": true,
+        "bodyExample": {
+          "service_type": "hotel",
+          "license_number": "HTL-2024-002",
+          "documents": ["url1", "url2"]
+        }
+      }
+    },
+    
+    "errorMessages": {
+      "tourMaxLicenses": {
+        "code": "TOUR_MAX_LICENSES",
+        "message": "Tour provider chỉ có thể đăng ký 1 license duy nhất",
+        "userMessage": "Tour chỉ được có 1 giấy phép. Vui lòng xóa các giấy phép thừa."
+      },
+      "flightMaxLicenses": {
+        "code": "FLIGHT_MAX_LICENSES",
+        "message": "Flight provider chỉ có thể đăng ký 1 license duy nhất",
+        "userMessage": "Flight chỉ được có 1 giấy phép. Vui lòng xóa các giấy phép thừa."
+      },
+      "duplicateLicenseNumber": {
+        "code": "DUPLICATE_LICENSE",
+        "message": "License number không được trùng lặp",
+        "userMessage": "Các license number phải khác nhau. Vui lòng kiểm tra lại."
+      },
+      "licenseExists": {
+        "code": "LICENSE_EXISTS",
+        "message": "License number đã được đăng ký bởi công ty khác",
+        "userMessage": "License number này đã được sử dụng. Vui lòng sử dụng số khác."
+      },
+      "onlyHotelCanAdd": {
+        "code": "ONLY_HOTEL_CAN_ADD",
+        "message": "Chỉ có thể thêm license cho service type hotel",
+        "userMessage": "Tour và Flight chỉ được có 1 license duy nhất, không thể thêm mới."
+      }
+    },
+    
+    "validationRules": {
+      "licenseNumber": {
+        "required": true,
+        "pattern": "^[A-Z]{3}-\\d{4}-\\d{3}$",
+        "patternExample": "HTL-2024-001",
+        "description": "Format: XXX-YYYY-NNN (VD: HTL-2024-001)",
+        "unique": true
+      },
+      "serviceTypes": {
+        "required": true,
+        "minLength": 1,
+        "allowedValues": ["hotel", "tour", "flight"]
+      },
+      "licenses": {
+        "required": true,
+        "minLength": 1,
+        "mustMatchServiceTypes": true,
+        "rules": {
+          "hotel": {
+            "min": 0,
+            "max": null
+          },
+          "tour": {
+            "min": 0,
+            "max": 1
+          },
+          "flight": {
+            "min": 0,
+            "max": 1
+          }
+        }
+      }
+    },
+    
+    "uiConfig": {
+      "registrationSteps": [
+        {
+          "step": 1,
+          "title": "Thông tin cá nhân",
+          "fields": ["email", "password", "first_name", "last_name"]
+        },
+        {
+          "step": 2,
+          "title": "Thông tin công ty",
+          "fields": ["company_name", "contact_person", "company_email", "company_phone", "address"]
+        },
+        {
+          "step": 3,
+          "title": "Loại hình dịch vụ",
+          "fields": ["service_types"],
+          "description": "Chọn các loại dịch vụ bạn muốn cung cấp"
+        },
+        {
+          "step": 4,
+          "title": "Giấy phép kinh doanh",
+          "fields": ["licenses"],
+          "description": "Cung cấp giấy phép cho từng loại dịch vụ",
+          "dynamic": true
+        }
+      ],
+      
+      "dashboardSections": {
+        "hotel": {
+          "title": "Danh sách Khách sạn",
+          "showAddButton": true,
+          "addButtonText": "➕ Thêm khách sạn mới",
+          "displayMode": "grid"
+        },
+        "tour": {
+          "title": "Giấy phép Tour",
+          "showAddButton": false,
+          "displayMode": "single",
+          "infoText": "ℹ️ Tour chỉ được có 1 license duy nhất"
+        },
+        "flight": {
+          "title": "Giấy phép Hàng không",
+          "showAddButton": false,
+          "displayMode": "single",
+          "infoText": "ℹ️ Flight chỉ được có 1 license duy nhất"
+        }
+      },
+      
+      "colors": {
+        "primary": "#3b82f6",
+        "success": "#10b981",
+        "warning": "#f59e0b",
+        "danger": "#ef4444",
+        "gray": "#6b7280"
+      }
+    },
+    
+    "helperFunctions": {
+      "validateLicenses": "function(serviceTypes, licenses) { ... }",
+      "canAddLicense": "function(serviceType) { return serviceType === 'hotel'; }",
+      "getLicensesByType": "function(licenses, serviceType) { return licenses.filter(l => l.service_type === serviceType); }",
+      "getStatusConfig": "function(status) { return licenseStatuses[status]; }",
+      "formatLicenseNumber": "function(type, year, number) { return `${type.toUpperCase().slice(0,3)}-${year}-${String(number).padStart(3, '0')}`; }"
+    }
+  }
+}

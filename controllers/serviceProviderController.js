@@ -1,4 +1,4 @@
-const ServiceProvider = require('../models/ServiceProvider');
+const ServiceProvider = require('../models/service-provider.model');
 
 // Get provider profile
 exports.getProviderProfile = async (req, res) => {
