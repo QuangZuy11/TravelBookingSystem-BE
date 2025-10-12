@@ -4,51 +4,127 @@ const tourController = require('../controllers/service-provider/tour/tourControl
 const tourBookingController = require('../controllers/service-provider/tour/tourBookingController');
 const tourDatesController = require('../controllers/service-provider/tour/tourDatesController');
 const itineraryController = require('../controllers/service-provider/tour/itineraryController');
+const { checkServiceProviderVerification } = require('../middlewares/verificationMiddleware');
 
 // ===== TOUR MANAGEMENT =====
+// Note: Add authentication middleware (authMiddleware) before deploying to production
 
 // Provider Dashboard
 router.get('/provider/:providerId/dashboard', tourController.getProviderDashboardStats);
 
-// Tour CRUD
+// Tour CRUD - READ operations (no verification required)
 router.get('/provider/:providerId/tours', tourController.getAllProviderTours);
-router.post('/provider/:providerId/tours', tourController.createTour);
 router.get('/provider/:providerId/tours/:tourId', tourController.getTourById);
-router.put('/provider/:providerId/tours/:tourId', tourController.updateTour);
-router.delete('/provider/:providerId/tours/:tourId', tourController.deleteTour);
-router.patch('/provider/:providerId/tours/:tourId/status', tourController.updateTourStatus);
 
-// ===== TOUR DATES MANAGEMENT (thay the Schedule) =====
+// Tour CRUD - CREATE/UPDATE/DELETE operations (require verified 'tour' license)
+router.post('/provider/:providerId/tours', 
+    // authMiddleware, // TODO: Add auth middleware
+    checkServiceProviderVerification('tour'),
+    tourController.createTour
+);
 
-// Them available dates
-router.post('/:tourId/dates', tourDatesController.addAvailableDate);
-router.post('/:tourId/dates/bulk', tourDatesController.addBulkDates);
+router.put('/provider/:providerId/tours/:tourId', 
+    // authMiddleware, // TODO: Add auth middleware
+    checkServiceProviderVerification('tour'),
+    tourController.updateTour
+);
 
-// Lay dates
+router.delete('/provider/:providerId/tours/:tourId', 
+    // authMiddleware, // TODO: Add auth middleware
+    checkServiceProviderVerification('tour'),
+    tourController.deleteTour
+);
+
+router.patch('/provider/:providerId/tours/:tourId/status', 
+    // authMiddleware, // TODO: Add auth middleware
+    checkServiceProviderVerification('tour'),
+    tourController.updateTourStatus
+);
+
+// ===== TOUR DATES MANAGEMENT =====
+
+// Add dates - Requires verification
+router.post('/:tourId/dates', 
+    // authMiddleware, // TODO: Add auth middleware
+    checkServiceProviderVerification('tour'),
+    tourDatesController.addAvailableDate
+);
+
+router.post('/:tourId/dates/bulk', 
+    // authMiddleware, // TODO: Add auth middleware
+    checkServiceProviderVerification('tour'),
+    tourDatesController.addBulkDates
+);
+
+// Get dates - No verification required
 router.get('/:tourId/dates', tourDatesController.getTourDates);
 router.get('/:tourId/dates/:date/availability', tourDatesController.checkDateAvailability);
 
-// Cap nhat & xoa dates
-router.put('/:tourId/dates/:date', tourDatesController.updateDate);
-router.delete('/:tourId/dates/:date', tourDatesController.deleteDate);
-router.put('/:tourId/dates/:date/cancel', tourDatesController.cancelDate);
+// Update/Delete dates - Requires verification
+router.put('/:tourId/dates/:date', 
+    // authMiddleware, // TODO: Add auth middleware
+    checkServiceProviderVerification('tour'),
+    tourDatesController.updateDate
+);
 
-// Search tours by date
+router.delete('/:tourId/dates/:date', 
+    // authMiddleware, // TODO: Add auth middleware
+    checkServiceProviderVerification('tour'),
+    tourDatesController.deleteDate
+);
+
+router.put('/:tourId/dates/:date/cancel', 
+    // authMiddleware, // TODO: Add auth middleware
+    checkServiceProviderVerification('tour'),
+    tourDatesController.cancelDate
+);
+
+// Search tours by date - No verification required
 router.get('/search/by-date', tourDatesController.searchToursByDate);
 
 // ===== ITINERARY MANAGEMENT =====
 
-// Itinerary CRUD
-router.post('/:tourId/itineraries', itineraryController.createItinerary);
+// Itinerary CRUD - READ operations
 router.get('/:tourId/itineraries', itineraryController.getTourItineraries);
 router.get('/itineraries/:id', itineraryController.getItineraryById);
-router.put('/itineraries/:id', itineraryController.updateItinerary);
-router.delete('/itineraries/:id', itineraryController.deleteItinerary);
 
-// Itinerary Activities
-router.post('/itineraries/:id/activities', itineraryController.addActivity);
-router.put('/itineraries/:id/activities/:activityId', itineraryController.updateActivity);
-router.delete('/itineraries/:id/activities/:activityId', itineraryController.deleteActivity);
+// Itinerary CRUD - CREATE/UPDATE/DELETE operations (require verified 'tour' license)
+router.post('/:tourId/itineraries', 
+    // authMiddleware, // TODO: Add auth middleware
+    checkServiceProviderVerification('tour'),
+    itineraryController.createItinerary
+);
+
+router.put('/itineraries/:id', 
+    // authMiddleware, // TODO: Add auth middleware
+    checkServiceProviderVerification('tour'),
+    itineraryController.updateItinerary
+);
+
+router.delete('/itineraries/:id', 
+    // authMiddleware, // TODO: Add auth middleware
+    checkServiceProviderVerification('tour'),
+    itineraryController.deleteItinerary
+);
+
+// Itinerary Activities - Require verification
+router.post('/itineraries/:id/activities', 
+    // authMiddleware, // TODO: Add auth middleware
+    checkServiceProviderVerification('tour'),
+    itineraryController.addActivity
+);
+
+router.put('/itineraries/:id/activities/:activityId', 
+    // authMiddleware, // TODO: Add auth middleware
+    checkServiceProviderVerification('tour'),
+    itineraryController.updateActivity
+);
+
+router.delete('/itineraries/:id/activities/:activityId', 
+    // authMiddleware, // TODO: Add auth middleware
+    checkServiceProviderVerification('tour'),
+    itineraryController.deleteActivity
+);
 
 // Itinerary Budget Breakdown
 router.post('/itineraries/:id/budget', itineraryController.addBudgetBreakdown);

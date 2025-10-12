@@ -316,7 +316,7 @@ exports.cancelBooking = async (req, res) => {
 
     // Check access rights
     const isCustomer = req.user.role === 'customer' && booking.customer_id.toString() === req.user._id.toString();
-    const isProvider = req.user.role === 'service_provider' && booking.provider_id.toString() === req.user.service_provider_id.toString();
+    const isProvider = req.user.role === 'ServiceProvider' && booking.provider_id.toString() === req.user.service_provider_id.toString();
 
     if (!isCustomer && !isProvider) {
       return res.status(403).json({
