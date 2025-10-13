@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
-const Tour = require('../models/Tour');
+const Tour = require('../../../models/tour.model');
+const Review = require('../../../models/review.model');
+const Itinerary = require('../../../models/itinerary.model');
 
 // Dashboard Statistics
 exports.getProviderDashboardStats = async (req, res) => {
@@ -102,16 +104,21 @@ exports.createTour = async (req, res) => {
     try {
         const tour = await Tour.create({
             ...req.body,
-            providerId: req.params.providerId
+            provider_id: req.params.providerId
         });
         res.status(201).json({
             success: true,
             data: tour
         });
     } catch (error) {
+        console.error('❌ Tour creation error:', error);
         res.status(400).json({
             success: false,
-            error: error.message
+            error: error.message,
+            details: error.errors ? Object.keys(error.errors).map(key => ({
+                field: key,
+                message: error.errors[key].message
+            })) : undefined
         });
     }
 };
@@ -120,7 +127,7 @@ exports.createTour = async (req, res) => {
 exports.updateTour = async (req, res) => {
     try {
         const tour = await Tour.findOneAndUpdate(
-            { _id: req.params.id, providerId: req.params.providerId },
+            { _id: req.params.tourId, provider_id: req.params.providerId },
             req.body,
             { new: true, runValidators: true }
         );
@@ -134,12 +141,18 @@ exports.updateTour = async (req, res) => {
 
         res.status(200).json({
             success: true,
+            message: 'Tour updated successfully',
             data: tour
         });
     } catch (error) {
+        console.error('❌ Update tour error:', error);
         res.status(400).json({
             success: false,
-            error: error.message
+            error: error.message,
+            details: error.errors ? Object.keys(error.errors).map(key => ({
+                field: key,
+                message: error.errors[key].message
+            })) : undefined
         });
     }
 };
@@ -149,8 +162,19 @@ exports.getTourById = async (req, res) => {
     try {
         const tour = await Tour.findOne({
             _id: req.params.tourId,
-            providerId: req.params.providerId
+            provider_id: req.params.providerId
+        })
+        .populate('provider_id', 'business_name email phone rating')
+        .populate({
+            path: 'itineraries',
+            select: 'title description duration days activities'
         });
+        // Note: Reviews populate removed - will be added in separate endpoint
+        // .populate({
+        //     path: 'reviews',
+        //     select: 'rating comment traveler_id created_at',
+        //     options: { limit: 5, sort: '-created_at' }
+        // });
 
         if (!tour) {
             return res.status(404).json({
@@ -164,9 +188,11 @@ exports.getTourById = async (req, res) => {
             data: tour
         });
     } catch (error) {
+        console.error('❌ Get tour error:', error);
         res.status(500).json({
             success: false,
-            error: 'Server Error'
+            error: 'Server Error',
+            message: error.message
         });
     }
 };
@@ -174,17 +200,41 @@ exports.getTourById = async (req, res) => {
 // Get all tours for a provider
 exports.getAllProviderTours = async (req, res) => {
     try {
-        const tours = await Tour.find({ providerId: req.params.providerId });
+        const { providerId } = req.params;
+        const { status, category, difficulty, page = 1, limit = 10, sort = '-created_at' } = req.query;
+        
+        // Build query
+        const query = { provider_id: providerId };
+        
+        if (status) query.status = status;
+        if (category) query.category = category;
+        if (difficulty) query.difficulty = difficulty;
+        
+        // Execute query with pagination
+        const skip = (page - 1) * limit;
+        const tours = await Tour.find(query)
+            .sort(sort)
+            .skip(skip)
+            .limit(parseInt(limit))
+            .populate('provider_id', 'business_name email phone')
+            .select('-__v');
+        
+        const total = await Tour.countDocuments(query);
         
         res.status(200).json({
             success: true,
             count: tours.length,
+            total,
+            page: parseInt(page),
+            pages: Math.ceil(total / limit),
             data: tours
         });
     } catch (error) {
+        console.error('❌ Get tours error:', error);
         res.status(500).json({
             success: false,
-            error: 'Server Error'
+            error: 'Server Error',
+            message: error.message
         });
     }
 };
@@ -193,8 +243,8 @@ exports.getAllProviderTours = async (req, res) => {
 exports.deleteTour = async (req, res) => {
     try {
         const tour = await Tour.findOneAndDelete({
-            _id: req.params.id,
-            providerId: req.params.providerId
+            _id: req.params.tourId,
+            provider_id: req.params.providerId
         });
 
         if (!tour) {
@@ -206,12 +256,15 @@ exports.deleteTour = async (req, res) => {
 
         res.status(200).json({
             success: true,
+            message: 'Tour deleted successfully',
             data: {}
         });
     } catch (error) {
+        console.error('❌ Delete tour error:', error);
         res.status(500).json({
             success: false,
-            error: 'Server Error'
+            error: 'Server Error',
+            message: error.message
         });
     }
 };
@@ -219,38 +272,100 @@ exports.deleteTour = async (req, res) => {
 // Update tour status
 exports.updateTourStatus = async (req, res) => {
     try {
+        const { providerId, tourId } = req.params;
         const { status } = req.body;
 
-        if (!status || !['active', 'inactive'].includes(status)) {
+        // Validate status
+        const validStatuses = ['draft', 'active', 'inactive', 'archived'];
+        if (!status || !validStatuses.includes(status)) {
             return res.status(400).json({
                 success: false,
-                error: 'Please provide a valid status (active/inactive)'
+                message: 'Trạng thái không hợp lệ',
+                error: `Status must be one of: ${validStatuses.join(', ')}`
             });
         }
 
-        const tour = await Tour.findOneAndUpdate(
-            {
-                _id: req.params.tourId,
-                providerId: req.params.providerId
-            },
-            { status },
-            { new: true, runValidators: true }
-        );
-
+        // Find tour
+        const tour = await Tour.findById(tourId);
+        
         if (!tour) {
             return res.status(404).json({
                 success: false,
+                message: 'Không tìm thấy tour',
                 error: 'Tour not found'
             });
         }
 
+        // Check ownership
+        if (tour.provider_id.toString() !== providerId) {
+            return res.status(403).json({
+                success: false,
+                message: 'Bạn không có quyền thay đổi trạng thái tour này',
+                error: 'Unauthorized'
+            });
+        }
+
+        // Business logic validation
+        if (status === 'active') {
+            // Check if tour has required fields for activation
+            if (!tour.image) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Không thể kích hoạt tour chưa có hình ảnh',
+                    error: 'Tour must have at least one image to be activated'
+                });
+            }
+            
+            if (!tour.available_dates || tour.available_dates.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Không thể kích hoạt tour chưa có ngày khởi hành',
+                    error: 'Tour must have at least one available date to be activated'
+                });
+            }
+
+            if (!tour.pricing || !tour.pricing.adult) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Không thể kích hoạt tour chưa có giá',
+                    error: 'Tour must have pricing information to be activated'
+                });
+            }
+        }
+
+        // Store old status for logging
+        const oldStatus = tour.status;
+
+        // Update status
+        tour.status = status;
+        tour.updated_at = new Date();
+        await tour.save();
+
+        console.log(`✅ Tour status updated: ${tourId} from ${oldStatus} to ${status}`);
+
+        // Return updated tour (select important fields only)
         res.status(200).json({
             success: true,
-            data: tour
+            message: 'Cập nhật trạng thái tour thành công',
+            data: {
+                _id: tour._id,
+                title: tour.title,
+                status: tour.status,
+                location: tour.location,
+                duration_hours: tour.duration_hours,
+                pricing: tour.pricing,
+                difficulty: tour.difficulty,
+                rating: tour.rating,
+                image: tour.image,
+                updated_at: tour.updated_at
+            }
         });
+
     } catch (error) {
-        res.status(400).json({
+        console.error('❌ Error updating tour status:', error);
+        res.status(500).json({
             success: false,
+            message: 'Lỗi server khi cập nhật trạng thái',
             error: error.message
         });
     }

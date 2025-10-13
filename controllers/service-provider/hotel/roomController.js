@@ -1,5 +1,5 @@
-const Room = require('../models/Room');
-const Hotel = require('../models/Hotel');
+const Room = require('../../../models/room.model');
+const Hotel = require('../../../models/hotel.model');
 
 // Get all rooms of a hotel
 exports.getHotelRooms = async (req, res) => {

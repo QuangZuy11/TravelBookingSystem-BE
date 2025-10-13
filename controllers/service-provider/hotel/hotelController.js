@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
-const Hotel = require('../models/Hotel');
-const Room = require('../models/Room');
+const Hotel = require('../../../models/hotel.model');
+const Room = require('../../../models/room.model');
 
 // Get all hotels for a provider
 exports.getProviderHotels = async (req, res) => {
