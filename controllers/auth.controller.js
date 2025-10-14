@@ -86,14 +86,12 @@ exports.login = async (req, res) => {
   try {
     let user = await User.findOne({ email })
       .populate('role', 'role_name')
-      .populate('role_id', 'role_name');
     
     if (!user) {
       return res.status(400).json({ success: false, message: 'Email hoặc mật khẩu không hợp lệ' });
     }
 
-    // Check if role exists (support both 'role' and 'role_id' for backward compatibility)
-    const userRole = user.role || user.role_id;
+    const userRole = user.role;
     if (!userRole) {
       console.error('❌ User không có role:', user.email);
       return res.status(500).json({ 
