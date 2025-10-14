@@ -105,12 +105,26 @@ exports.login = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email hoặc mật khẩu không hợp lệ' });
     }
 
-    const token = generateToken({
+    // Prepare token payload
+    const tokenPayload = {
       user: {
         id: user.id,
         role: userRole.role_name,
       }
-    });
+    };
+
+    // If user is ServiceProvider, get provider info and add to token
+    let serviceProvider = null;
+    if (userRole.role_name === 'ServiceProvider') {
+      serviceProvider = await ServiceProvider.findOne({ user_id: user._id });
+      
+      if (serviceProvider) {
+        // Add service_provider_id to token for middleware
+        tokenPayload.user.service_provider_id = serviceProvider._id;
+      }
+    }
+
+    const token = generateToken(tokenPayload);
 
     const userObject = user.toObject();
     delete userObject.password;
@@ -124,10 +138,8 @@ exports.login = async (req, res) => {
       email: user.email,
     };
 
-    // If user is ServiceProvider, include provider info
+    // If user is ServiceProvider, include provider info in response
     if (userRole.role_name === 'ServiceProvider') {
-      const serviceProvider = await ServiceProvider.findOne({ user_id: user._id });
-      
       if (serviceProvider) {
         // Provider exists - return full info
         responseData.provider = {
