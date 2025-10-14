@@ -7,16 +7,17 @@ const adminController = require('../../controllers/admin/admin.controller');
 // Áp dụng middleware cho tất cả các route trong file này
 router.use(authMiddleware, checkAdminRole);
 
-// @route   GET /api/admin/dashboard/stats
+// Dashboard
 router.get('/dashboard/stats', adminController.getDashboardStats);
 
-// @route   GET /api/admin/users
+// User Management
 router.get('/users', adminController.getAllUsers);
-
-// @route   PUT /api/admin/users/:id
+router.post('/users', adminController.createUser);
+router.get('/users/stats', adminController.getUserStats); 
+router.get('/users/:id', adminController.getUserById);
 router.put('/users/:id', adminController.updateUser);
-
-// @route   DELETE /api/admin/users/:id
 router.delete('/users/:id', adminController.deleteUser);
+router.put('/users/:id/ban', adminController.banUser);
+router.put('/users/:id/password', adminController.changeUserPassword);
 
 module.exports = router;

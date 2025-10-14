@@ -27,7 +27,14 @@ const userSchema = new mongoose.Schema({
   role_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Role',
-  }
+  },
+  status: {
+    type: String,
+    enum: ['active', 'banned'],
+    default: 'active',
+  },
+  ban_reason: { type: String },
+  
 }, { 
   timestamps: true,
   toJSON: { virtuals: true },
