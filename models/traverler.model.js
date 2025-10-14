@@ -6,23 +6,32 @@ const travelerSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      unique: true, // mỗi user chỉ có 1 traveler profile
+      unique: true,
+      alias: "userId",
     },
-    travel_preferences: {
-      type: Object, // hoặc bạn có thể mô tả chi tiết từng field
-      default: {},
+    passport_number: {
+      type: String,
+      required: true,
+      unique: true,
     },
-    favorite_destinations: {
-      type: [String], // mảng các địa điểm yêu thích
-      default: [],
+    nationality: {
+      type: String,
+      required: true,
     },
-    travel_interests: {
-      type: [String], // mảng các sở thích khi đi du lịch
-      default: [],
+    phone: {
+      type: String,
     },
-    budget_preferences: {
-      type: [String], // mảng các lựa chọn về ngân sách
-      default: [],
+    city: {
+      type: String,
+    },
+    gender: {
+      type: String,
+      enum: ["Male", "Female", "Other"],
+      required: true,
+    },
+    date_of_birth: {
+      type: Date,
+      required: true,
     },
   },
   { timestamps: true }

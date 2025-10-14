@@ -1,94 +1,143 @@
-const User = require('../models/user.model');
-const traveler = require("../models/traverler.model");
+const User = require("../models/user.model");
+const Traveler = require("../models/traverler.model");
 const bcrypt = require("bcryptjs");
+
 // @desc    Get current user's profile
 // @route   GET /api/profiles/me
 // @access  Private
 exports.getMe = async (req, res) => {
   try {
-    // req.user được gán trong middleware auth.js
     const user = await User.findById(req.user.id)
-      .select('-password')
-      .populate('role', 'role_name');
+      .select("-password")
+      .populate("role", "role_name");
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: "User not found",
       });
     }
-    
+
+    const travelerProfile = await Traveler.findOne({ user_id: req.user.id });
+    const responseData = user.toObject();
+
+    if (travelerProfile) {
+      responseData.traveler = travelerProfile.toObject();
+    }
 
     res.status(200).json({
       success: true,
-      data: user
+      data: responseData,
     });
   } catch (err) {
-    console.error(err.message);
+    console.error("Error in getMe:", err);
     res.status(500).json({
       success: false,
-      message: 'Server Error'
+      message: err?.message || "Server Error",
     });
   }
 };
 
 exports.updateMe = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const { name, phone, email } = req.body;
+    const userId = req.user?.id || req.user?._id;
 
-    // Tìm user
-    let user = await User.findById(userId).select("-password").populate("role", "role_name");
+    if (!userId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Khong xac dinh duoc nguoi dung tu token" });
+    }
+
+    const {
+      name,
+      phone,
+      email,
+      gender,
+      date_of_birth,
+      city,
+      passport_number,
+      nationality,
+    } = req.body;
+
+    const user = await User.findById(userId).select("-password").populate("role", "role_name");
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    // Cập nhật các trường
-    if (name) user.name = name;
-    if (phone) user.phone = phone;
-    if (email) user.email = email;
-
-    await user.save();
-
-    return res.status(200).json({
-      success: true,
-      message: "Cập nhật thông tin user thành công",
-      data: user,
-    });
-  } catch (err) {
-    console.error(err.message);
-    return res.status(500).json({ success: false, message: "Server Error" });
-  }
-};
-
-exports.updateMe = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { name, phone, email } = req.body;
-
-    // Tìm user
-    let user = await User.findById(userId).select("-password").populate("role", "role_name");
-    if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+    if (name) {
+      user.name = name;
+    }
+    if (email) {
+      user.email = email;
     }
 
-    // Cập nhật các trường
-    if (name) user.name = name;
-    if (phone) user.phone = phone;
-    if (email) user.email = email;
+    let parsedDateOfBirth;
+    if (date_of_birth) {
+      parsedDateOfBirth = new Date(date_of_birth);
+      if (Number.isNaN(parsedDateOfBirth.getTime())) {
+        return res.status(400).json({ success: false, message: "Ngay sinh khong hop le" });
+      }
+    }
+
+    const normalizedUserId = user._id;
+    let travelerProfile = await Traveler.findOne({ user_id: normalizedUserId });
+    const travelerUpdates = {};
+
+    if (phone) travelerUpdates.phone = phone;
+    if (city) travelerUpdates.city = city;
+    if (passport_number) travelerUpdates.passport_number = passport_number;
+    if (nationality) travelerUpdates.nationality = nationality;
+    if (gender) travelerUpdates.gender = gender;
+    if (date_of_birth) {
+      travelerUpdates.date_of_birth = parsedDateOfBirth;
+    }
+
+    const hasTravelerUpdates = Object.keys(travelerUpdates).length > 0;
+
+    if (hasTravelerUpdates) {
+      if (!travelerProfile) {
+        const requiredFields = ["passport_number", "nationality", "gender", "date_of_birth"];
+        const missingFields = requiredFields.filter((field) => !travelerUpdates[field]);
+
+        if (missingFields.length) {
+          return res.status(400).json({
+            success: false,
+            message: `Thieu thong tin traveler: ${missingFields.join(", ")}`,
+          });
+        }
+
+        travelerProfile = new Traveler({
+          user_id: normalizedUserId,
+          ...travelerUpdates,
+        });
+      } else {
+        travelerProfile.user_id = normalizedUserId;
+        Object.assign(travelerProfile, travelerUpdates);
+      }
+    }
 
     await user.save();
+    if (hasTravelerUpdates) {
+      await travelerProfile.save();
+    }
+
+    const responseData = user.toObject();
+
+    if (travelerProfile) {
+      responseData.traveler = travelerProfile.toObject();
+    }
 
     return res.status(200).json({
       success: true,
-      message: "Cập nhật thông tin user thành công",
-      data: user,
+      message: "Cap nhat thong tin user thanh cong",
+      data: responseData,
     });
   } catch (err) {
-    console.error(err.message);
-    return res.status(500).json({ success: false, message: "Server Error" });
+    console.error("Error in updateMe:", err);
+    return res.status(500).json({ success: false, message: err?.message || "Server Error" });
   }
 };
+
 exports.changePassword = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -97,7 +146,7 @@ exports.changePassword = async (req, res) => {
     if (!oldPassword || !newPassword) {
       return res.status(400).json({
         success: false,
-        message: "Vui lòng nhập đầy đủ mật khẩu cũ và mật khẩu mới",
+        message: "Vui long nhap day du mat khau cu va mat khau moi",
       });
     }
 
@@ -106,23 +155,21 @@ exports.changePassword = async (req, res) => {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    // Check old password
     const isMatch = await bcrypt.compare(oldPassword, user.password);
     if (!isMatch) {
-      return res.status(400).json({ success: false, message: "Mật khẩu cũ không đúng" });
+      return res.status(400).json({ success: false, message: "Mat khau cu khong dung" });
     }
 
-    // Hash new password
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(newPassword, salt);
     await user.save();
 
     return res.status(200).json({
       success: true,
-      message: "Đổi mật khẩu thành công",
+      message: "Doi mat khau thanh cong",
     });
   } catch (err) {
-    console.error(err.message);
-    return res.status(500).json({ success: false, message: "Server Error" });
+    console.error("Error in changePassword:", err);
+    return res.status(500).json({ success: false, message: err?.message || "Server Error" });
   }
 };
