@@ -44,6 +44,10 @@ app.use("/api/auth/service-provider", serviceProviderAuthRoutes);
 app.use("/api/profiles", require("./routes/profile.routes"));
 // Admin routes
 app.use("/api/admin/service-providers", adminServiceProviderRoutes);
+app.use('/api/admin', require('./routes/admin/admin.routes'));
+// Trong server.js
+// ... các routes khác
+
 
 mongoose
   .connect(process.env.MONGO_URI)
