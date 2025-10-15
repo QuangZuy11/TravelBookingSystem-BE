@@ -2,14 +2,11 @@ const User = require('../models/user.model');
 
 const checkAdminRole = async (req, res, next) => {
     try {
-        const user = await User.findById(req.user.id)
-            .populate('role')   // Populate trường 'role'
-            .populate('role_id'); // Populate cả trường 'role_id'
+        // Chỉ cần populate trường 'role'
+        const user = await User.findById(req.user.id).populate('role');
 
-        // Lấy thông tin role từ một trong hai trường
-        const userRole = user.role || user.role_id; 
-
-        if (user && userRole && userRole.role_name === 'Admin') {
+        // Kiểm tra trực tiếp, không cần biến userRole phụ
+        if (user && user.role && user.role.role_name === 'Admin') {
             next();
         } else {
             return res.status(403).json({
