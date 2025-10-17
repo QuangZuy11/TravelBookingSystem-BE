@@ -4,7 +4,7 @@ const itinerarySchema = new mongoose.Schema({
     tour_id: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Tour',
-        required: true
+        required: false // made optional to support generated itineraries not tied to a Tour
     },
     provider_id: {
         type: mongoose.Schema.Types.ObjectId,
@@ -67,7 +67,8 @@ const itinerarySchema = new mongoose.Schema({
 });
 
 // Indexes
-itinerarySchema.index({ tour_id: 1, day_number: 1 }, { unique: true }); // Unique day per tour
+// Unique day per tour when tour_id is present. Use partial index to allow multiple generated itineraries without a tour_id.
+itinerarySchema.index({ tour_id: 1, day_number: 1 }, { unique: true, partialFilterExpression: { tour_id: { $exists: true, $ne: null } } });
 itinerarySchema.index({ provider_id: 1 });
 
 // Update timestamp on save
