@@ -21,9 +21,14 @@ const reviewSchema = new mongoose.Schema({
         ref: 'ServiceProvider',
         required: true
     },
+    bookingType: {
+        type: String,
+        enum: ['HotelBooking', 'TourBooking'],
+        required: true
+    },
     bookingId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Booking',
+        refPath: 'bookingType',
         required: true
     },
     rating: {

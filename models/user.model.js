@@ -39,4 +39,16 @@ userSchema.virtual("traveler", {
   justOne: true,
 });
 
+userSchema.virtual("hotelBookings", {
+  ref: "HotelBooking",
+  localField: "_id",
+  foreignField: "user_id",
+});
+
+userSchema.virtual("tourBookings", {
+  ref: "TourBooking",
+  localField: "_id",
+  foreignField: "user_id",
+});
+
 module.exports = mongoose.model("User", userSchema, "USERS");
