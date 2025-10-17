@@ -39,4 +39,4 @@ const adBookingSchema = new mongoose.Schema({
     default: Date.now,
   },
 });
-module.exports = mongoose.model("AdBooking", adBookingSchema, "ad_bookings");
+module.exports = mongoose.model("AdBooking", adBookingSchema, "AD_BOOKINGS");

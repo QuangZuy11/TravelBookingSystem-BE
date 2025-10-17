@@ -50,4 +50,4 @@ const destinationSchema = new mongoose.Schema({
     }
 });
 
-module.exports = mongoose.model('Destination', destinationSchema);
+module.exports = mongoose.model('Destination', destinationSchema, 'DESTINATIONS');

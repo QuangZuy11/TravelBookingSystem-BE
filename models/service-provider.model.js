@@ -204,4 +204,4 @@ serviceProviderSchema.methods.updateAdminVerification = function(approved, admin
 serviceProviderSchema.set('toJSON', { virtuals: true });
 serviceProviderSchema.set('toObject', { virtuals: true });
 
-module.exports = mongoose.model('ServiceProvider', serviceProviderSchema);
+module.exports = mongoose.model('ServiceProvider', serviceProviderSchema, 'SERVICE_PROVIDERS');

@@ -19,4 +19,4 @@ aiGeneratedItinerarySchema.pre('save', function(next) {
 aiGeneratedItinerarySchema.set('toJSON', { virtuals: true });
 aiGeneratedItinerarySchema.set('toObject', { virtuals: true });
 
-module.exports = mongoose.model('AiGeneratedItinerary', aiGeneratedItinerarySchema);
+module.exports = mongoose.model('AiGeneratedItinerary', aiGeneratedItinerarySchema, 'AI_GENERATED_ITINERARIES');

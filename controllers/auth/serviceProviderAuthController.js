@@ -122,11 +122,6 @@ exports.registerServiceProvider = async (req, res) => {
             });
         }
         
-        // no flight validations (flight feature removed)
-        
-        // Hotel có thể có nhiều licenses (không cần check)
-
-        // Validate each license
         for (const license of licenses) {
             if (!license.service_type || !license.license_number) {
                 return res.status(400).json({

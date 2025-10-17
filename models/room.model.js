@@ -87,4 +87,4 @@ roomSchema.post('remove', async function(doc) {
     });
 });
 
-module.exports = mongoose.model('Room', roomSchema);
+module.exports = mongoose.model('Room', roomSchema, 'HOTEL_ROOMS');

@@ -349,4 +349,4 @@ tourBookingSchema.methods.canBeCancelled = function() {
   return validStatuses.includes(this.status) && hoursUntilTour > 0;
 };
 
-module.exports = mongoose.model("TourBooking", tourBookingSchema);
+module.exports = mongoose.model("TourBooking", tourBookingSchema, "TOUR_BOOKINGS");

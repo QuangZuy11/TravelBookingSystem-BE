@@ -24,4 +24,4 @@ aiItineraryRequestSchema.pre('save', function(next) {
 aiItineraryRequestSchema.set('toJSON', { virtuals: true });
 aiItineraryRequestSchema.set('toObject', { virtuals: true });
 
-module.exports = mongoose.model('AiItineraryRequest', aiItineraryRequestSchema);
+module.exports = mongoose.model('AiItineraryRequest', aiItineraryRequestSchema, 'AI_ITINERARY_REQUESTS');
