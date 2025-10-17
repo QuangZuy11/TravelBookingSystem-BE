@@ -17,7 +17,8 @@ module.exports = function (req, res, next) {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     // 5. Gắn payload đã giải mã vào request để các route sau có thể sử dụng
-    req.user = decoded.user;
+    // Support both formats: decoded.user (old format) or decoded directly (new format)
+    req.user = decoded.user || decoded;
     next();
     
   } catch (err) {

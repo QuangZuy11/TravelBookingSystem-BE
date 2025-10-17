@@ -16,7 +16,7 @@ const serviceProviderAuthRoutes = require("./routes/serviceProviderAuthRoutes");
 const adminServiceProviderRoutes = require("./routes/admin/adminServiceProviderRoutes");
 const travelerRoutes = require("./routes/traveler/hotel.routes");
 const adBookingRoutes = require("./routes/adBooking.routes");
-
+const travelerTourRoutes = require("./routes/traveler/TourRoutes");
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -29,6 +29,8 @@ app.get("/", (req, res) => {
 
 /// Traveler routes
 app.use("/api/traveler/hotels", travelerRoutes);
+// Tour traveler
+app.use("/api/traveler/tours", travelerTourRoutes);
 //AD_booking
 app.use("/api/ad-bookings", adBookingRoutes);
 // Provider routes
@@ -44,6 +46,10 @@ app.use("/api/auth/service-provider", serviceProviderAuthRoutes);
 app.use("/api/profiles", require("./routes/profile.routes"));
 // Admin routes
 app.use("/api/admin/service-providers", adminServiceProviderRoutes);
+app.use('/api/admin', require('./routes/admin/admin.routes'));
+// Trong server.js
+// ... các routes khác
+
 
 mongoose
   .connect(process.env.MONGO_URI)

@@ -2,10 +2,11 @@ const express = require('express');
 const router = express.Router();
 const hotelController = require('../controllers/service-provider/hotel/hotelController');
 const roomController = require('../controllers/service-provider/hotel/roomController');
+const authMiddleware = require('../middlewares/auth.middleware');
 const { checkServiceProviderVerification } = require('../middlewares/verificationMiddleware');
 
 // ===== HOTEL MANAGEMENT ROUTES =====
-// Note: Add authentication middleware (authMiddleware) before deploying to production
+// Authentication middleware is required for all protected routes
 
 // Provider hotel routes
 router.get('/provider/:providerId/hotels', hotelController.getProviderHotels);
@@ -14,19 +15,19 @@ router.get('/provider/:providerId/hotel-statistics', hotelController.getHotelSta
 
 // CREATE hotel - Requires verified 'hotel' license
 router.post('/provider/:providerId/hotels', 
-    // authMiddleware, // TODO: Add auth middleware
+    authMiddleware,
     checkServiceProviderVerification('hotel'),
     hotelController.createHotel
 );
 
 router.put('/provider/:providerId/hotels/:id', 
-    // authMiddleware, // TODO: Add auth middleware
+    authMiddleware,
     checkServiceProviderVerification('hotel'),
     hotelController.updateHotel
 );
 
 router.delete('/provider/:providerId/hotels/:id', 
-    // authMiddleware, // TODO: Add auth middleware
+    authMiddleware,
     checkServiceProviderVerification('hotel'),
     hotelController.deleteHotel
 );
@@ -40,19 +41,19 @@ router.get('/provider/:providerId/hotels/:hotelId/rooms/:roomId', roomController
 
 // CREATE/UPDATE/DELETE room - Requires verified 'hotel' license
 router.post('/provider/:providerId/hotels/:hotelId/rooms', 
-    // authMiddleware, // TODO: Add auth middleware
+    authMiddleware,
     checkServiceProviderVerification('hotel'),
     roomController.createRoom
 );
 
 router.put('/provider/:providerId/hotels/:hotelId/rooms/:roomId', 
-    // authMiddleware, // TODO: Add auth middleware
+    authMiddleware,
     checkServiceProviderVerification('hotel'),
     roomController.updateRoom
 );
 
 router.delete('/provider/:providerId/hotels/:hotelId/rooms/:roomId', 
-    // authMiddleware, // TODO: Add auth middleware
+    authMiddleware,
     checkServiceProviderVerification('hotel'),
     roomController.deleteRoom
 );
@@ -60,13 +61,13 @@ router.delete('/provider/:providerId/hotels/:hotelId/rooms/:roomId',
 router.get('/provider/:providerId/hotels/:hotelId/rooms/:roomId/bookings', roomController.getRoomBookings);
 
 router.put('/provider/:providerId/hotels/:hotelId/rooms/:roomId/status', 
-    // authMiddleware, // TODO: Add auth middleware
+    authMiddleware,
     checkServiceProviderVerification('hotel'),
     roomController.updateRoomStatus
 );
 
 router.post('/provider/:providerId/hotels/:hotelId/rooms/:roomId/maintenance', 
-    // authMiddleware, // TODO: Add auth middleware
+    authMiddleware,
     checkServiceProviderVerification('hotel'),
     roomController.addMaintenanceRecord
 );
