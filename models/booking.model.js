@@ -13,7 +13,7 @@ const bookingSchema = new mongoose.Schema({
     },
     bookingType: {
         type: String,
-        enum: ['tour', 'hotel', 'flight'],
+        enum: ['tour', 'hotel'],
         required: true
     },
     // Dynamic reference based on bookingType

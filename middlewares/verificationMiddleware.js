@@ -6,7 +6,7 @@ const ServiceProvider = require('../models/service-provider.model');
 
 /**
  * Check if service provider has verified license for specific service type
- * @param {string} serviceType - 'hotel', 'flight', or 'tour'
+ * @param {string} serviceType - 'hotel' or 'tour'
  */
 const checkServiceProviderVerification = (serviceType) => {
     return async (req, res, next) => {

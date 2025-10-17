@@ -8,7 +8,7 @@ const reviewSchema = new mongoose.Schema({
     },
     serviceType: {
         type: String,
-        enum: ['tour', 'hotel', 'flight'],
+        enum: ['tour', 'hotel'],
         required: true
     },
     serviceId: {

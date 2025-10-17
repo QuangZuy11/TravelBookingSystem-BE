@@ -29,7 +29,7 @@ exports.registerServiceProvider = async (req, res) => {
             company_email,
             company_phone,
             address,
-            service_types, // ['hotel', 'flight', 'tour'] - hoặc dùng 'type' cũng được
+            service_types, // ['hotel', 'tour'] - hoặc dùng 'type' cũng được
             type, // Alias của service_types
             licenses // [{ service_type, license_number, documents }]
         } = req.body;
@@ -91,7 +91,7 @@ exports.registerServiceProvider = async (req, res) => {
         }
 
         // Validate service types
-        const validTypes = ['hotel', 'flight', 'tour'];
+    const validTypes = ['hotel', 'tour'];
         const invalidTypes = serviceTypesArray.filter(type => !validTypes.includes(type));
         if (invalidTypes.length > 0) {
             return res.status(400).json({
@@ -111,10 +111,8 @@ exports.registerServiceProvider = async (req, res) => {
         }
 
         // Validate license count based on service type
-        const hotelLicenses = licenses.filter(l => l.service_type === 'hotel');
-        const tourLicenses = licenses.filter(l => l.service_type === 'tour');
-        const flightLicenses = licenses.filter(l => l.service_type === 'flight');
-        
+    const hotelLicenses = licenses.filter(l => l.service_type === 'hotel');
+    const tourLicenses = licenses.filter(l => l.service_type === 'tour');
         // Tour chỉ được có 1 license
         if (tourLicenses.length > 1) {
             return res.status(400).json({
@@ -124,14 +122,7 @@ exports.registerServiceProvider = async (req, res) => {
             });
         }
         
-        // Flight chỉ được có 1 license
-        if (flightLicenses.length > 1) {
-            return res.status(400).json({
-                success: false,
-                message: 'Flight provider chỉ có thể đăng ký 1 license duy nhất',
-                error: 'Flight service type can only have 1 license'
-            });
-        }
+        // no flight validations (flight feature removed)
         
         // Hotel có thể có nhiều licenses (không cần check)
 
@@ -180,8 +171,8 @@ exports.registerServiceProvider = async (req, res) => {
             });
         }
 
-        // NOTE: Không cần check service_types.length === licenses.length nữa
-        // Vì hotel có thể có nhiều licenses, tour/flight chỉ 1
+    // NOTE: Không cần check service_types.length === licenses.length nữa
+    // Vì hotel có thể có nhiều licenses, tour chỉ 1
 
         // ===== CHECK EXISTING USER =====
         
@@ -345,7 +336,7 @@ exports.createProviderProfile = async (req, res) => {
             company_email,
             company_phone,
             address,
-            service_types, // ['hotel', 'flight', 'tour']
+            service_types, // ['hotel', 'tour']
             type, // Alias
             licenses // [{ service_type, license_number, documents }]
         } = req.body;
@@ -408,7 +399,7 @@ exports.createProviderProfile = async (req, res) => {
             });
         }
 
-        const validTypes = ['hotel', 'flight', 'tour'];
+    const validTypes = ['hotel', 'tour'];
         const invalidTypes = finalServiceTypes.filter(t => !validTypes.includes(t));
         if (invalidTypes.length > 0) {
             return res.status(400).json({
@@ -427,10 +418,8 @@ exports.createProviderProfile = async (req, res) => {
         }
 
         // Validate license count
-        const hotelLicenses = licenses.filter(l => l.service_type === 'hotel');
-        const tourLicenses = licenses.filter(l => l.service_type === 'tour');
-        const flightLicenses = licenses.filter(l => l.service_type === 'flight');
-        
+    const hotelLicenses = licenses.filter(l => l.service_type === 'hotel');
+    const tourLicenses = licenses.filter(l => l.service_type === 'tour');
         if (tourLicenses.length > 1) {
             return res.status(400).json({
                 success: false,
@@ -439,13 +428,7 @@ exports.createProviderProfile = async (req, res) => {
             });
         }
         
-        if (flightLicenses.length > 1) {
-            return res.status(400).json({
-                success: false,
-                message: 'Flight provider chỉ có thể đăng ký 1 license duy nhất',
-                error: 'Flight service type can only have 1 license'
-            });
-        }
+        // no flight validations (flight feature removed)
 
         // Validate each license
         for (const license of licenses) {

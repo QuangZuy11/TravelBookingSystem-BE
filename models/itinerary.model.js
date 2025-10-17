@@ -43,7 +43,7 @@ const itinerarySchema = new mongoose.Schema({
     transportation: {
         type: {
             type: String,
-            enum: ['flight', 'bus', 'train', 'car', 'boat', 'walking', 'other']
+            enum: ['bus', 'train', 'car', 'boat', 'walking', 'other']
         },
         details: String,
         departure_time: String,

@@ -10,7 +10,6 @@ const tourRoutes = require("./routes/tourRoutes");
 const itineraryRoutes = require("./routes/itineraryRoutes");
 const budgetRoutes = require("./routes/budgetRoutes");
 const hotelRoutes = require("./routes/hotelRoutes");
-const flightRoutes = require("./routes/flightRoutes");
 const serviceProviderRoutes = require("./routes/serviceProviderRoutes");
 const serviceProviderAuthRoutes = require("./routes/serviceProviderAuthRoutes");
 const adminServiceProviderRoutes = require("./routes/admin/adminServiceProviderRoutes");
@@ -39,7 +38,7 @@ app.use("/api/tour", tourRoutes);
 app.use("/api/itineraries", itineraryRoutes);
 app.use("/api/budget-breakdowns", budgetRoutes);
 app.use("/api/hotel", hotelRoutes);
-app.use("/api/flight", flightRoutes);
+// flight functionality removed
 app.use("/api/provider", serviceProviderRoutes);
 // AI itinerary endpoints
 app.use('/api/ai-itineraries', aiItineraryRoutes);
