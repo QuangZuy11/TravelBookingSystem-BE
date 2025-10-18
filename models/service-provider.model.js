@@ -33,12 +33,12 @@ const serviceProviderSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
-    // Loại hình dịch vụ - có thể cung cấp nhiều loại
-    type: [{
+    // Loại hình dịch vụ - CHỈ được chọn 1 loại
+    type: {
         type: String,
         enum: ['hotel', 'tour'],
         required: true
-    }],
+    },
     // Mảng chứa license và verification status cho từng loại dịch vụ
     // NOTE: Chỉ hotel có thể có nhiều licenses, tour chỉ có 1 license duy nhất
     licenses: [{

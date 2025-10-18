@@ -34,14 +34,26 @@ exports.registerServiceProvider = async (req, res) => {
             licenses // [{ service_type, license_number, documents }]
         } = req.body;
 
-        // Support cả 'type' và 'service_types'
-        const serviceTypesArray = service_types || type;
+        // Support cả 'type' và 'service_types', nhưng CHỈ nhận 1 loại dịch vụ
+        let serviceType = service_types || type;
+        
+        // Nếu là array, chỉ lấy phần tử đầu tiên và warn
+        if (Array.isArray(serviceType)) {
+            if (serviceType.length > 1) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Mỗi nhà cung cấp chỉ được chọn 1 loại dịch vụ duy nhất',
+                    error: 'Only one service type allowed'
+                });
+            }
+            serviceType = serviceType[0];
+        }
 
         console.log('📝 Service Provider Registration Request:', {
             email: email || company_email,
             name: name || contact_person,
             company_name,
-            service_types: serviceTypesArray,
+            service_type: serviceType,
             licenses: licenses?.map(l => ({ type: l.service_type, number: l.license_number }))
         });
 
@@ -81,22 +93,21 @@ exports.registerServiceProvider = async (req, res) => {
             });
         }
 
-        // Check service types
-        if (!serviceTypesArray || !Array.isArray(serviceTypesArray) || serviceTypesArray.length === 0) {
+        // Check service type
+        if (!serviceType) {
             return res.status(400).json({
                 success: false,
-                message: 'Vui lòng chọn ít nhất một loại hình dịch vụ (field: type hoặc service_types)',
-                error: 'service_types must be a non-empty array'
+                message: 'Vui lòng chọn loại hình dịch vụ (field: type hoặc service_types)',
+                error: 'service type is required'
             });
         }
 
-        // Validate service types
-    const validTypes = ['hotel', 'tour'];
-        const invalidTypes = serviceTypesArray.filter(type => !validTypes.includes(type));
-        if (invalidTypes.length > 0) {
+        // Validate service type
+        const validTypes = ['hotel', 'tour'];
+        if (!validTypes.includes(serviceType)) {
             return res.status(400).json({
                 success: false,
-                message: `Loại dịch vụ không hợp lệ: ${invalidTypes.join(', ')}`,
+                message: `Loại dịch vụ không hợp lệ: ${serviceType}`,
                 error: `Valid types are: ${validTypes.join(', ')}`
             });
         }
@@ -131,11 +142,11 @@ exports.registerServiceProvider = async (req, res) => {
                 });
             }
 
-            if (!serviceTypesArray.includes(license.service_type)) {
+            if (license.service_type !== serviceType) {
                 return res.status(400).json({
                     success: false,
-                    message: `Loại dịch vụ ${license.service_type} trong license không khớp với service_types`,
-                    error: 'License service_type must match declared service_types'
+                    message: `Loại dịch vụ ${license.service_type} trong license không khớp với service type đã chọn (${serviceType})`,
+                    error: 'License service_type must match declared service type'
                 });
             }
         }
@@ -238,7 +249,7 @@ exports.registerServiceProvider = async (req, res) => {
             email: finalCompanyEmail,
             phone: finalCompanyPhone,
             address,
-            type: serviceTypesArray,
+            type: serviceType,
             licenses: formattedLicenses
         });
 
@@ -246,7 +257,7 @@ exports.registerServiceProvider = async (req, res) => {
 
         console.log(`✅ Service Provider created: ${serviceProvider._id}`);
         console.log(`   Company: ${company_name}`);
-        console.log(`   Services: ${serviceTypesArray.join(', ')}`);
+        console.log(`   Service: ${serviceType}`);
         console.log(`   Licenses: ${formattedLicenses.length} pending verification`);
 
         // ===== GENERATE JWT TOKEN =====
@@ -347,13 +358,26 @@ exports.createProviderProfile = async (req, res) => {
             });
         }
 
+        // Accept both 'type' and 'service_types', nhưng CHỈ nhận 1 loại dịch vụ
+        let serviceType = service_types || type;
+        
+        if (Array.isArray(serviceType)) {
+            if (serviceType.length > 1) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Mỗi nhà cung cấp chỉ được chọn 1 loại dịch vụ duy nhất',
+                    error: 'Only one service type allowed'
+                });
+            }
+            serviceType = serviceType[0];
+        }
+
         console.log('📝 Create Service Provider Profile Request:', {
             userId,
             company_name,
-            service_types: service_types || type
+            service_type: serviceType
         });
 
-        // Check if user already has provider profile
         const existingProvider = await ServiceProvider.findOne({ user_id: userId });
         if (existingProvider) {
             return res.status(400).json({
@@ -363,7 +387,6 @@ exports.createProviderProfile = async (req, res) => {
             });
         }
 
-        // Get user info
         const user = await User.findById(userId);
         if (!user) {
             return res.status(404).json({
@@ -373,11 +396,6 @@ exports.createProviderProfile = async (req, res) => {
             });
         }
 
-        // ===== VALIDATION =====
-        
-        // Accept both 'type' and 'service_types'
-        const finalServiceTypes = service_types || type;
-        
         if (!company_name || !contact_person || !address) {
             return res.status(400).json({
                 success: false,
@@ -386,20 +404,19 @@ exports.createProviderProfile = async (req, res) => {
             });
         }
 
-        if (!finalServiceTypes || !Array.isArray(finalServiceTypes) || finalServiceTypes.length === 0) {
+        if (!serviceType) {
             return res.status(400).json({
                 success: false,
-                message: 'Vui lòng chọn ít nhất một loại hình dịch vụ',
-                error: 'service_types must be a non-empty array'
+                message: 'Vui lòng chọn loại hình dịch vụ',
+                error: 'service type is required'
             });
         }
 
-    const validTypes = ['hotel', 'tour'];
-        const invalidTypes = finalServiceTypes.filter(t => !validTypes.includes(t));
-        if (invalidTypes.length > 0) {
+        const validTypes = ['hotel', 'tour'];
+        if (!validTypes.includes(serviceType)) {
             return res.status(400).json({
                 success: false,
-                message: `Loại dịch vụ không hợp lệ: ${invalidTypes.join(', ')}`,
+                message: `Loại dịch vụ không hợp lệ: ${serviceType}`,
                 error: `Valid types are: ${validTypes.join(', ')}`
             });
         }
@@ -435,11 +452,11 @@ exports.createProviderProfile = async (req, res) => {
                 });
             }
 
-            if (!finalServiceTypes.includes(license.service_type)) {
+            if (license.service_type !== serviceType) {
                 return res.status(400).json({
                     success: false,
-                    message: `Loại dịch vụ ${license.service_type} trong license không khớp`,
-                    error: 'License service_type must match declared service_types'
+                    message: `Loại dịch vụ ${license.service_type} trong license không khớp với service type đã chọn (${serviceType})`,
+                    error: 'License service_type must match declared service type'
                 });
             }
         }
@@ -511,7 +528,7 @@ exports.createProviderProfile = async (req, res) => {
             email: company_email || user.email,
             phone: company_phone || user.phone,
             address,
-            type: finalServiceTypes,
+            type: serviceType,
             licenses: formattedLicenses
         });
 
@@ -519,7 +536,7 @@ exports.createProviderProfile = async (req, res) => {
 
         console.log(`✅ Service Provider profile created: ${serviceProvider._id}`);
         console.log(`   Company: ${company_name}`);
-        console.log(`   Services: ${finalServiceTypes.join(', ')}`);
+        console.log(`   Service: ${serviceType}`);
         console.log(`   Licenses: ${formattedLicenses.length} pending verification`);
 
         // ===== RESPONSE =====
