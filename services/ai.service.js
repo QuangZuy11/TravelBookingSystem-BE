@@ -33,14 +33,15 @@ const callOpenAI = async (messages, maxTokens = 1200) => {
  * If OPENAI_API_KEY is not present, this service will throw and caller should fallback.
  */
 exports.generateItinerary = async ({ request, destination, pois, days }) => {
-  // Build compact POI list to send
+  // Build compact POI list to send (sử dụng đúng field names từ POI model)
   const poiSummaries = (pois || []).map(p => ({
     id: p._id,
-    name: p.poi_name,
+    name: p.name, // Đổi từ poi_name sang name
     description: p.description || '',
-    categories: p.categories || [],
-    rating: p.rating || 0,
-    price: p.price || 0
+    type: p.type || 'other',
+    rating: p.ratings?.average || 0, // Đổi từ rating sang ratings.average
+    entryFee: p.entryFee?.adult || 0, // Đổi từ price sang entryFee.adult
+    recommendedDuration: p.recommendedDuration || { hours: 2, minutes: 0 }
   }));
 
   const system = `You are a helpful itinerary generator. Return only JSON that conforms to the schema described.`;

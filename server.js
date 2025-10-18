@@ -17,6 +17,8 @@ const travelerRoutes = require("./routes/traveler/hotel.routes");
 const adBookingRoutes = require("./routes/adBooking.routes");
 const travelerTourRoutes = require("./routes/traveler/TourRoutes");
 const aiItineraryRoutes = require('./routes/aiItinerary.routes');
+const poiRoutes = require('./routes/poi.routes');
+const destinationRoutes = require('./routes/destination.routes');
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -42,6 +44,10 @@ app.use("/api/hotel", hotelRoutes);
 app.use("/api/provider", serviceProviderRoutes);
 // AI itinerary endpoints
 app.use('/api/ai-itineraries', aiItineraryRoutes);
+// POI endpoints
+app.use('/api/poi', poiRoutes);
+// Destination endpoints
+app.use('/api/destinations', destinationRoutes);
 // Auth routes
 app.use("/api/auth", require("./routes/auth.routes"));
 app.use("/api/auth/service-provider", serviceProviderAuthRoutes);
