@@ -1,18 +1,10 @@
-/**
- * Middleware kiểm tra Service Provider có verified license hay không
- */
-
 const ServiceProvider = require('../models/service-provider.model');
 
-/**
- * Check if service provider has verified license for specific service type
- * @param {string} serviceType - 'hotel', 'flight', or 'tour'
- */
 const checkServiceProviderVerification = (serviceType) => {
     return async (req, res, next) => {
         try {
-            // Get service provider ID from token
-            const serviceProviderId = req.user?.service_provider_id;
+            const serviceProviderId = req.user?.service_provider_id || req.user?.id;
+            const providerIdFromUrl = req.params.providerId;
 
             if (!serviceProviderId) {
                 return res.status(403).json({
@@ -22,8 +14,11 @@ const checkServiceProviderVerification = (serviceType) => {
                 });
             }
 
-            // Find service provider
-            const provider = await ServiceProvider.findById(serviceProviderId);
+            let provider = await ServiceProvider.findById(serviceProviderId);
+            
+            if (!provider) {
+                provider = await ServiceProvider.findOne({ user_id: serviceProviderId });
+            }
             
             if (!provider) {
                 return res.status(404).json({
@@ -33,17 +28,23 @@ const checkServiceProviderVerification = (serviceType) => {
                 });
             }
 
-            // Check if provider registered for this service type
-            if (!provider.type.includes(serviceType)) {
+            if (providerIdFromUrl && providerIdFromUrl !== provider._id.toString()) {
                 return res.status(403).json({
                     success: false,
-                    message: `Bạn chưa đăng ký cung cấp dịch vụ ${serviceType}`,
-                    error: `Service type ${serviceType} not registered`,
-                    hint: 'Vui lòng liên hệ admin để thêm loại dịch vụ này'
+                    message: 'Bạn không có quyền truy cập resource này',
+                    error: 'Provider ID mismatch'
                 });
             }
 
-            // Find license for this service type
+            if (provider.type !== serviceType) {
+                return res.status(403).json({
+                    success: false,
+                    message: `Bạn đã đăng ký cung cấp dịch vụ ${provider.type}, không phải ${serviceType}`,
+                    error: `Service type mismatch`,
+                    hint: 'Mỗi nhà cung cấp chỉ có thể đăng ký 1 loại dịch vụ'
+                });
+            }
+
             const license = provider.getLicenseByType(serviceType);
             
             if (!license) {
@@ -55,7 +56,6 @@ const checkServiceProviderVerification = (serviceType) => {
                 });
             }
 
-            // Check verification status
             if (license.verification_status !== 'verified') {
                 const statusMessages = {
                     pending: 'Giấy phép của bạn đang chờ xác minh từ Admin',
@@ -78,16 +78,12 @@ const checkServiceProviderVerification = (serviceType) => {
                 });
             }
 
-            // All checks passed - attach provider info to request
             req.serviceProvider = provider;
             req.verifiedLicense = license;
-
-            console.log(`✅ Verified access for ${provider.company_name} to create ${serviceType}`);
 
             next();
 
         } catch (error) {
-            console.error('❌ Error in verification middleware:', error);
             res.status(500).json({
                 success: false,
                 message: 'Lỗi server khi kiểm tra quyền',
@@ -97,12 +93,9 @@ const checkServiceProviderVerification = (serviceType) => {
     };
 };
 
-/**
- * Check if service provider is fully verified (all licenses verified)
- */
 const checkFullVerification = async (req, res, next) => {
     try {
-        const serviceProviderId = req.user?.service_provider_id;
+        const serviceProviderId = req.user?.service_provider_id || req.user?.id;
 
         if (!serviceProviderId) {
             return res.status(403).json({
@@ -112,7 +105,11 @@ const checkFullVerification = async (req, res, next) => {
             });
         }
 
-        const provider = await ServiceProvider.findById(serviceProviderId);
+        let provider = await ServiceProvider.findById(serviceProviderId);
+        
+        if (!provider) {
+            provider = await ServiceProvider.findOne({ user_id: serviceProviderId });
+        }
         
         if (!provider) {
             return res.status(404).json({
@@ -143,7 +140,6 @@ const checkFullVerification = async (req, res, next) => {
         next();
 
     } catch (error) {
-        console.error('❌ Error in full verification check:', error);
         res.status(500).json({
             success: false,
             message: 'Lỗi server',

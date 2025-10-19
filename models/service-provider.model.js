@@ -33,18 +33,18 @@ const serviceProviderSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
-    // Loại hình dịch vụ - có thể cung cấp nhiều loại
-    type: [{
+    // Loại hình dịch vụ - CHỈ được chọn 1 loại
+    type: {
         type: String,
-        enum: ['hotel', 'flight', 'tour'],
+        enum: ['hotel', 'tour'],
         required: true
-    }],
+    },
     // Mảng chứa license và verification status cho từng loại dịch vụ
-    // NOTE: Chỉ hotel có thể có nhiều licenses, tour và flight chỉ có 1 license duy nhất
+    // NOTE: Chỉ hotel có thể có nhiều licenses, tour chỉ có 1 license duy nhất
     licenses: [{
         service_type: {
             type: String,
-            enum: ['hotel', 'flight', 'tour'],
+            enum: ['hotel', 'tour'],
             required: true
         },
         license_number: {
@@ -116,20 +116,14 @@ serviceProviderSchema.index({ type: 1 });
 serviceProviderSchema.index({ 'licenses.verification_status': 1 });
 serviceProviderSchema.index({ 'licenses.license_number': 1 }, { unique: true, sparse: true }); // Unique constraint
 
-// Pre-save validation: Hotel có thể nhiều licenses, tour/flight chỉ 1
+// Pre-save validation: Hotel có thể nhiều licenses, tour chỉ 1
 serviceProviderSchema.pre('save', function(next) {
     const hotelLicenses = this.licenses.filter(l => l.service_type === 'hotel');
     const tourLicenses = this.licenses.filter(l => l.service_type === 'tour');
-    const flightLicenses = this.licenses.filter(l => l.service_type === 'flight');
     
     // Tour chỉ được có 1 license
     if (tourLicenses.length > 1) {
         return next(new Error('Tour provider chỉ có thể có 1 license duy nhất'));
-    }
-    
-    // Flight chỉ được có 1 license
-    if (flightLicenses.length > 1) {
-        return next(new Error('Flight provider chỉ có thể có 1 license duy nhất'));
     }
     
     // Check duplicate license_number trong cùng 1 provider
@@ -210,4 +204,4 @@ serviceProviderSchema.methods.updateAdminVerification = function(approved, admin
 serviceProviderSchema.set('toJSON', { virtuals: true });
 serviceProviderSchema.set('toObject', { virtuals: true });
 
-module.exports = mongoose.model('ServiceProvider', serviceProviderSchema);
+module.exports = mongoose.model('ServiceProvider', serviceProviderSchema, 'SERVICE_PROVIDERS');

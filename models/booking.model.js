@@ -1,75 +1,55 @@
 const mongoose = require('mongoose');
 
-const bookingSchema = new mongoose.Schema({
-    userId: {
+const hotelBookingSchema = new mongoose.Schema({
+    hotel_room_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Room',
+        required: true
+    },
+    user_id: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: true
     },
-    providerId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'ServiceProvider',
-        required: true
-    },
-    bookingType: {
-        type: String,
-        enum: ['tour', 'hotel', 'flight'],
-        required: true
-    },
-    // Dynamic reference based on bookingType
-    serviceId: {
-        type: mongoose.Schema.Types.ObjectId,
-        refPath: 'bookingType',
-        required: true
-    },
-    status: {
-        type: String,
-        enum: ['pending', 'confirmed', 'cancelled', 'completed'],
-        default: 'pending'
-    },
-    bookingDate: {
+    booking_date: {
         type: Date,
         default: Date.now
     },
-    checkInDate: {
+    check_in_date: {
         type: Date,
         required: true
     },
-    checkOutDate: {
+    check_out_date: {
         type: Date,
         required: true
     },
-    totalAmount: {
+    total_amount: {
         type: Number,
         required: true
     },
-    paymentStatus: {
+    payment_status: {
         type: String,
         enum: ['pending', 'paid', 'refunded', 'failed'],
         default: 'pending'
     },
-    numberOfGuests: {
-        adults: {
-            type: Number,
-            required: true
-        },
-        children: {
-            type: Number,
-            default: 0
-        }
+    booking_status: {
+        type: String,
+        enum: ['pending', 'confirmed', 'cancelled', 'completed'],
+        default: 'pending'
     },
-    specialRequests: String,
-    cancellationReason: String,
-    cancellationDate: Date,
-    refundAmount: Number,
-    createdAt: {
+    emergency_contact: {
+        type: String
+    },
+    created_at: {
         type: Date,
         default: Date.now
     },
-    updatedAt: {
+    updated_at: {
         type: Date,
         default: Date.now
     }
+}, {
+    timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }
 });
 
-module.exports = mongoose.model('Booking', bookingSchema);
+module.exports = mongoose.model('HotelBooking', hotelBookingSchema, 'HOTEL_BOOKINGS');

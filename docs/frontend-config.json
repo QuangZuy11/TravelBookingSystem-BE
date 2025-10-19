@@ -22,15 +22,6 @@
         "canAddLicense": false,
         "description": "Chỉ có thể có 1 license duy nhất",
         "validationMessage": "Tour chỉ được có 1 giấy phép duy nhất"
-      },
-      "flight": {
-        "code": "flight",
-        "name": "Hàng không",
-        "icon": "✈️",
-        "maxLicenses": 1,
-        "canAddLicense": false,
-        "description": "Chỉ có thể có 1 license duy nhất",
-        "validationMessage": "Flight chỉ được có 1 giấy phép duy nhất"
       }
     },
     
@@ -131,11 +122,7 @@
         "message": "Tour provider chỉ có thể đăng ký 1 license duy nhất",
         "userMessage": "Tour chỉ được có 1 giấy phép. Vui lòng xóa các giấy phép thừa."
       },
-      "flightMaxLicenses": {
-        "code": "FLIGHT_MAX_LICENSES",
-        "message": "Flight provider chỉ có thể đăng ký 1 license duy nhất",
-        "userMessage": "Flight chỉ được có 1 giấy phép. Vui lòng xóa các giấy phép thừa."
-      },
+      
       "duplicateLicenseNumber": {
         "code": "DUPLICATE_LICENSE",
         "message": "License number không được trùng lặp",
@@ -149,7 +136,7 @@
       "onlyHotelCanAdd": {
         "code": "ONLY_HOTEL_CAN_ADD",
         "message": "Chỉ có thể thêm license cho service type hotel",
-        "userMessage": "Tour và Flight chỉ được có 1 license duy nhất, không thể thêm mới."
+         "userMessage": "Tour chỉ được có 1 license duy nhất, không thể thêm mới."
       }
     },
     
@@ -161,10 +148,10 @@
         "description": "Format: XXX-YYYY-NNN (VD: HTL-2024-001)",
         "unique": true
       },
-      "serviceTypes": {
+          "serviceTypes": {
         "required": true,
         "minLength": 1,
-        "allowedValues": ["hotel", "tour", "flight"]
+        "allowedValues": ["hotel", "tour"]
       },
       "licenses": {
         "required": true,
@@ -176,10 +163,6 @@
             "max": null
           },
           "tour": {
-            "min": 0,
-            "max": 1
-          },
-          "flight": {
             "min": 0,
             "max": 1
           }
@@ -226,12 +209,6 @@
           "showAddButton": false,
           "displayMode": "single",
           "infoText": "ℹ️ Tour chỉ được có 1 license duy nhất"
-        },
-        "flight": {
-          "title": "Giấy phép Hàng không",
-          "showAddButton": false,
-          "displayMode": "single",
-          "infoText": "ℹ️ Flight chỉ được có 1 license duy nhất"
         }
       },
       

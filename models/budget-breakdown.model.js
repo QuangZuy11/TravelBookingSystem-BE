@@ -160,4 +160,4 @@ budgetBreakdownSchema.statics.calculateByCategory = async function(itineraryId) 
   ]);
 };
 
-module.exports = mongoose.model('BudgetBreakdown', budgetBreakdownSchema);
+module.exports = mongoose.model('BudgetBreakdown', budgetBreakdownSchema, 'BUDGET_BREAKDOWN');
