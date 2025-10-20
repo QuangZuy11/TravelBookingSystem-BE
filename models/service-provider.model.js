@@ -118,6 +118,10 @@ serviceProviderSchema.index({ 'licenses.license_number': 1 }, { unique: true, sp
 
 // Pre-save validation: Hotel có thể nhiều licenses, tour chỉ 1
 serviceProviderSchema.pre('save', function(next) {
+    if (!this.licenses || !Array.isArray(this.licenses)) {
+        return next();
+    }
+    
     const hotelLicenses = this.licenses.filter(l => l.service_type === 'hotel');
     const tourLicenses = this.licenses.filter(l => l.service_type === 'tour');
     
@@ -138,6 +142,10 @@ serviceProviderSchema.pre('save', function(next) {
 
 // Validation: Type phải match với licenses
 serviceProviderSchema.pre('save', function(next) {
+    if (!this.licenses || !Array.isArray(this.licenses) || this.licenses.length === 0) {
+        return next();
+    }
+    
     const typesInLicenses = [...new Set(this.licenses.map(l => l.service_type))];
     const typesInType = this.type;
     
@@ -152,7 +160,7 @@ serviceProviderSchema.pre('save', function(next) {
 
 // Virtual để check xem provider đã được verify chưa (TẤT CẢ licenses verified)
 serviceProviderSchema.virtual('is_verified').get(function() {
-    return this.licenses.every(license => license.verification_status === 'verified');
+    return this.licenses && this.licenses.length > 0 && this.licenses.every(license => license.verification_status === 'verified');
 });
 
 // Virtual để check xem đã được admin phê duyệt toàn bộ chưa (license verified + admin approved)
@@ -162,16 +170,22 @@ serviceProviderSchema.virtual('is_fully_approved').get(function() {
 
 // Virtual để check xem có license nào đang pending không
 serviceProviderSchema.virtual('has_pending_verification').get(function() {
-    return this.licenses.some(license => license.verification_status === 'pending');
+    return this.licenses && this.licenses.some(license => license.verification_status === 'pending');
 });
 
 // Method để lấy license theo service type
 serviceProviderSchema.methods.getLicenseByType = function(serviceType) {
+    if (!this.licenses || !Array.isArray(this.licenses)) {
+        return null;
+    }
     return this.licenses.find(license => license.service_type === serviceType);
 };
 
 // Method để update verification status
 serviceProviderSchema.methods.updateVerificationStatus = function(serviceType, status, verifiedBy, rejectionReason = null) {
+    if (!this.licenses || !Array.isArray(this.licenses)) {
+        return false;
+    }
     const license = this.licenses.find(l => l.service_type === serviceType);
     if (license) {
         license.verification_status = status;
