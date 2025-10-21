@@ -115,6 +115,7 @@ exports.getTourItineraries = async (req, res) => {
           { path: 'destination_id', select: 'name region country' }
         ]
       })
+      .populate('budget_breakdowns')
       .sort({ day_number: 1 });
 
     console.log(`✅ Found ${itineraries.length} itineraries for tour ${tourId}`);
@@ -675,7 +676,7 @@ exports.addBudgetBreakdown = async (req, res) => {
 
     // Add to itinerary
     itinerary.budget_breakdowns.push(budgetItem._id);
-    
+
     // Update total cost
     await itinerary.updateTotalCost();
 
@@ -974,7 +975,7 @@ exports.reorderActivities = async (req, res) => {
     }
 
     const itinerary = await Itinerary.findById(itineraryId);
-    
+
     if (!itinerary) {
       return res.status(404).json({
         success: false,

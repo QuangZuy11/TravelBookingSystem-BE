@@ -93,4 +93,4 @@ itineraryActivitySchema.pre('save', function(next) {
 itineraryActivitySchema.set('toJSON', { virtuals: true });
 itineraryActivitySchema.set('toObject', { virtuals: true });
 
-module.exports = mongoose.model('ItineraryActivity', itineraryActivitySchema);
+module.exports = mongoose.model('ItineraryActivity', itineraryActivitySchema, 'ITINERARY_ACTIVITIES');

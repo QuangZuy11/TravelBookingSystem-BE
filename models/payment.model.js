@@ -1,9 +1,14 @@
 const mongoose = require('mongoose');
 
 const paymentSchema = new mongoose.Schema({
+    bookingType: {
+        type: String,
+        enum: ['HotelBooking', 'TourBooking'],
+        required: true
+    },
     bookingId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Booking',
+        refPath: 'bookingType',
         required: true
     },
     userId: {
@@ -77,4 +82,4 @@ const paymentSchema = new mongoose.Schema({
     }
 });
 
-module.exports = mongoose.model('Payment', paymentSchema);
+module.exports = mongoose.model('Payment', paymentSchema, 'PAYMENTS');

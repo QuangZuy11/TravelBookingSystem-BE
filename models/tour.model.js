@@ -395,4 +395,4 @@ tourSchema.statics.findAvailableByDate = function(date) {
   });
 };
 
-module.exports = mongoose.model("Tour", tourSchema);
+module.exports = mongoose.model("Tour", tourSchema, "TOURS");

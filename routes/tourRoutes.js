@@ -4,6 +4,7 @@ const tourController = require('../controllers/service-provider/tour/tourControl
 const tourBookingController = require('../controllers/service-provider/tour/tourBookingController');
 const tourDatesController = require('../controllers/service-provider/tour/tourDatesController');
 const itineraryController = require('../controllers/service-provider/tour/itineraryController');
+const authMiddleware = require('../middlewares/auth.middleware');
 const { checkServiceProviderVerification } = require('../middlewares/verificationMiddleware');
 
 // ===== TOUR MANAGEMENT =====
@@ -17,26 +18,26 @@ router.get('/provider/:providerId/tours', tourController.getAllProviderTours);
 router.get('/provider/:providerId/tours/:tourId', tourController.getTourById);
 
 // Tour CRUD - CREATE/UPDATE/DELETE operations (require verified 'tour' license)
-router.post('/provider/:providerId/tours', 
-    // authMiddleware, // TODO: Add auth middleware
+router.post('/provider/:providerId/tours',
+    authMiddleware,
     checkServiceProviderVerification('tour'),
     tourController.createTour
 );
 
-router.put('/provider/:providerId/tours/:tourId', 
-    // authMiddleware, // TODO: Add auth middleware
+router.put('/provider/:providerId/tours/:tourId',
+    authMiddleware,
     checkServiceProviderVerification('tour'),
     tourController.updateTour
 );
 
-router.delete('/provider/:providerId/tours/:tourId', 
-    // authMiddleware, // TODO: Add auth middleware
+router.delete('/provider/:providerId/tours/:tourId',
+    authMiddleware,
     checkServiceProviderVerification('tour'),
     tourController.deleteTour
 );
 
-router.patch('/provider/:providerId/tours/:tourId/status', 
-    // authMiddleware, // TODO: Add auth middleware
+router.patch('/provider/:providerId/tours/:tourId/status',
+    authMiddleware,
     checkServiceProviderVerification('tour'),
     tourController.updateTourStatus
 );
@@ -44,14 +45,14 @@ router.patch('/provider/:providerId/tours/:tourId/status',
 // ===== TOUR DATES MANAGEMENT =====
 
 // Add dates - Requires verification
-router.post('/:tourId/dates', 
-    // authMiddleware, // TODO: Add auth middleware
+router.post('/:tourId/dates',
+    authMiddleware,
     checkServiceProviderVerification('tour'),
     tourDatesController.addAvailableDate
 );
 
-router.post('/:tourId/dates/bulk', 
-    // authMiddleware, // TODO: Add auth middleware
+router.post('/:tourId/dates/bulk',
+    authMiddleware,
     checkServiceProviderVerification('tour'),
     tourDatesController.addBulkDates
 );
@@ -61,20 +62,20 @@ router.get('/:tourId/dates', tourDatesController.getTourDates);
 router.get('/:tourId/dates/:date/availability', tourDatesController.checkDateAvailability);
 
 // Update/Delete dates - Requires verification
-router.put('/:tourId/dates/:date', 
-    // authMiddleware, // TODO: Add auth middleware
+router.put('/:tourId/dates/:date',
+    authMiddleware,
     checkServiceProviderVerification('tour'),
     tourDatesController.updateDate
 );
 
-router.delete('/:tourId/dates/:date', 
-    // authMiddleware, // TODO: Add auth middleware
+router.delete('/:tourId/dates/:date',
+    authMiddleware,
     checkServiceProviderVerification('tour'),
     tourDatesController.deleteDate
 );
 
-router.put('/:tourId/dates/:date/cancel', 
-    // authMiddleware, // TODO: Add auth middleware
+router.put('/:tourId/dates/:date/cancel',
+    authMiddleware,
     checkServiceProviderVerification('tour'),
     tourDatesController.cancelDate
 );
@@ -89,39 +90,39 @@ router.get('/:tourId/itineraries', itineraryController.getTourItineraries);
 router.get('/itineraries/:id', itineraryController.getItineraryById);
 
 // Itinerary CRUD - CREATE/UPDATE/DELETE operations (require verified 'tour' license)
-router.post('/:tourId/itineraries', 
-    // authMiddleware, // TODO: Add auth middleware
+router.post('/:tourId/itineraries',
+    authMiddleware,
     checkServiceProviderVerification('tour'),
     itineraryController.createItinerary
 );
 
-router.put('/itineraries/:id', 
-    // authMiddleware, // TODO: Add auth middleware
+router.put('/itineraries/:id',
+    authMiddleware,
     checkServiceProviderVerification('tour'),
     itineraryController.updateItinerary
 );
 
-router.delete('/itineraries/:id', 
-    // authMiddleware, // TODO: Add auth middleware
+router.delete('/itineraries/:id',
+    authMiddleware,
     checkServiceProviderVerification('tour'),
     itineraryController.deleteItinerary
 );
 
 // Itinerary Activities - Require verification
-router.post('/itineraries/:id/activities', 
-    // authMiddleware, // TODO: Add auth middleware
+router.post('/itineraries/:id/activities',
+    authMiddleware,
     checkServiceProviderVerification('tour'),
     itineraryController.addActivity
 );
 
-router.put('/itineraries/:id/activities/:activityId', 
-    // authMiddleware, // TODO: Add auth middleware
+router.put('/itineraries/:id/activities/:activityId',
+    authMiddleware,
     checkServiceProviderVerification('tour'),
     itineraryController.updateActivity
 );
 
-router.delete('/itineraries/:id/activities/:activityId', 
-    // authMiddleware, // TODO: Add auth middleware
+router.delete('/itineraries/:id/activities/:activityId',
+    authMiddleware,
     checkServiceProviderVerification('tour'),
     itineraryController.deleteActivity
 );

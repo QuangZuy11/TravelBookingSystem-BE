@@ -48,7 +48,7 @@ const roomSchema = new mongoose.Schema({
     bookings: [{
         bookingId: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: 'Booking'
+            ref: 'HotelBooking'
         },
         checkIn: Date,
         checkOut: Date
@@ -87,4 +87,4 @@ roomSchema.post('remove', async function(doc) {
     });
 });
 
-module.exports = mongoose.model('Room', roomSchema);
+module.exports = mongoose.model('Room', roomSchema, 'HOTEL_ROOMS');

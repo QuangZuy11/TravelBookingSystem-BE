@@ -8,7 +8,7 @@ const reviewSchema = new mongoose.Schema({
     },
     serviceType: {
         type: String,
-        enum: ['tour', 'hotel', 'flight'],
+        enum: ['tour', 'hotel'],
         required: true
     },
     serviceId: {
@@ -21,9 +21,14 @@ const reviewSchema = new mongoose.Schema({
         ref: 'ServiceProvider',
         required: true
     },
+    bookingType: {
+        type: String,
+        enum: ['HotelBooking', 'TourBooking'],
+        required: true
+    },
     bookingId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Booking',
+        refPath: 'bookingType',
         required: true
     },
     rating: {
@@ -78,4 +83,4 @@ const reviewSchema = new mongoose.Schema({
     }
 });
 
-module.exports = mongoose.model('Review', reviewSchema);
+module.exports = mongoose.model('Review', reviewSchema, 'REVIEWS');

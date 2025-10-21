@@ -4,7 +4,7 @@ const itinerarySchema = new mongoose.Schema({
     tour_id: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Tour',
-        required: true
+        required: false // made optional to support generated itineraries not tied to a Tour
     },
     provider_id: {
         type: mongoose.Schema.Types.ObjectId,
@@ -43,7 +43,7 @@ const itinerarySchema = new mongoose.Schema({
     transportation: {
         type: {
             type: String,
-            enum: ['flight', 'bus', 'train', 'car', 'boat', 'walking', 'other']
+            enum: ['bus', 'train', 'car', 'boat', 'walking', 'other']
         },
         details: String,
         departure_time: String,
@@ -67,17 +67,25 @@ const itinerarySchema = new mongoose.Schema({
 });
 
 // Indexes
-itinerarySchema.index({ tour_id: 1, day_number: 1 }, { unique: true }); // Unique day per tour
+// Unique day per tour when tour_id is present. Use partial index to allow multiple generated itineraries without a tour_id.
+itinerarySchema.index({ tour_id: 1, day_number: 1 }, { unique: true, partialFilterExpression: { tour_id: { $exists: true, $ne: null } } });
 itinerarySchema.index({ provider_id: 1 });
 
 // Update timestamp on save
-itinerarySchema.pre('save', function(next) {
+itinerarySchema.pre('save', function (next) {
     this.updated_at = Date.now();
     next();
+});
+
+// Virtual populate for budget_breakdowns (reverse relationship)
+itinerarySchema.virtual('budget_breakdowns', {
+    ref: 'BudgetBreakdown',
+    localField: '_id',
+    foreignField: 'itinerary_id'
 });
 
 // Ensure virtuals are included
 itinerarySchema.set('toJSON', { virtuals: true });
 itinerarySchema.set('toObject', { virtuals: true });
 
-module.exports = mongoose.model('Itinerary', itinerarySchema);
+module.exports = mongoose.model('Itinerary', itinerarySchema, 'ITINERARIES');

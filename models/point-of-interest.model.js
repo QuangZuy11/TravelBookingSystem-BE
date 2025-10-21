@@ -76,4 +76,4 @@ const pointOfInterestSchema = new mongoose.Schema({
     }
 });
 
-module.exports = mongoose.model('PointOfInterest', pointOfInterestSchema);
+module.exports = mongoose.model('PointOfInterest', pointOfInterestSchema, 'POINTS_OF_INTEREST');
