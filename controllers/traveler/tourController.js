@@ -40,7 +40,7 @@ const getAllToursForTraveler = async (req, res) => {
       tours = tours.sort((a, b) => parseFloat(b.rating) - parseFloat(a.rating));
     }
 
-    // 🧩 Format lại dữ liệu để frontend dễ hiển thị
+    // 🧩 Format dữ liệu trả về frontend
     const formattedTours = tours.map((tour) => ({
       id: tour._id,
       name: tour.title,
@@ -50,8 +50,15 @@ const getAllToursForTraveler = async (req, res) => {
       rating: parseFloat(tour.rating),
       reviews: parseInt(tour.total_rating),
       image: tour.image,
-      highlights: tour.description, // description là mảng => dùng luôn làm highlights
+      highlights: tour.highlights,
+      description: tour.description,
+      included_services: tour.included_services,
       type: tour.price === 0 ? "free" : "package",
+      // Add missing fields with default values
+      max_guests: tour.max_guests || 20,
+      discount: tour.discount || 0,
+      discount_label: tour.discount_label || null,
+      tags: tour.tags || [],
     }));
 
     res.status(200).json({
@@ -88,8 +95,15 @@ const getTourById = async (req, res) => {
       rating: parseFloat(tour.rating),
       reviews: parseInt(tour.total_rating),
       image: tour.image,
-      highlights: tour.description,
+      highlights: tour.highlights,
+      description: tour.description,
+      included_services: tour.included_services,
       type: tour.price === 0 ? "free" : "package",
+      // Add missing fields with default values
+      max_guests: tour.max_guests || 20,
+      discount: tour.discount || 0,
+      discount_label: tour.discount_label || null,
+      tags: tour.tags || [],
     };
 
     res.status(200).json({

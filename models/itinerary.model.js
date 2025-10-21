@@ -1,91 +1,40 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const itinerarySchema = new mongoose.Schema({
+const itinerarySchema = new mongoose.Schema(
+  {
     tour_id: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Tour',
-        required: false // made optional to support generated itineraries not tied to a Tour
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Tour",
+      required: true,
     },
-    provider_id: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'ServiceProvider',
-        required: false  // Optional for now (no auth)
-    },
-    day_number: {
-        type: Number,
-        required: true,
-        min: 1
+    day: {
+      type: Number,
+      required: true,
     },
     title: {
-        type: String,
-        required: true,
-        trim: true
+      type: String,
+      required: true,
+      trim: true,
     },
     description: {
-        type: String,
-        trim: true
+      type: String,
+      required: true,
+      trim: true,
     },
-    meals: [{
-        type: String,
-        enum: ['breakfast', 'lunch', 'dinner', 'snack']
-    }],
-    accommodation: {
-        name: String,
-        type: {
-            type: String,
-            enum: ['hotel', 'resort', 'homestay', 'camping', 'guesthouse', 'other']
+    activities: {
+      type: [String],
+      required: true,
+      validate: {
+        validator: function (arr) {
+          return arr.length > 0;
         },
-        address: String,
-        check_in: String,
-        check_out: String,
-        rating: Number
+        message: "Itinerary must contain at least one activity",
+      },
     },
-    transportation: {
-        type: {
-            type: String,
-            enum: ['bus', 'train', 'car', 'boat', 'walking', 'other']
-        },
-        details: String,
-        departure_time: String,
-        arrival_time: String,
-        departure_location: String,
-        arrival_location: String
-    },
-    activities: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'ItineraryActivity'
-    }],
-    notes: String,
-    created_at: {
-        type: Date,
-        default: Date.now
-    },
-    updated_at: {
-        type: Date,
-        default: Date.now
-    }
-});
+  },
+  {
+    timestamps: true,
+  }
+);
 
-// Indexes
-// Unique day per tour when tour_id is present. Use partial index to allow multiple generated itineraries without a tour_id.
-itinerarySchema.index({ tour_id: 1, day_number: 1 }, { unique: true, partialFilterExpression: { tour_id: { $exists: true, $ne: null } } });
-itinerarySchema.index({ provider_id: 1 });
-
-// Update timestamp on save
-itinerarySchema.pre('save', function (next) {
-    this.updated_at = Date.now();
-    next();
-});
-
-// Virtual populate for budget_breakdowns (reverse relationship)
-itinerarySchema.virtual('budget_breakdowns', {
-    ref: 'BudgetBreakdown',
-    localField: '_id',
-    foreignField: 'itinerary_id'
-});
-
-// Ensure virtuals are included
-itinerarySchema.set('toJSON', { virtuals: true });
-itinerarySchema.set('toObject', { virtuals: true });
-
-module.exports = mongoose.model('Itinerary', itinerarySchema, 'ITINERARIES');
+module.exports = mongoose.model("Itinerary", itinerarySchema);
