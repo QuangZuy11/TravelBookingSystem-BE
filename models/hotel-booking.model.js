@@ -1,0 +1,288 @@
+const mongoose = require('mongoose');
+
+
+const hotelBookingSchema = new mongoose.Schema({
+    // ID phòng khách sạn được đặt
+    hotel_room_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Room',
+        required: [true, 'ID phòng khách sạn là bắt buộc']
+    },
+
+    // ID người dùng đặt phòng
+    user_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: [true, 'ID người dùng là bắt buộc']
+    },
+
+
+    // Ngày đặt phòng (thời điểm tạo booking)
+    booking_date: {
+        type: Date,
+        default: Date.now
+    },
+
+    // Ngày nhận phòng
+    check_in_date: {
+        type: Date,
+        required: [true, 'Ngày check-in là bắt buộc'],
+        validate: {
+            validator: function (value) {
+                return value >= new Date();
+            },
+            message: 'Ngày check-in phải từ hôm nay trở đi'
+        }
+    },
+
+    // Ngày trả phòng
+    check_out_date: {
+        type: Date,
+        required: [true, 'Ngày check-out là bắt buộc'],
+        validate: {
+            validator: function (value) {
+                return value > this.check_in_date;
+            },
+            message: 'Ngày check-out phải sau ngày check-in'
+        }
+    },
+
+    // Tổng số tiền phải trả
+    total_amount: {
+        type: mongoose.Schema.Types.Decimal128,
+        required: [true, 'Tổng số tiền là bắt buộc'],
+        get: function (value) {
+            if (value) {
+                return parseFloat(value.toString());
+            }
+            return value;
+        }
+    },
+
+    // Trạng thái thanh toán
+    payment_status: {
+        type: String,
+        enum: {
+            values: ['pending', 'paid', 'refunded', 'failed'],
+            message: '{VALUE} không phải trạng thái thanh toán hợp lệ'
+        },
+        default: 'pending'
+    },
+
+    // Trạng thái đặt phòng
+    booking_status: {
+        type: String,
+        enum: {
+            values: ['pending', 'confirmed', 'cancelled'],
+            message: '{VALUE} không phải trạng thái đặt phòng hợp lệ'
+        },
+        default: 'pending'
+    },
+
+
+
+    // Ngày hủy
+    cancelled_at: {
+        type: Date
+    },
+
+    // Thời gian tạo
+    created_at: {
+        type: Date,
+        default: Date.now
+    },
+
+    // Thời gian cập nhật
+    updated_at: {
+        type: Date,
+        default: Date.now
+    }
+}, {
+    timestamps: true, // Tự động thêm createdAt và updatedAt
+    toJSON: { getters: true }, // Áp dụng getters khi chuyển sang JSON
+    toObject: { getters: true }
+});
+
+// Index để tối ưu tìm kiếm
+hotelBookingSchema.index({ user_id: 1, booking_date: -1 });
+hotelBookingSchema.index({ hotel_room_id: 1, check_in_date: 1, check_out_date: 1 });
+hotelBookingSchema.index({ booking_status: 1, payment_status: 1 });
+
+// Middleware: Cập nhật updated_at trước khi save
+hotelBookingSchema.pre('save', function (next) {
+    this.updated_at = Date.now();
+    next();
+});
+
+// Middleware: Kiểm tra phòng có sẵn không trước khi save
+hotelBookingSchema.pre('save', async function (next) {
+    if (this.isNew) {
+        const Room = mongoose.model('Room');
+        const room = await Room.findById(this.hotel_room_id);
+
+        if (!room) {
+            return next(new Error('Phòng không tồn tại'));
+        }
+
+        // Kiểm tra phòng có đang được đặt trong khoảng thời gian này không
+        const overlappingBooking = await this.constructor.findOne({
+            hotel_room_id: this.hotel_room_id,
+            booking_status: { $in: ['confirmed', 'checked_in', 'pending'] },
+            $or: [
+                {
+                    check_in_date: { $lt: this.check_out_date },
+                    check_out_date: { $gt: this.check_in_date }
+                }
+            ]
+        });
+
+        if (overlappingBooking) {
+            return next(new Error('Phòng đã được đặt trong khoảng thời gian này'));
+        }
+    }
+
+    // Kiểm tra quan hệ 1:1 với Payment
+    if (this.isModified('payment_id') && this.payment_id) {
+        const Payment = mongoose.model('Payment');
+        const payment = await Payment.findById(this.payment_id);
+
+        if (payment && payment.booking_id && !payment.booking_id.equals(this._id)) {
+            return next(new Error('Payment này đã được link với booking khác'));
+        }
+    }
+
+    next();
+});
+
+// Middleware: Cập nhật bookings trong Room model
+hotelBookingSchema.post('save', async function (doc) {
+    const Room = mongoose.model('Room');
+
+    // Thêm booking vào room
+    await Room.findByIdAndUpdate(doc.hotel_room_id, {
+        $addToSet: {
+            bookings: {
+                bookingId: doc._id,
+                checkIn: doc.check_in_date,
+                checkOut: doc.check_out_date
+            }
+        }
+    });
+});
+
+// Method: Tính số đêm
+hotelBookingSchema.methods.calculateNights = function () {
+    const checkIn = new Date(this.check_in_date);
+    const checkOut = new Date(this.check_out_date);
+    const diffTime = Math.abs(checkOut - checkIn);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+};
+
+// Method: Kiểm tra có thể hủy không
+hotelBookingSchema.methods.canCancel = function () {
+    const now = new Date();
+    const checkIn = new Date(this.check_in_date);
+    const hoursUntilCheckIn = (checkIn - now) / (1000 * 60 * 60);
+
+    // Có thể hủy nếu còn hơn 24 giờ trước check-in
+    return hoursUntilCheckIn > 24 && this.booking_status !== 'cancelled';
+};
+
+// Method: Hủy booking
+hotelBookingSchema.methods.cancelBooking = async function (reason) {
+    if (!this.canCancel()) {
+        throw new Error('Không thể hủy booking này');
+    }
+
+    this.booking_status = 'cancelled';
+    this.cancellation_reason = reason;
+    this.cancelled_at = new Date();
+
+    // Cập nhật trạng thái thanh toán nếu đã thanh toán
+    if (this.payment_status === 'paid' && this.payment_id) {
+        this.payment_status = 'refunded';
+
+        // Xử lý refund payment
+        const Payment = mongoose.model('Payment');
+        const payment = await Payment.findById(this.payment_id);
+        if (payment) {
+            await payment.processRefund(reason);
+        }
+    }
+
+    await this.save();
+
+    // Xóa booking khỏi room
+    const Room = mongoose.model('Room');
+    await Room.findByIdAndUpdate(this.hotel_room_id, {
+        $pull: {
+            bookings: { bookingId: this._id }
+        }
+    });
+};
+
+// Method: Link payment với booking (đảm bảo 1:1)
+hotelBookingSchema.methods.linkPayment = async function (paymentId) {
+    const Payment = mongoose.model('Payment');
+    const payment = await Payment.findById(paymentId);
+
+    if (!payment) {
+        throw new Error('Payment không tồn tại');
+    }
+
+    if (payment.booking_id && !payment.booking_id.equals(this._id)) {
+        throw new Error('Payment đã được link với booking khác');
+    }
+
+    // Update booking
+    this.payment_id = paymentId;
+    this.payment_status = payment.status === 'completed' ? 'paid' : 'pending';
+
+    // Update payment
+    payment.booking_id = this._id;
+
+    await Promise.all([this.save(), payment.save()]);
+
+    return this;
+};
+
+// Static method: Tìm bookings theo user
+hotelBookingSchema.statics.findByUser = function (userId, options = {}) {
+    const query = { user_id: userId };
+
+    if (options.status) {
+        query.booking_status = options.status;
+    }
+
+    return this.find(query)
+        .populate('hotel_room_id')
+        .populate('user_id', 'name email phone')
+        .populate('payment_id')
+        .sort({ booking_date: -1 });
+};
+
+// Static method: Tìm bookings theo phòng
+hotelBookingSchema.statics.findByRoom = function (roomId, options = {}) {
+    const query = { hotel_room_id: roomId };
+
+    if (options.startDate && options.endDate) {
+        query.$or = [
+            {
+                check_in_date: { $lt: options.endDate },
+                check_out_date: { $gt: options.startDate }
+            }
+        ];
+    }
+
+    return this.find(query)
+        .populate('user_id', 'name email phone')
+        .sort({ check_in_date: 1 });
+};
+
+// Virtual: Tính tổng số khách
+hotelBookingSchema.virtual('total_guests').get(function () {
+    return this.number_of_guests.adults + this.number_of_guests.children;
+});
+
+module.exports = mongoose.model('HotelBooking', hotelBookingSchema, 'HOTEL_BOOKINGS');

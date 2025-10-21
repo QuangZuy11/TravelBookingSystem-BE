@@ -1,27 +1,47 @@
 const jwt = require('jsonwebtoken');
 
-module.exports = function (req, res, next) {
-  // 1. Lấy token từ header
-  const authHeader = req.header('Authorization');
+module.exports = function requireAuth(req, res, next) {
+  // 1) Lấy Authorization header (hỗ trợ cả chữ thường và hoa)
+  const rawHeader = req.headers['authorization'] || req.headers['Authorization'];
 
-  // 2. Kiểm tra xem header 'Authorization' có tồn tại và đúng định dạng không
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ msg: 'No token or invalid token format, authorization denied' });
+  if (!rawHeader) {
+    return res.status(401).json({ success: false, message: 'Thiếu Authorization header' });
   }
 
-  try {
-    // 3. Tách lấy giá trị token (bỏ "Bearer " ở đầu)
-    const token = authHeader.split(' ')[1];
+  // 2) Hỗ trợ cả 2 định dạng: "Bearer <token>" hoặc chỉ "<token>"
+  const parts = rawHeader.split(' ');
+  const token = parts.length === 2 && /^Bearer$/i.test(parts[0]) ? parts[1] : rawHeader;
 
-    // 4. Xác thực token
+  try {
+    // 3) Xác thực token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // 5. Gắn payload đã giải mã vào request để các route sau có thể sử dụng
-    // Support both formats: decoded.user (old format) or decoded directly (new format)
-    req.user = decoded.user || decoded;
-    next();
-    
+    // 4) Chuẩn hóa req.user để luôn có _id
+    // Trường hợp 1: payload dạng { user: { id, role } }
+    if (decoded && decoded.user) {
+      const u = decoded.user;
+      req.user = {
+        _id: u._id || u.id || u.userId,
+        id: u.id || u._id || u.userId,
+        role: u.role,
+        ...u
+      };
+    } else {
+      // Trường hợp 2: payload để trực tiếp trên root { id/_id, email, role, ... }
+      req.user = {
+        _id: decoded._id || decoded.id || decoded.userId,
+        id: decoded.id || decoded._id || decoded.userId,
+        role: decoded.role,
+        ...decoded
+      };
+    }
+
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ success: false, message: 'Token không chứa thông tin người dùng hợp lệ' });
+    }
+
+    return next();
   } catch (err) {
-    res.status(401).json({ msg: 'Token is not valid' });
+    return res.status(401).json({ success: false, message: 'Token không hợp lệ hoặc đã hết hạn' });
   }
 };

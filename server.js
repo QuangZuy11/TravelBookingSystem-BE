@@ -15,6 +15,7 @@ const serviceProviderAuthRoutes = require("./routes/serviceProviderAuthRoutes");
 const adminServiceProviderRoutes = require("./routes/admin/adminServiceProviderRoutes");
 const travelerRoutes = require("./routes/traveler/hotel.routes");
 const travelerHotelRoomRoutes = require("./routes/traveler/hotel-room.routes");
+const travelerHotelBookingRoutes = require("./routes/traveler/hotel-booking.routes");
 const adBookingRoutes = require("./routes/adBooking.routes");
 const travelerTourRoutes = require("./routes/traveler/TourRoutes");
 const aiItineraryRoutes = require('./routes/aiItinerary.routes');
@@ -33,6 +34,7 @@ app.get("/", (req, res) => {
 /// Traveler routes
 app.use("/api/traveler/hotels", travelerRoutes);
 app.use("/api/traveler/hotels", travelerHotelRoomRoutes);
+app.use("/api/traveler/bookings", travelerHotelBookingRoutes);
 // Tour traveler
 app.use("/api/traveler/tours", travelerTourRoutes);
 //AD_booking
