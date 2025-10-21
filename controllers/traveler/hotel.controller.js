@@ -113,10 +113,10 @@ exports.searchHotels = async (req, res) => {
         // Thực hiện query tìm kiếm
         const hotels = await Hotel.find(searchQuery)
             .populate('providerId', 'name email phone') // Lấy thông tin nhà cung cấp
+            .populate('reviews.userId', 'name email') // Lấy thông tin người review
             .sort(sortOptions)
             .skip(skip)
-            .limit(Number(limit))
-            .select('-reviews -__v'); // Loại bỏ reviews và __v để tối ưu performance
+            .limit(Number(limit)); // Trả về tất cả các trường
 
         // Đếm tổng số kết quả cho phân trang
         const totalCount = await Hotel.countDocuments(searchQuery);
