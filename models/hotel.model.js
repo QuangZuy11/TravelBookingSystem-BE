@@ -100,6 +100,25 @@ const hotelSchema = new mongoose.Schema({
     updatedAt: {
         type: Date,
         default: Date.now
+    },
+    latestPromotion: {
+        promotionId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Promotion'
+        },
+        code: String,
+        label: String,
+        discountType: {
+            type: String,
+            enum: ['percent', 'amount']
+        },
+        discountValue: Number,
+        startDate: Date,
+        endDate: Date,
+        updatedAt: {
+            type: Date,
+            default: Date.now
+        }
     }
 });
 

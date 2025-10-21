@@ -1,13 +1,12 @@
 const Tour = require("../../models/tour.model.js");
 
-// 🧭 Lấy toàn bộ tour cho traveler (có hỗ trợ search, filter, sort)
+// L?y to�n b? tour cho traveler (c� h? tr? search, filter, sort)
 const getAllToursForTraveler = async (req, res) => {
   try {
     const { search, destination, price, sortBy } = req.query;
 
     let query = {};
 
-    // 🔍 Tìm kiếm theo tên tour hoặc địa điểm
     if (search) {
       query.$or = [
         { title: { $regex: search, $options: "i" } },
@@ -15,23 +14,19 @@ const getAllToursForTraveler = async (req, res) => {
       ];
     }
 
-    // 🎯 Lọc theo điểm đến
     if (destination && destination !== "all") {
       query.location = { $regex: destination, $options: "i" };
     }
 
-    // 💰 Lọc theo khoảng giá
     if (price && price !== "all") {
       const [min, max] = price.split("-").map(Number);
-      if (!isNaN(min) && !isNaN(max)) {
+      if (!Number.isNaN(min) && !Number.isNaN(max)) {
         query.price = { $gte: min, $lte: max };
       }
     }
 
-    // 🧾 Truy vấn từ Mongo
     let tours = await Tour.find(query);
 
-    // 🔽 Sắp xếp theo yêu cầu
     if (sortBy === "price-low") {
       tours = tours.sort((a, b) => a.price - b.price);
     } else if (sortBy === "price-high") {
@@ -40,7 +35,6 @@ const getAllToursForTraveler = async (req, res) => {
       tours = tours.sort((a, b) => parseFloat(b.rating) - parseFloat(a.rating));
     }
 
-    // 🧩 Format lại dữ liệu để frontend dễ hiển thị
     const formattedTours = tours.map((tour) => ({
       id: tour._id,
       name: tour.title,
@@ -50,7 +44,7 @@ const getAllToursForTraveler = async (req, res) => {
       rating: parseFloat(tour.rating),
       reviews: parseInt(tour.total_rating),
       image: tour.image,
-      highlights: tour.description, // description là mảng => dùng luôn làm highlights
+      highlights: tour.description,
       type: tour.price === 0 ? "free" : "package",
     }));
 
@@ -60,22 +54,22 @@ const getAllToursForTraveler = async (req, res) => {
       data: formattedTours,
     });
   } catch (error) {
-    console.error("❌ Lỗi khi lấy danh sách tour:", error);
+    console.error("L?i khi l?y danh s�ch tour:", error);
     res.status(500).json({
       success: false,
-      message: "Lỗi server khi lấy danh sách tour",
+      message: "L?i server khi l?y danh s�ch tour",
     });
   }
 };
 
-// 🧭 Lấy chi tiết 1 tour theo id
+// L?y chi ti?t 1 tour theo id
 const getTourById = async (req, res) => {
   try {
     const tour = await Tour.findById(req.params.id);
     if (!tour) {
       return res.status(404).json({
         success: false,
-        message: "Không tìm thấy tour",
+        message: "Kh�ng t�m th?y tour",
       });
     }
 
@@ -97,10 +91,10 @@ const getTourById = async (req, res) => {
       data: formattedTour,
     });
   } catch (error) {
-    console.error("❌ Lỗi khi lấy chi tiết tour:", error);
+    console.error("L?i khi l?y chi ti?t tour:", error);
     res.status(500).json({
       success: false,
-      message: "Lỗi server khi lấy chi tiết tour",
+      message: "L?i server khi l?y chi ti?t tour",
     });
   }
 };
