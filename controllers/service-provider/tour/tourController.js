@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Tour = require('../../../models/tour.model');
 const Review = require('../../../models/review.model');
 const Itinerary = require('../../../models/itinerary.model');
+const googleDriveService = require('../../../services/googleDrive.service');
 
 // Dashboard Statistics
 exports.getProviderDashboardStats = async (req, res) => {
@@ -103,17 +104,88 @@ exports.getTourStatistics = async (req, res) => {
 
 // Create new tour
 exports.createTour = async (req, res) => {
+    console.log('📝 Creating tour with body:', req.body);
+    console.log('📁 File received:', req.file ? 'Yes' : 'No');
+
+    let createdTour = null;
+
     try {
-        const tour = await Tour.create({
-            ...req.body,
-            provider_id: req.params.providerId
+        // Parse tour data if sent as multipart/form-data
+        let tourData;
+        if (req.body.tourData) {
+            tourData = JSON.parse(req.body.tourData);
+        } else {
+            tourData = req.body;
+
+            // Parse JSON strings in tourData for array/object fields
+            const fieldsToParseAsJSON = [
+                'description', 'services', 'languages_offered', 'highlights',
+                'what_to_bring', 'available_dates', 'capacity', 'booking_info',
+                'pricing', 'meeting_point', 'accessibility'
+            ];
+
+            fieldsToParseAsJSON.forEach(field => {
+                if (tourData[field] && typeof tourData[field] === 'string') {
+                    try {
+                        tourData[field] = JSON.parse(tourData[field]);
+                        console.log(`✅ Parsed ${field} from string to object/array`);
+                    } catch (e) {
+                        console.log(`⚠️ Could not parse ${field}, keeping as string`);
+                    }
+                }
+            });
+        }
+
+        // 1. Create tour with image handling
+        // Priority: tourData.image (URL from frontend) > '' (will upload file later)
+        const initialImage = tourData.image || (req.file ? '' : tourData.image);
+
+        createdTour = await Tour.create({
+            ...tourData,
+            provider_id: req.params.providerId,
+            image: initialImage || '' // Use existing URL or empty (will upload)
         });
+
+        console.log('✅ Tour created:', createdTour._id);
+        console.log('📸 Initial image:', initialImage || 'Will upload file');
+
+        // 2. Upload image to Google Drive if file provided (overrides URL)
+        if (req.file) {
+            console.log('📤 Uploading tour image to Drive...');
+
+            const uploadedFile = await googleDriveService.uploadFile(
+                req.file,
+                `tours/${createdTour._id}`
+            );
+
+            // 3. Update tour with uploaded image URL
+            createdTour.image = uploadedFile.direct_url;
+            await createdTour.save();
+
+            console.log('✅ Uploaded tour image successfully');
+        } else if (!initialImage) {
+            // No file and no URL provided - this is an error
+            throw new Error('Tour image is required - provide either a file upload or image URL');
+        }
+
         res.status(201).json({
             success: true,
-            data: tour
+            message: req.file ? 'Tour created with image' : 'Tour created successfully',
+            data: createdTour
         });
     } catch (error) {
         console.error('❌ Tour creation error:', error);
+
+        // Rollback: delete tour if it was created but upload failed
+        if (createdTour) {
+            try {
+                await Tour.findByIdAndDelete(createdTour._id);
+                console.log('🔄 Rolled back tour creation');
+            } catch (rollbackError) {
+                console.error('❌ Rollback failed:', rollbackError);
+            }
+        }
+
         res.status(400).json({
             success: false,
             error: error.message,
@@ -127,7 +199,36 @@ exports.createTour = async (req, res) => {
 
 // Update tour
 exports.updateTour = async (req, res) => {
+    console.log('\n🗺️ === UPDATE TOUR CONTROLLER ===');
+    console.log('Tour ID:', req.params.tourId);
+    console.log('Provider ID:', req.params.providerId);
+    console.log('Body fields:', req.body ? Object.keys(req.body).join(', ') : 'EMPTY');
+
     try {
+        // Initialize req.body if undefined/null
+        if (!req.body) {
+            req.body = {};
+        }
+
+        // Parse JSON strings in req.body for array/object fields
+        const fieldsToParseAsJSON = [
+            'description', 'services', 'languages_offered', 'highlights',
+            'what_to_bring', 'available_dates', 'capacity', 'booking_info',
+            'pricing', 'meeting_point', 'accessibility'
+        ];
+
+        fieldsToParseAsJSON.forEach(field => {
+            if (req.body[field] && typeof req.body[field] === 'string') {
+                try {
+                    req.body[field] = JSON.parse(req.body[field]);
+                    console.log(`✅ Parsed ${field} from string to object/array`);
+                } catch (e) {
+                    console.log(`⚠️ Could not parse ${field}, keeping as string`);
+                }
+            }
+        });
+
+        console.log('💾 Updating tour in database...');
         const tour = await Tour.findOneAndUpdate(
             { _id: req.params.tourId, provider_id: req.params.providerId },
             req.body,
@@ -135,11 +236,15 @@ exports.updateTour = async (req, res) => {
         );
 
         if (!tour) {
+            console.log('❌ Tour not found');
             return res.status(404).json({
                 success: false,
                 error: 'Tour not found'
             });
         }
+
+        console.log('✅ Tour updated successfully');
+        console.log('🗺️ === UPDATE TOUR COMPLETE ===\n');
 
         res.status(200).json({
             success: true,
@@ -147,7 +252,9 @@ exports.updateTour = async (req, res) => {
             data: tour
         });
     } catch (error) {
-        console.error('❌ Update tour error:', error);
+        console.error('❌ === ERROR IN UPDATE TOUR ===');
+        console.error('Error:', error.message);
+        console.error('Stack:', error.stack);
         res.status(400).json({
             success: false,
             error: error.message,

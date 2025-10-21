@@ -62,40 +62,109 @@ exports.generateItineraryFromRequest = async (req, res) => {
     const request = await AiItineraryRequest.findById(requestId);
     if (!request) return res.status(404).json({ success: false, message: 'Request not found' });
 
-    console.log(`🛰️ Generating itinerary for request ${requestId} -> destination=${request.destination}`);
+    console.log(`🛰️ Generating itinerary for request ${requestId}`);
+    console.log(`📋 Request details:`, {
+      destination: request.destination,
+      preferences: request.preferences,
+      budget_total: request.budget_total,
+      duration_days: request.duration_days
+    });
 
     // Mark processing
     request.status = 'processing';
     await request.save();
 
-    // Find destination (sử dụng field 'name' theo Destination model)
     let destination = null;
-    if (request.destination_id) {
-      destination = await Destination.findById(request.destination_id);
-    } else {
-      destination = await Destination.findOne({ name: new RegExp('^' + request.destination + '$', 'i') });
-    }
-    console.log('🛰️ Destination lookup result:', destination ? destination._id : 'none');
+    let destinationName = request.destination;
 
-    // Update request with destination_id if found
-    if (destination && !request.destination_id) {
-      request.destination_id = destination._id;
-      await request.save();
+    // CASE 1: User doesn't know where to go - AI suggests destination
+    if (!request.destination && !request.destination_id) {
+      console.log('🤔 User has no destination - asking AI for suggestion...');
+
+      try {
+        // Get all available destinations from DB
+        const availableDestinations = await Destination.find({}).limit(50);
+
+        if (availableDestinations.length === 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'No destinations available in database'
+          });
+        }
+
+        // Ask AI to suggest best destination
+        const suggestion = await aiService.generateDestinationSuggestion({
+          request,
+          availableDestinations
+        });
+
+        console.log('💡 AI suggested destination:', suggestion);
+
+        // Save AI suggestion
+        request.ai_suggested_destination = suggestion.suggested_destination_name;
+        request.ai_suggested_destination_id = suggestion.suggested_destination_id;
+        await request.save();
+
+        // Use suggested destination
+        destination = await Destination.findById(suggestion.suggested_destination_id);
+        destinationName = suggestion.suggested_destination_name;
+
+        console.log('✅ Using AI suggested destination:', destinationName);
+      } catch (aiErr) {
+        console.warn('⚠️ AI destination suggestion failed:', aiErr.message);
+        // Fallback: pick random popular destination
+        const fallbackDest = await Destination.findOne({}).sort({ 'ratings.average': -1 });
+        if (fallbackDest) {
+          destination = fallbackDest;
+          destinationName = fallbackDest.name;
+          request.ai_suggested_destination = fallbackDest.name;
+          request.ai_suggested_destination_id = fallbackDest._id;
+          await request.save();
+          console.log('🔄 Fallback to popular destination:', destinationName);
+        } else {
+          return res.status(400).json({
+            success: false,
+            message: 'Cannot determine destination and AI service unavailable'
+          });
+        }
+      }
     }
+    // CASE 2: User specified destination
+    else {
+      console.log('� User specified destination:', request.destination || 'by ID');
+
+      // Find destination (sử dụng field 'name' theo Destination model)
+      if (request.destination_id) {
+        destination = await Destination.findById(request.destination_id);
+      } else {
+        destination = await Destination.findOne({ name: new RegExp('^' + request.destination + '$', 'i') });
+      }
+
+      // Update request with destination_id if found
+      if (destination && !request.destination_id) {
+        request.destination_id = destination._id;
+        request.destination = destination.name;
+        await request.save();
+      }
+
+      destinationName = destination?.name || request.destination;
+    }
+
+    console.log('🛰️ Final destination:', destinationName, '| ID:', destination?._id);
 
     // Fetch POIs for destination, order by rating (sử dụng 'destinationId' theo POI model)
     let pois = [];
     if (destination) {
       pois = await PointOfInterest.find({ destinationId: destination._id })
         .sort({ 'ratings.average': -1 })
-        .limit(20);
+        .limit(30);
     } else {
       // Fallback: search POIs by destination string in name
       pois = await PointOfInterest.find({
-        name: new RegExp(request.destination, 'i')
+        name: new RegExp(destinationName, 'i')
       })
         .sort({ 'ratings.average': -1 })
-        .limit(20);
+        .limit(30);
     }
     console.log('🛰️ Found POIs:', pois.length);
 
@@ -110,7 +179,8 @@ exports.generateItineraryFromRequest = async (req, res) => {
       return Math.min(5, Math.max(1, Math.floor((pois.length || 3) / 3)));
     })();
 
-    // Partition POIs into days
+    console.log('📅 Duration:', days, 'days');
+
     // Try to call AI service to generate structured plan
     let aiPlan = null;
     try {
@@ -299,16 +369,32 @@ exports.generateItineraryFromRequest = async (req, res) => {
       tour_id: tour ? tour._id : null,
       provider_id: tour ? tour.provider_id : null,
       itinerary_data: createdItineraries,
-      summary: `Generated ${createdItineraries.length} itinerary days for ${request.destination}`
+      summary: destination
+        ? `Generated ${createdItineraries.length} itinerary days for ${destination.name}`
+        : `Generated ${createdItineraries.length} itinerary days for ${destinationName || 'destination'}`
     });
     await aiGen.save();
 
     // Update request
     request.status = 'completed';
-    request.ai_response = { generated_id: aiGen._id };
+    request.ai_response = {
+      generated_id: aiGen._id,
+      destination_used: destinationName,
+      ai_suggested: !!request.ai_suggested_destination
+    };
     await request.save();
 
-    res.status(200).json({ success: true, message: 'Itinerary generated', data: aiGen });
+    res.status(200).json({
+      success: true,
+      message: 'Itinerary generated',
+      data: aiGen,
+      destination: {
+        name: destinationName,
+        id: destination?._id,
+        ai_suggested: !!request.ai_suggested_destination,
+        suggestion_reason: request.ai_response?.suggestion_reason
+      }
+    });
   } catch (err) {
     console.error('Error generating itinerary', err);
     res.status(500).json({ success: false, message: 'Server error', error: err.message });
