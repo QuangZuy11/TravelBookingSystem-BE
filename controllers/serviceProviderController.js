@@ -105,34 +105,9 @@ exports.getProviderStatistics = async (req, res) => {
     }
 };
 
-// Upload provider documents
-exports.uploadDocuments = async (req, res) => {
-    try {
-        const provider = await ServiceProvider.findById(req.params.providerId);
-
-        if (!provider) {
-            return res.status(404).json({
-                success: false,
-                error: 'Service provider not found'
-            });
-        }
-
-        // Assuming req.files contains the uploaded documents
-        const documentUrls = req.files.map(file => file.path);
-        provider.documents.push(...documentUrls);
-        await provider.save();
-
-        res.status(200).json({
-            success: true,
-            data: provider
-        });
-    } catch (error) {
-        res.status(400).json({
-            success: false,
-            error: error.message
-        });
-    }
-};
+// ❌ REMOVED: uploadDocuments - Deprecated
+// Use new API instead: POST /api/upload/service-provider/license/:licenseId/documents
+// See: controllers/fileUpload.controller.js -> uploadLicenseDocuments
 
 // Get service processes
 exports.getServiceProcesses = async (req, res) => {

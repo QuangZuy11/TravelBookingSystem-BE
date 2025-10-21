@@ -6,7 +6,8 @@ const serviceProviderController = require('../controllers/serviceProviderControl
 router.get('/providers/:providerId', serviceProviderController.getProviderProfile);
 router.put('/providers/:providerId', serviceProviderController.updateProviderProfile);
 router.get('/providers/:providerId/statistics', serviceProviderController.getProviderStatistics);
-router.post('/providers/:providerId/documents', serviceProviderController.uploadDocuments);
+// ❌ REMOVED: uploadDocuments route - Use new upload API instead
+// POST /api/upload/service-provider/license/:licenseId/documents
 router.get('/providers/:providerId/processes', serviceProviderController.getServiceProcesses);
 
 module.exports = router;

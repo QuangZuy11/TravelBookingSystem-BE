@@ -6,6 +6,7 @@ const tourDatesController = require('../controllers/service-provider/tour/tourDa
 const itineraryController = require('../controllers/service-provider/tour/itineraryController');
 const authMiddleware = require('../middlewares/auth.middleware');
 const { checkServiceProviderVerification } = require('../middlewares/verificationMiddleware');
+const uploadMiddleware = require('../middlewares/upload.middleware');
 
 // ===== TOUR MANAGEMENT =====
 // Note: Add authentication middleware (authMiddleware) before deploying to production
@@ -18,9 +19,12 @@ router.get('/provider/:providerId/tours', tourController.getAllProviderTours);
 router.get('/provider/:providerId/tours/:tourId', tourController.getTourById);
 
 // Tour CRUD - CREATE/UPDATE/DELETE operations (require verified 'tour' license)
+// Supports optional single image upload (multipart/form-data)
 router.post('/provider/:providerId/tours',
     authMiddleware,
     checkServiceProviderVerification('tour'),
+    uploadMiddleware.uploadSingleImage, // Optional: handles single file if present
+    uploadMiddleware.handleMulterError,
     tourController.createTour
 );
 

@@ -2,15 +2,27 @@ const mongoose = require('mongoose');
 
 const aiItineraryRequestSchema = new mongoose.Schema({
   user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  destination: { type: String, required: true },
+
+  // Destination is now OPTIONAL (user may not know where to go)
+  destination: { type: String, required: false },
   destination_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Destination', required: false },
+
+  // Trip details
   start_date: { type: Date },
   end_date: { type: Date },
   duration_days: { type: Number },
   participant_number: { type: Number, default: 1 },
-  age_range: { type: Array, default: [] },
+  age_range: { type: Array, default: [] }, // e.g. ['28-35']
+  budget_total: { type: Number }, // Total budget in VND (e.g. 10000000)
   budget_level: { type: String, enum: ['low', 'medium', 'high'], default: 'medium' },
+
+  // Preferences (e.g. ['nature', 'food', 'culture', 'adventure'])
   preferences: { type: Array, default: [] },
+
+  // AI suggested destination (when user doesn't provide destination)
+  ai_suggested_destination: { type: String },
+  ai_suggested_destination_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Destination' },
+
   status: { type: String, enum: ['pending', 'processing', 'completed', 'failed'], default: 'pending' },
   ai_response: { type: Object },
   created_at: { type: Date, default: Date.now },

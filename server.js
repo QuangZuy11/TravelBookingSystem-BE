@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const path = require("path");
 require("dotenv").config();
 
 const app = express();
@@ -21,10 +22,17 @@ const travelerTourRoutes = require("./routes/traveler/TourRoutes");
 const aiItineraryRoutes = require('./routes/aiItinerary.routes');
 const poiRoutes = require('./routes/poi.routes');
 const destinationRoutes = require('./routes/destination.routes');
+const fileUploadRoutes = require('./routes/fileUpload.routes');
+const imageProxyRoutes = require('./routes/imageProxy.routes');
+
 // Middleware
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Increase payload limit for file uploads (50MB for JSON, 50MB for URL-encoded)
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Serve static files from public directory (for test pages)
+app.use('/public', express.static(path.join(__dirname, 'public')));
 
 // Routes
 app.get("/", (req, res) => {
@@ -52,6 +60,10 @@ app.use('/api/ai-itineraries', aiItineraryRoutes);
 app.use('/api/poi', poiRoutes);
 // Destination endpoints
 app.use('/api/destinations', destinationRoutes);
+// File upload endpoints
+app.use('/api/upload', fileUploadRoutes);
+// Image proxy endpoint (for bypassing CORS on Google Drive images)
+app.use('/api', imageProxyRoutes);
 // Auth routes
 app.use("/api/auth", require("./routes/auth.routes"));
 app.use("/api/auth/service-provider", serviceProviderAuthRoutes);
