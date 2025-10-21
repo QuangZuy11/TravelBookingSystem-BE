@@ -7,7 +7,7 @@ const Itinerary = require('../../../models/itinerary.model');
 exports.getProviderDashboardStats = async (req, res) => {
     try {
         const providerId = req.params.providerId;
-        
+
         const stats = await Promise.all([
             // Tour Stats
             Tour.aggregate([
@@ -16,9 +16,9 @@ exports.getProviderDashboardStats = async (req, res) => {
                     $group: {
                         _id: null,
                         totalTours: { $sum: 1 },
-                        activeTours: { 
-                            $sum: { 
-                                $cond: [{ $eq: ["$status", "active"] }, 1, 0] 
+                        activeTours: {
+                            $sum: {
+                                $cond: [{ $eq: ["$status", "active"] }, 1, 0]
                             }
                         },
                         totalBookings: { $sum: "$bookedCount" },
@@ -31,12 +31,14 @@ exports.getProviderDashboardStats = async (req, res) => {
             // Recent Tour Bookings
             Tour.aggregate([
                 { $match: { providerId: mongoose.Types.ObjectId(providerId) } },
-                { $lookup: {
-                    from: 'bookings',
-                    localField: '_id',
-                    foreignField: 'tourId',
-                    as: 'recentBookings'
-                }},
+                {
+                    $lookup: {
+                        from: 'bookings',
+                        localField: '_id',
+                        foreignField: 'tourId',
+                        as: 'recentBookings'
+                    }
+                },
                 { $unwind: '$recentBookings' },
                 { $sort: { 'recentBookings.createdAt': -1 } },
                 { $limit: 5 }
@@ -131,7 +133,7 @@ exports.updateTour = async (req, res) => {
             req.body,
             { new: true, runValidators: true }
         );
-        
+
         if (!tour) {
             return res.status(404).json({
                 success: false,
@@ -164,11 +166,11 @@ exports.getTourById = async (req, res) => {
             _id: req.params.tourId,
             provider_id: req.params.providerId
         })
-        .populate('provider_id', 'business_name email phone rating')
-        .populate({
-            path: 'itineraries',
-            select: 'title description duration days activities'
-        });
+            .populate('provider_id', 'company_name email phone rating')
+            .populate({
+                path: 'itineraries',
+                select: 'title description duration days activities'
+            });
         // Note: Reviews populate removed - will be added in separate endpoint
         // .populate({
         //     path: 'reviews',
@@ -202,25 +204,25 @@ exports.getAllProviderTours = async (req, res) => {
     try {
         const { providerId } = req.params;
         const { status, category, difficulty, page = 1, limit = 10, sort = '-created_at' } = req.query;
-        
+
         // Build query
         const query = { provider_id: providerId };
-        
+
         if (status) query.status = status;
         if (category) query.category = category;
         if (difficulty) query.difficulty = difficulty;
-        
+
         // Execute query with pagination
         const skip = (page - 1) * limit;
         const tours = await Tour.find(query)
             .sort(sort)
             .skip(skip)
             .limit(parseInt(limit))
-            .populate('provider_id', 'business_name email phone')
+            .populate('provider_id', 'company_name email phone')
             .select('-__v');
-        
+
         const total = await Tour.countDocuments(query);
-        
+
         res.status(200).json({
             success: true,
             count: tours.length,
@@ -287,7 +289,7 @@ exports.updateTourStatus = async (req, res) => {
 
         // Find tour
         const tour = await Tour.findById(tourId);
-        
+
         if (!tour) {
             return res.status(404).json({
                 success: false,
@@ -315,7 +317,7 @@ exports.updateTourStatus = async (req, res) => {
                     error: 'Tour must have at least one image to be activated'
                 });
             }
-            
+
             if (!tour.available_dates || tour.available_dates.length === 0) {
                 return res.status(400).json({
                     success: false,
