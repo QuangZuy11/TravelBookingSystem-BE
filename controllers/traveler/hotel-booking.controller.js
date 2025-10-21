@@ -16,17 +16,17 @@ exports.getBookingPaymentInfo = async (req, res) => {
 
         console.log('=== Get Booking Payment Info ===');
         console.log('Booking ID:', bookingId);
-            console.log('User ID:', req.user?._id);
+        console.log('User ID:', req.user?._id);
 
-            // Kiểm tra xem user đã được authenticate chưa
-            if (!req.user || !req.user._id) {
-                return res.status(401).json({
-                    success: false,
-                    message: 'Người dùng chưa được xác thực. Vui lòng đăng nhập.'
-                });
-            }
+        // Kiểm tra xem user đã được authenticate chưa
+        if (!req.user || !req.user._id) {
+            return res.status(401).json({
+                success: false,
+                message: 'Người dùng chưa được xác thực. Vui lòng đăng nhập.'
+            });
+        }
 
-            const userId = req.user._id;
+        const userId = req.user._id;
 
         // Kiểm tra booking có tồn tại không
         const booking = await HotelBooking.findById(bookingId)
@@ -69,7 +69,7 @@ exports.getBookingPaymentInfo = async (req, res) => {
         const hotel = room.hotelId;
 
         // Format địa chỉ khách sạn
-        const hotelAddress = hotel.address 
+        const hotelAddress = hotel.address
             ? `${hotel.address.street || ''}, ${hotel.address.city || ''}, ${hotel.address.state || ''}, ${hotel.address.country || ''}`.replace(/^,\s*|,\s*$/g, '').replace(/,\s*,/g, ',')
             : 'Không có thông tin địa chỉ';
 
@@ -84,7 +84,7 @@ exports.getBookingPaymentInfo = async (req, res) => {
                 name: hotel.name,
                 address: hotelAddress
             },
-            
+
             // Thông tin phòng
             room: {
                 type: room.type,
@@ -94,14 +94,14 @@ exports.getBookingPaymentInfo = async (req, res) => {
                 capacity: room.capacity,
                 pricePerNight: room.pricePerNight
             },
-            
+
             // Thông tin người đặt
             guest: {
                 name: userInfo.name,
                 email: userInfo.email,
                 phone: travelerInfo?.phone || 'Chưa cập nhật'
             },
-            
+
             // Thông tin đặt phòng
             booking: {
                 bookingId: booking._id,
@@ -112,7 +112,7 @@ exports.getBookingPaymentInfo = async (req, res) => {
                 bookingStatus: booking.booking_status,
                 paymentStatus: booking.payment_status
             },
-            
+
             // Thông tin giá tiền
             pricing: {
                 pricePerNight: room.pricePerNight,
@@ -146,19 +146,19 @@ exports.getBookingPaymentInfo = async (req, res) => {
  */
 exports.getUserBookings = async (req, res) => {
     try {
-            // Kiểm tra xem user đã được authenticate chưa
-            if (!req.user || !req.user._id) {
-                return res.status(401).json({
-                    success: false,
-                    message: 'Người dùng chưa được xác thực. Vui lòng đăng nhập.'
-                });
-            }
+        // Kiểm tra xem user đã được authenticate chưa
+        if (!req.user || !req.user._id) {
+            return res.status(401).json({
+                success: false,
+                message: 'Người dùng chưa được xác thực. Vui lòng đăng nhập.'
+            });
+        }
 
-            const userId = req.user._id;
+        const userId = req.user._id;
         const { status, page = 1, limit = 10 } = req.query;
 
         const query = { user_id: userId };
-        
+
         // Filter theo status nếu có
         if (status) {
             query.booking_status = status;
@@ -213,16 +213,16 @@ exports.getUserBookings = async (req, res) => {
 exports.getBookingById = async (req, res) => {
     try {
         const { bookingId } = req.params;
-        
-            // Kiểm tra xem user đã được authenticate chưa
-            if (!req.user || !req.user._id) {
-                return res.status(401).json({
-                    success: false,
-                    message: 'Người dùng chưa được xác thực. Vui lòng đăng nhập.'
-                });
-            }
 
-            const userId = req.user._id;
+        // Kiểm tra xem user đã được authenticate chưa
+        if (!req.user || !req.user._id) {
+            return res.status(401).json({
+                success: false,
+                message: 'Người dùng chưa được xác thực. Vui lòng đăng nhập.'
+            });
+        }
+
+        const userId = req.user._id;
 
         const booking = await HotelBooking.findById(bookingId)
             .populate({
