@@ -15,10 +15,10 @@ const serviceProviderAuthRoutes = require("./routes/serviceProviderAuthRoutes");
 const adminServiceProviderRoutes = require("./routes/admin/adminServiceProviderRoutes");
 const travelerRoutes = require("./routes/traveler/hotel.routes");
 const adBookingRoutes = require("./routes/adBooking.routes");
-const travelerTourRoutes = require("./routes/traveler/TourRoutes");
-const aiItineraryRoutes = require('./routes/aiItinerary.routes');
-const poiRoutes = require('./routes/poi.routes');
-const destinationRoutes = require('./routes/destination.routes');
+const aiItineraryRoutes = require("./routes/aiItinerary.routes");
+const poiRoutes = require("./routes/poi.routes");
+const destinationRoutes = require("./routes/destination.routes");
+const travelerTourRoutes = require("./routes/traveler/TravelerTourRoutes");
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -43,21 +43,20 @@ app.use("/api/hotel", hotelRoutes);
 // flight functionality removed
 app.use("/api/provider", serviceProviderRoutes);
 // AI itinerary endpoints
-app.use('/api/ai-itineraries', aiItineraryRoutes);
+app.use("/api/ai-itineraries", aiItineraryRoutes);
 // POI endpoints
-app.use('/api/poi', poiRoutes);
+app.use("/api/poi", poiRoutes);
 // Destination endpoints
-app.use('/api/destinations', destinationRoutes);
+app.use("/api/destinations", destinationRoutes);
 // Auth routes
 app.use("/api/auth", require("./routes/auth.routes"));
 app.use("/api/auth/service-provider", serviceProviderAuthRoutes);
 app.use("/api/profiles", require("./routes/profile.routes"));
 // Admin routes
 app.use("/api/admin/service-providers", adminServiceProviderRoutes);
-app.use('/api/admin', require('./routes/admin/admin.routes'));
+app.use("/api/admin", require("./routes/admin/admin.routes"));
 // Trong server.js
 // ... các routes khác
-
 
 mongoose
   .connect(process.env.MONGO_URI)

@@ -4,7 +4,7 @@ const itinerarySchema = new mongoose.Schema(
   {
     tour_id: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Tour", // Liên kết đến model Tour
+      ref: "Tour",
       required: true,
     },
     day: {

@@ -52,7 +52,14 @@ const tourSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    itinerary: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Itinerary",
+      },
+    ],
   },
+
   {
     collection: "TOURS",
     versionKey: false,

@@ -1,5 +1,5 @@
 const Tour = require("../../models/tour.model");
-
+const Itinerary = require("../../models/itinerary.model");
 // 🧭 Lấy toàn bộ tour cho traveler (có hỗ trợ search, filter, sort)
 const getAllToursForTraveler = async (req, res) => {
   try {
@@ -30,8 +30,9 @@ const getAllToursForTraveler = async (req, res) => {
     // 📦 Lấy dữ liệu từ MongoDB (tối ưu select + lean)
     let tours = await Tour.find(query)
       .select(
-        "title location duration_hours price rating total_rating image highlights description included_services provider_id created_at"
+        "title location duration_hours price rating total_rating image highlights description included_services provider_id created_at itinerary"
       )
+      .populate("itinerary")
       .lean();
 
     // 🔽 Sắp xếp
@@ -62,6 +63,7 @@ const getAllToursForTraveler = async (req, res) => {
       included_services: tour.included_services,
       provider_id: tour.provider_id,
       created_at: tour.created_at,
+      itinerary: tour.itinerary || [],
     }));
 
     res.status(200).json({
@@ -81,13 +83,24 @@ const getAllToursForTraveler = async (req, res) => {
 // 🧭 Lấy chi tiết 1 tour theo ID
 const getTourById = async (req, res) => {
   try {
-    const tour = await Tour.findById(req.params.id);
+    const tour = await Tour.findById(req.params.id).lean();
+
     if (!tour) {
       return res.status(404).json({
         success: false,
         message: "Không tìm thấy tour",
       });
     }
+
+    // 🔍 Lấy itineraries riêng biệt vì mối quan hệ ngược
+    const itineraries = await Itinerary.find({ tour_id: req.params.id })
+      .sort({ day: 1 })
+      .lean();
+
+    // 🔍 Debug: Log để kiểm tra dữ liệu itinerary
+    console.log("📋 Tour ID:", req.params.id);
+    console.log("📋 Found itineraries:", itineraries.length);
+    console.log("📋 Itineraries data:", itineraries);
 
     const formattedTour = {
       id: tour._id,
@@ -103,6 +116,7 @@ const getTourById = async (req, res) => {
       included_services: tour.included_services,
       provider_id: tour.provider_id,
       created_at: tour.created_at,
+      itineraries: itineraries || [], // ✅ Lấy từ query riêng biệt
     };
 
     res.status(200).json({
