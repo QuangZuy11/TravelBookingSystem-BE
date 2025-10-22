@@ -14,55 +14,37 @@ const tourSchema = new mongoose.Schema(
     description: {
       type: String,
       required: true,
-      trim: true,
     },
     provider_id: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Provider",
+      ref: "User",
       required: true,
     },
     price: {
       type: Number,
       required: true,
+      min: 0,
     },
     duration_hours: {
       type: String,
-      required: true,
     },
     location: {
       type: String,
       required: true,
-      trim: true,
     },
     image: {
       type: String,
       required: true,
     },
     rating: {
-      type: String,
-      default: "0",
-    },
-    total_rating: {
-      type: String,
-      default: "0",
-    },
-    included_services: {
-      type: [String],
-      default: [],
-    },
-    max_guests: {
-      type: Number,
-      default: 20,
-    },
-    discount: {
       type: Number,
       default: 0,
     },
-    discount_label: {
-      type: String,
-      default: null,
+    total_rating: {
+      type: Number,
+      default: 0,
     },
-    tags: {
+    included_services: {
       type: [String],
       default: [],
     },
@@ -72,8 +54,8 @@ const tourSchema = new mongoose.Schema(
     },
   },
   {
-    collection: "tours",
-    timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
+    collection: "TOURS",
+    versionKey: false,
   }
 );
 
