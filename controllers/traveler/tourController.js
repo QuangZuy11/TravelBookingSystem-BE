@@ -27,12 +27,11 @@ const getAllToursForTraveler = async (req, res) => {
       }
     }
 
-    // 📦 Lấy dữ liệu từ MongoDB (tối ưu select + lean)
+    // 📦 Lấy dữ liệu từ MongoDB (bỏ populate itinerary)
     let tours = await Tour.find(query)
       .select(
-        "title location duration_hours price rating total_rating image highlights description included_services provider_id created_at itinerary"
+        "title location duration_hours price rating total_rating image highlights description included_services provider_id created_at"
       )
-      .populate("itinerary")
       .lean();
 
     // 🔽 Sắp xếp
@@ -47,6 +46,24 @@ const getAllToursForTraveler = async (req, res) => {
         (a, b) => new Date(b.created_at) - new Date(a.created_at)
       );
     }
+
+    // 🗺️ Lấy itineraries cho tất cả tours
+    const tourIds = tours.map((tour) => tour._id);
+    const allItineraries = await Itinerary.find({
+      tour_id: { $in: tourIds },
+    })
+      .sort({ tour_id: 1, day: 1 })
+      .lean();
+
+    // 📊 Nhóm itineraries theo tour_id
+    const itinerariesByTourId = allItineraries.reduce((acc, itinerary) => {
+      const tourId = itinerary.tour_id.toString();
+      if (!acc[tourId]) {
+        acc[tourId] = [];
+      }
+      acc[tourId].push(itinerary);
+      return acc;
+    }, {});
 
     // 🧩 Chuẩn hóa dữ liệu trả về
     const formattedTours = tours.map((tour) => ({
@@ -63,7 +80,7 @@ const getAllToursForTraveler = async (req, res) => {
       included_services: tour.included_services,
       provider_id: tour.provider_id,
       created_at: tour.created_at,
-      itinerary: tour.itinerary || [],
+      itineraries: itinerariesByTourId[tour._id.toString()] || [], // ✅ Thêm itineraries
     }));
 
     res.status(200).json({
@@ -79,7 +96,6 @@ const getAllToursForTraveler = async (req, res) => {
     });
   }
 };
-
 // 🧭 Lấy chi tiết 1 tour theo ID
 const getTourById = async (req, res) => {
   try {
@@ -96,11 +112,6 @@ const getTourById = async (req, res) => {
     const itineraries = await Itinerary.find({ tour_id: req.params.id })
       .sort({ day: 1 })
       .lean();
-
-    // 🔍 Debug: Log để kiểm tra dữ liệu itinerary
-    console.log("📋 Tour ID:", req.params.id);
-    console.log("📋 Found itineraries:", itineraries.length);
-    console.log("📋 Itineraries data:", itineraries);
 
     const formattedTour = {
       id: tour._id,
