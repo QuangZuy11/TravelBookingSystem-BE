@@ -6,6 +6,11 @@ const hotelSchema = new mongoose.Schema({
         ref: 'ServiceProvider',
         required: true
     },
+    destination_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Destination',
+        required: false // Optional: hotel có thể không thuộc destination nào
+    },
     name: {
         type: String,
         required: true

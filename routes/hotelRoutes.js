@@ -9,6 +9,11 @@ const uploadMiddleware = require('../middlewares/upload.middleware');
 // ===== HOTEL MANAGEMENT ROUTES =====
 // Authentication middleware is required for all protected routes
 
+// ===== PUBLIC ROUTES (No authentication required) =====
+// Get hotel details with nearby POIs - for travelers
+router.get('/:hotelId/details', hotelController.getHotelDetailsWithPOIs);
+
+// ===== PROVIDER ROUTES (Authentication required) =====
 // Provider hotel routes
 router.get('/provider/:providerId/hotels', hotelController.getProviderHotels);
 router.get('/provider/:providerId/hotels/:hotelId', hotelController.getHotelById);

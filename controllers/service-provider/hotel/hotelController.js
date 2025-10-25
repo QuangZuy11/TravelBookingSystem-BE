@@ -473,3 +473,85 @@ exports.getHotelBookings = async (req, res) => {
         });
     }
 };
+
+// ===== PUBLIC ENDPOINTS =====
+
+// Get hotel details with POIs (Public - for travelers)
+exports.getHotelDetailsWithPOIs = async (req, res) => {
+    try {
+        const hotelId = req.params.hotelId;
+
+        // Get hotel details
+        const hotel = await Hotel.findById(hotelId)
+            .populate('destination_id', 'name description country city image')
+            .populate({
+                path: 'reviews.userId',
+                select: 'name email'
+            });
+
+        if (!hotel) {
+            return res.status(404).json({
+                success: false,
+                error: 'Hotel not found'
+            });
+        }
+
+        // Get POIs in the same destination (if hotel has destination_id)
+        let nearbyPOIs = [];
+        if (hotel.destination_id) {
+            const POI = require('../../../models/point-of-interest.model');
+
+            const pois = await POI.find({
+                destinationId: hotel.destination_id._id
+                // Remove status filter if not exist in schema
+            })
+                .select('name description type images location ratings openingHours entryFee')
+                .limit(10) // Limit to 10 POIs
+                .sort({ 'ratings.average': -1 }); // Sort by rating
+
+            // Transform POI data to match frontend expectations
+            nearbyPOIs = pois.map(poi => ({
+                _id: poi._id,
+                name: poi.name,
+                description: poi.description,
+                category: poi.type, // Map 'type' to 'category' for frontend
+                images: poi.images || [],
+                location: poi.location, // Already has coordinates structure
+                rating: poi.ratings?.average || 0, // Map ratings.average to rating
+                opening_hours: formatOpeningHours(poi.openingHours), // Convert to simple string
+                entry_fee: poi.entryFee ? {
+                    adult: poi.entryFee.adult,
+                    child: poi.entryFee.child
+                } : null
+            }));
+        }
+
+        res.status(200).json({
+            success: true,
+            data: {
+                hotel,
+                nearbyPOIs,
+                destination: hotel.destination_id || null
+            }
+        });
+    } catch (error) {
+        console.error('Error getting hotel details with POIs:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Server Error'
+        });
+    }
+};
+
+// Helper function to format opening hours
+function formatOpeningHours(openingHours) {
+    if (!openingHours) return null;
+
+    // Check if has today's hours (simplified - just return Monday as example)
+    const monday = openingHours.monday;
+    if (monday && monday.open && monday.close) {
+        return `${monday.open} - ${monday.close}`;
+    }
+
+    return 'Check schedule';
+}
