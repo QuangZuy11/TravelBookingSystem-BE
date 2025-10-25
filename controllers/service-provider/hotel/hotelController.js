@@ -298,9 +298,13 @@ exports.updateHotel = async (req, res) => {
 
         let finalImageUrls = [];
 
-        const existingImages = req.body.existing_images || req.body.images || [];
+        // Get existing images from frontend (ONLY images user wants to keep)
+        // Frontend sends existing_images = array of URLs to keep (can be reordered, some deleted)
+        const existingImages = req.body.existing_images || [];
+        console.log(`📸 Keeping ${existingImages.length} existing images`);
 
         if (req.files && req.files.length > 0) {
+            console.log('📋 Uploaded files:');
             req.files.forEach((file, i) => {
                 console.log(`   ${i + 1}. ${file.originalname} (${(file.size / 1024).toFixed(2)} KB)`);
             });
@@ -315,15 +319,18 @@ exports.updateHotel = async (req, res) => {
             );
 
             const newImageUrls = uploadedFiles.map(f => f.direct_url);
-            console.log(`✅ Uploaded ${uploadedFiles.length} images to Google Drive`);
+            console.log(`✅ Uploaded ${newImageUrls.length} new images to Google Drive`);
 
+            // Combine: existing (kept by user) + new uploaded
             finalImageUrls = [...existingImages, ...newImageUrls];
         } else {
+            // No new files - use existing_images as-is
+            // This allows: delete images, reorder images
             finalImageUrls = existingImages;
         }
 
         req.body.images = finalImageUrls;
-        console.log(`🖼️ Total images: ${finalImageUrls.length}`);
+        console.log(`🖼️ Final images: ${finalImageUrls.length} (kept: ${existingImages.length}, new: ${req.files ? req.files.length : 0})`);
 
         delete req.body.existing_images;
 
@@ -373,7 +380,11 @@ exports.deleteHotel = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            data: {}
+            message: 'Hotel deleted successfully',
+            data: {
+                deletedHotelId: hotel._id,
+                redirectUrl: '/provider/hotels' // Gợi ý redirect cho frontend
+            }
         });
     } catch (error) {
         res.status(500).json({
