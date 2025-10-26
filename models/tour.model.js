@@ -16,18 +16,23 @@ const tourSchema = new mongoose.Schema(
       ref: "ServiceProvider",
       required: true,
     },
+    destination_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Destination",
+      required: true // Tour PHẢI thuộc một destination
+    },
     price: {
       type: Number,
       required: true,
+      min: [1000, 'Price must be at least 1,000 VND']
     },
     duration_hours: {
       type: String,
-      required: true,
+      required: false // Made optional, can use 'duration' instead
     },
-    location: {
+    duration: {
       type: String,
-      required: true,
-      trim: true,
+      required: false // Flexible duration format: "3 days 2 nights", "5 hours", etc.
     },
     rating: {
       type: Number,
@@ -43,33 +48,33 @@ const tourSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    
+
     // ===== NEW FIELDS =====
-    
+
     status: {
       type: String,
       enum: ['draft', 'active', 'inactive', 'archived'],
       default: 'draft'
     },
-    
+
     capacity: {
-      min_participants: { 
-        type: Number, 
+      min_participants: {
+        type: Number,
         default: 1,
         min: 0
       },
-      max_participants: { 
-        type: Number, 
+      max_participants: {
+        type: Number,
         required: true,
         min: 1
       },
-      current_participants: { 
-        type: Number, 
+      current_participants: {
+        type: Number,
         default: 0,
         min: 0
       }
     },
-    
+
     booking_info: {
       booking_deadline: {
         type: Number, // hours before start
@@ -92,11 +97,11 @@ const tourSchema = new mongoose.Schema(
         default: true
       }
     },
-    
+
     pricing: {
-      base_price: { 
-        type: Number, 
-        required: false // Made optional to support adult/child/infant structure
+      base_price: {
+        type: Number,
+        required: false
       },
       adult: {
         type: Number,
@@ -104,12 +109,12 @@ const tourSchema = new mongoose.Schema(
       },
       child: {
         type: Number,
-        default: function() {
-          return this.pricing.adult ? this.pricing.adult * 0.7 : this.pricing.base_price * 0.7;
-        }
+        required: false,
+        default: 0 // Simple default, no complex function
       },
       infant: {
         type: Number,
+        required: false,
         default: 0
       },
       currency: {
@@ -130,7 +135,7 @@ const tourSchema = new mongoose.Schema(
         }
       }
     },
-    
+
     services: {
       included: [{
         type: String,
@@ -141,48 +146,36 @@ const tourSchema = new mongoose.Schema(
         trim: true
       }]
     },
-    
+
     difficulty: {
       type: String,
       enum: ['easy', 'moderate', 'challenging', 'difficult'],
       default: 'easy'
     },
-    
+
     languages_offered: [{
       type: String,
       default: ['English', 'Vietnamese']
     }],
-    
+
     meeting_point: {
       address: {
         type: String,
         required: true
       },
-      coordinates: {
-        latitude: {
-          type: Number,
-          min: -90,
-          max: 90
-        },
-        longitude: {
-          type: Number,
-          min: -180,
-          max: 180
-        }
-      },
       instructions: {
         type: String
       }
     },
-    
+
     highlights: [{
       type: String
     }],
-    
+
     what_to_bring: [{
       type: String
     }],
-    
+
     accessibility: {
       wheelchair_accessible: {
         type: Boolean,
@@ -197,7 +190,7 @@ const tourSchema = new mongoose.Schema(
         default: true
       }
     },
-    
+
     // Available tour dates (không dùng Schedule)
     available_dates: [{
       date: {
@@ -223,7 +216,7 @@ const tourSchema = new mongoose.Schema(
       },
       special_notes: String
     }],
-    
+
     created_at: {
       type: Date,
       default: Date.now,
@@ -235,9 +228,9 @@ const tourSchema = new mongoose.Schema(
   },
   {
     collection: "tours",
-    timestamps: { 
-      createdAt: 'created_at', 
-      updatedAt: 'updated_at' 
+    timestamps: {
+      createdAt: 'created_at',
+      updatedAt: 'updated_at'
     }
   }
 );
@@ -252,50 +245,56 @@ tourSchema.index({ created_at: -1 });
 tourSchema.index({ 'available_dates.date': 1, 'available_dates.status': 1 });
 
 // Virtual for available slots
-tourSchema.virtual('available_slots').get(function() {
+tourSchema.virtual('available_slots').get(function () {
   return this.capacity.max_participants - this.capacity.current_participants;
 });
 
 // Virtual for is_available
-tourSchema.virtual('is_available').get(function() {
+tourSchema.virtual('is_available').get(function () {
   return this.status === 'active' && this.available_slots > 0;
 });
 
 // Pre-save middleware to sync pricing
-tourSchema.pre('save', function(next) {
+tourSchema.pre('save', function (next) {
+  // If main 'price' field is set but pricing structure is empty, use it
+  if (this.price && !this.pricing.base_price && !this.pricing.adult) {
+    this.pricing.base_price = this.price;
+    this.pricing.adult = this.price;
+  }
+
   // Sync pricing structures
   if (this.pricing.adult && !this.pricing.base_price) {
     this.pricing.base_price = this.pricing.adult;
   } else if (this.pricing.base_price && !this.pricing.adult) {
     this.pricing.adult = this.pricing.base_price;
   }
-  
-  // Validate at least one price is set
-  if (!this.pricing.base_price && !this.pricing.adult) {
-    return next(new Error('Either base_price or adult price must be provided'));
+
+  // Validate at least one price is set (check main price too)
+  if (!this.pricing.base_price && !this.pricing.adult && !this.price) {
+    return next(new Error('Price is required'));
   }
-  
+
   // Auto-calculate child price if not set
-  const basePrice = this.pricing.adult || this.pricing.base_price;
+  const basePrice = this.pricing.adult || this.pricing.base_price || this.price;
   if (!this.pricing.child || this.pricing.child === 0) {
     this.pricing.child = Math.round(basePrice * 0.7);
   }
-  
+
   // Auto-calculate infant price if not set
   if (!this.pricing.infant || this.pricing.infant === 0) {
     this.pricing.infant = Math.round(basePrice * 0.3);
   }
-  
+
   // Sync with main price field
   if (!this.price) {
     this.price = basePrice;
   }
-  
+
   // Validate capacity
   if (this.capacity.current_participants > this.capacity.max_participants) {
     return next(new Error('Current participants cannot exceed max participants'));
   }
-  
+
   next();
 });
 
@@ -307,7 +306,7 @@ tourSchema.set('toObject', { virtuals: true });
 tourSchema.virtual('itineraries', {
   ref: 'Itinerary',
   localField: '_id',
-  foreignField: 'tourId'
+  foreignField: 'tour_id' // Fixed: match Itinerary model field name
 });
 
 // Virtual for bookings
@@ -326,7 +325,7 @@ tourSchema.virtual('reviews', {
 });
 
 // Instance method to add available date
-tourSchema.methods.addAvailableDate = function(date, slots, guideId = null) {
+tourSchema.methods.addAvailableDate = function (date, slots, guideId = null) {
   this.available_dates.push({
     date: date,
     available_slots: slots,
@@ -338,49 +337,49 @@ tourSchema.methods.addAvailableDate = function(date, slots, guideId = null) {
 };
 
 // Instance method to book slots for a date
-tourSchema.methods.bookSlots = function(date, slotsToBook) {
-  const dateEntry = this.available_dates.find(d => 
+tourSchema.methods.bookSlots = function (date, slotsToBook) {
+  const dateEntry = this.available_dates.find(d =>
     d.date.toISOString().split('T')[0] === new Date(date).toISOString().split('T')[0]
   );
-  
+
   if (!dateEntry) {
     throw new Error('Date not available');
   }
-  
+
   if (dateEntry.available_slots - dateEntry.booked_slots < slotsToBook) {
     throw new Error('Not enough slots available');
   }
-  
+
   dateEntry.booked_slots += slotsToBook;
-  
+
   if (dateEntry.booked_slots >= dateEntry.available_slots) {
     dateEntry.status = 'full';
   }
-  
+
   return this.save();
 };
 
 // Instance method to cancel booking slots
-tourSchema.methods.cancelBookingSlots = function(date, slotsToCan) {
-  const dateEntry = this.available_dates.find(d => 
+tourSchema.methods.cancelBookingSlots = function (date, slotsToCan) {
+  const dateEntry = this.available_dates.find(d =>
     d.date.toISOString().split('T')[0] === new Date(date).toISOString().split('T')[0]
   );
-  
+
   if (!dateEntry) {
     throw new Error('Date not found');
   }
-  
+
   dateEntry.booked_slots -= slotsToCan;
-  
+
   if (dateEntry.booked_slots < dateEntry.available_slots && dateEntry.status === 'full') {
     dateEntry.status = 'available';
   }
-  
+
   return this.save();
 };
 
 // Static method to find available tours by date
-tourSchema.statics.findAvailableByDate = function(date) {
+tourSchema.statics.findAvailableByDate = function (date) {
   return this.find({
     status: 'active',
     'available_dates': {

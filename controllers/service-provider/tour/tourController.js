@@ -276,7 +276,11 @@ exports.getTourById = async (req, res) => {
             .populate('provider_id', 'company_name email phone rating')
             .populate({
                 path: 'itineraries',
-                select: 'title description duration days activities'
+                select: 'title description duration days activities meals accommodation transportation notes day_number',
+                populate: {
+                    path: 'activities',
+                    select: 'title description time duration location category pricing order'
+                }
             });
         // Note: Reviews populate removed - will be added in separate endpoint
         // .populate({
