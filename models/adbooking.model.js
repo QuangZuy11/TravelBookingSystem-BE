@@ -1,42 +1,39 @@
-// models/AdBooking.js
 const mongoose = require("mongoose");
 
-const adBookingSchema = new mongoose.Schema({
-  tour_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Tour",
-    required: true,
+const adBookingSchema = new mongoose.Schema(
+  {
+    tour_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Tour",
+      required: true,
+    },
+    provider_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    start_date: {
+      type: Date,
+      required: true,
+    },
+    end_date: {
+      type: Date,
+      required: true,
+    },
+    status: {
+      type: String,
+      enum: ["active", "inactive", "expired"],
+      default: "active",
+    },
+    price: {
+      type: Number,
+      required: true,
+    },
   },
-  description: {
-    type: Array,
-    required: true,
-  },
-  advertisement_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Advertisement",
-    required: true,
-  },
-  provider_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "ServiceProvider",
-    required: true,
-  },
-  start_date: {
-    type: Date,
-    required: true,
-  },
-  end_date: {
-    type: Date,
-    required: true,
-  },
-  status: {
-    type: String,
-    enum: ["pending", "active", "rejected", "expired"],
-    default: "pending",
-  },
-  created_at: {
-    type: Date,
-    default: Date.now,
-  },
-});
-module.exports = mongoose.model("AdBooking", adBookingSchema, "AD_BOOKINGS");
+  {
+    timestamps: true,
+    collection: "AD_BOOKINGS", // ← QUAN TRỌNG: Chỉ định đúng tên collection
+  }
+);
+
+module.exports = mongoose.model("AdBooking", adBookingSchema);

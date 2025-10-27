@@ -58,9 +58,9 @@ app.use("/api/provider/promotions", providerPromotionRoutes);
 // flight functionality removed
 app.use("/api/provider", serviceProviderRoutes);
 // AI itinerary endpoints
-app.use('/api/ai-itineraries', aiItineraryRoutes);
+app.use("/api/ai-itineraries", aiItineraryRoutes);
 // POI endpoints
-app.use('/api/poi', poiRoutes);
+app.use("/api/poi", poiRoutes);
 // Destination endpoints
 app.use('/api/destinations', destinationRoutes);
 // File upload endpoints
@@ -73,10 +73,9 @@ app.use("/api/auth/service-provider", serviceProviderAuthRoutes);
 app.use("/api/profiles", require("./routes/profile.routes"));
 // Admin routes
 app.use("/api/admin/service-providers", adminServiceProviderRoutes);
-app.use('/api/admin', require('./routes/admin/admin.routes'));
+app.use("/api/admin", require("./routes/admin/admin.routes"));
 // Trong server.js
 // ... các routes khác
-
 
 mongoose
   .connect(process.env.MONGO_URI)
