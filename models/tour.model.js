@@ -13,18 +13,17 @@ const tourSchema = new mongoose.Schema(
     },
     description: {
       type: String,
-      required: true,
+      required: false,
     },
     provider_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
-    destination_id: {
+    destination_id: [{
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Destination",
-      required: true // Tour PHẢI thuộc một destination
-    },
+      ref: "Destination"
+    }],
     price: {
       type: Number,
       required: true,
@@ -69,7 +68,16 @@ const tourSchema = new mongoose.Schema(
   {
     collection: "TOURS",
     versionKey: false,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true }
   }
 );
+
+// Virtual for itineraries (populate from Itinerary collection)
+tourSchema.virtual('itineraries', {
+  ref: 'ITINERARIES',
+  localField: '_id',
+  foreignField: 'tour_id'
+});
 
 module.exports = mongoose.model("Tour", tourSchema);

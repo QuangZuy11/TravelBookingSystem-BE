@@ -6,17 +6,14 @@ const getAllToursForTraveler = async (req, res) => {
     const { search, destination, price, sortBy } = req.query;
     let query = {};
 
-    // 🔍 Tìm kiếm theo tên hoặc địa điểm
+    // 🔍 Tìm kiếm theo tên tour
     if (search) {
-      query.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { location: { $regex: search, $options: "i" } },
-      ];
+      query.title = { $regex: search, $options: "i" };
     }
 
-    // 🎯 Lọc theo địa điểm
+    // 🎯 Lọc theo điểm đến (destination_id)
     if (destination && destination !== "all") {
-      query.location = { $regex: destination, $options: "i" };
+      query.destination_id = destination; // Filter by destination ObjectId
     }
 
     // 💰 Lọc theo khoảng giá (vd: 1000000-5000000)
@@ -27,12 +24,8 @@ const getAllToursForTraveler = async (req, res) => {
       }
     }
 
-    // 📦 Lấy dữ liệu từ MongoDB (bỏ populate itinerary)
-    let tours = await Tour.find(query)
-      .select(
-        "title location duration_hours price rating total_rating image highlights description included_services provider_id created_at"
-      )
-      .lean();
+    // 🧾 Truy vấn từ Mongo với populate destination
+    let tours = await Tour.find(query).populate('destination_id', 'name');
 
     // 🔽 Sắp xếp
     if (sortBy === "price-low") {
@@ -68,9 +61,12 @@ const getAllToursForTraveler = async (req, res) => {
     // 🧩 Chuẩn hóa dữ liệu trả về
     const formattedTours = tours.map((tour) => ({
       id: tour._id,
-      title: tour.title,
-      location: tour.location,
-      duration: tour.duration_hours,
+      name: tour.title,
+      destinations: tour.destination_id ? tour.destination_id.map(d => ({
+        id: d._id,
+        name: d.name
+      })) : [], // Array of {id, name}
+      duration: tour.duration || tour.duration_hours,
       price: tour.price,
       rating: parseFloat(tour.rating) || 0,
       total_rating: parseInt(tour.total_rating) || 0,
@@ -99,8 +95,7 @@ const getAllToursForTraveler = async (req, res) => {
 // 🧭 Lấy chi tiết 1 tour theo ID
 const getTourById = async (req, res) => {
   try {
-    const tour = await Tour.findById(req.params.id).lean();
-
+    const tour = await Tour.findById(req.params.id).populate('destination_id', 'name');
     if (!tour) {
       return res.status(404).json({
         success: false,
@@ -115,9 +110,12 @@ const getTourById = async (req, res) => {
 
     const formattedTour = {
       id: tour._id,
-      title: tour.title,
-      location: tour.location,
-      duration: tour.duration_hours,
+      name: tour.title,
+      destinations: tour.destination_id ? tour.destination_id.map(d => ({
+        id: d._id,
+        name: d.name
+      })) : [], // Array of {id, name}
+      duration: tour.duration || tour.duration_hours,
       price: tour.price,
       rating: parseFloat(tour.rating) || 0,
       total_rating: parseInt(tour.total_rating) || 0,

@@ -104,9 +104,6 @@ exports.getTourStatistics = async (req, res) => {
 
 // Create new tour
 exports.createTour = async (req, res) => {
-    console.log('📝 Creating tour with body:', req.body);
-    console.log('📁 File received:', req.file ? 'Yes' : 'No');
-
     let createdTour = null;
 
     try {
@@ -128,7 +125,6 @@ exports.createTour = async (req, res) => {
                 if (tourData[field] && typeof tourData[field] === 'string') {
                     try {
                         tourData[field] = JSON.parse(tourData[field]);
-                        console.log(`✅ Parsed ${field} from string to object/array`);
                     } catch (e) {
                         console.log(`⚠️ Could not parse ${field}, keeping as string`);
                     }
@@ -146,13 +142,8 @@ exports.createTour = async (req, res) => {
             image: initialImage || '' // Use existing URL or empty (will upload)
         });
 
-        console.log('✅ Tour created:', createdTour._id);
-        console.log('📸 Initial image:', initialImage || 'Will upload file');
-
         // 2. Upload image to Google Drive if file provided (overrides URL)
         if (req.file) {
-            console.log('📤 Uploading tour image to Drive...');
-
             const uploadedFile = await googleDriveService.uploadFile(
                 req.file,
                 `tours/${createdTour._id}`
@@ -162,7 +153,6 @@ exports.createTour = async (req, res) => {
             createdTour.image = uploadedFile.direct_url;
             await createdTour.save();
 
-            console.log('✅ Uploaded tour image successfully');
         } else if (!initialImage) {
             // No file and no URL provided - this is an error
             throw new Error('Tour image is required - provide either a file upload or image URL');
@@ -180,7 +170,6 @@ exports.createTour = async (req, res) => {
         if (createdTour) {
             try {
                 await Tour.findByIdAndDelete(createdTour._id);
-                console.log('🔄 Rolled back tour creation');
             } catch (rollbackError) {
                 console.error('❌ Rollback failed:', rollbackError);
             }
@@ -199,11 +188,6 @@ exports.createTour = async (req, res) => {
 
 // Update tour
 exports.updateTour = async (req, res) => {
-    console.log('\n🗺️ === UPDATE TOUR CONTROLLER ===');
-    console.log('Tour ID:', req.params.tourId);
-    console.log('Provider ID:', req.params.providerId);
-    console.log('Body fields:', req.body ? Object.keys(req.body).join(', ') : 'EMPTY');
-
     try {
         // Initialize req.body if undefined/null
         if (!req.body) {
@@ -221,14 +205,12 @@ exports.updateTour = async (req, res) => {
             if (req.body[field] && typeof req.body[field] === 'string') {
                 try {
                     req.body[field] = JSON.parse(req.body[field]);
-                    console.log(`✅ Parsed ${field} from string to object/array`);
                 } catch (e) {
                     console.log(`⚠️ Could not parse ${field}, keeping as string`);
                 }
             }
         });
 
-        console.log('💾 Updating tour in database...');
         const tour = await Tour.findOneAndUpdate(
             { _id: req.params.tourId, provider_id: req.params.providerId },
             req.body,
@@ -242,9 +224,6 @@ exports.updateTour = async (req, res) => {
                 error: 'Tour not found'
             });
         }
-
-        console.log('✅ Tour updated successfully');
-        console.log('🗺️ === UPDATE TOUR COMPLETE ===\n');
 
         res.status(200).json({
             success: true,
@@ -274,6 +253,7 @@ exports.getTourById = async (req, res) => {
             provider_id: req.params.providerId
         })
             .populate('provider_id', 'company_name email phone rating')
+            .populate('destination_id', 'name') // Populate destinations array
             .populate({
                 path: 'itineraries',
                 select: 'title description duration days activities meals accommodation transportation notes day_number',
@@ -296,9 +276,31 @@ exports.getTourById = async (req, res) => {
             });
         }
 
+        // Clean up response data
+        const tourObj = tour.toObject();
+
+        // Clean up itineraries: remove null accommodation and transportation
+        if (tourObj.itineraries && tourObj.itineraries.length > 0) {
+            tourObj.itineraries = tourObj.itineraries.map(itinerary => {
+                if (itinerary.accommodation === null) {
+                    delete itinerary.accommodation;
+                }
+                if (itinerary.transportation === null) {
+                    delete itinerary.transportation;
+                }
+                return itinerary;
+            });
+        }
+
+        // Clean up pricing: only keep base_price
+        if (tourObj.pricing) {
+            const basePrice = tourObj.pricing.base_price;
+            tourObj.pricing = { base_price: basePrice };
+        }
+
         res.status(200).json({
             success: true,
-            data: tour
+            data: tourObj
         });
     } catch (error) {
         console.error('❌ Get tour error:', error);
@@ -330,6 +332,7 @@ exports.getAllProviderTours = async (req, res) => {
             .skip(skip)
             .limit(parseInt(limit))
             .populate('provider_id', 'company_name email phone')
+            .populate('destination_id', 'name') // Populate destinations array
             .select('-__v');
 
         const total = await Tour.countDocuments(query);
@@ -453,8 +456,6 @@ exports.updateTourStatus = async (req, res) => {
         tour.status = status;
         tour.updated_at = new Date();
         await tour.save();
-
-        console.log(`✅ Tour status updated: ${tourId} from ${oldStatus} to ${status}`);
 
         // Return updated tour (select important fields only)
         res.status(200).json({

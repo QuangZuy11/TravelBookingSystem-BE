@@ -70,8 +70,6 @@ exports.createItinerary = async (req, res) => {
 
     await itinerary.save();
 
-    console.log(`✅ Itinerary created: ${itinerary._id} for tour ${tour_id}`);
-
     res.status(201).json({
       success: true,
       message: 'Tạo lịch trình thành công',
@@ -117,8 +115,6 @@ exports.getTourItineraries = async (req, res) => {
       })
       .populate('budget_breakdowns')
       .sort({ day_number: 1 });
-
-    console.log(`✅ Found ${itineraries.length} itineraries for tour ${tourId}`);
 
     res.status(200).json({
       success: true,
@@ -227,8 +223,6 @@ exports.updateItinerary = async (req, res) => {
     itinerary.updated_at = new Date();
     await itinerary.save();
 
-    console.log(`✅ Itinerary updated: ${id}`);
-
     res.status(200).json({
       success: true,
       message: 'Cập nhật lịch trình thành công',
@@ -279,8 +273,6 @@ exports.deleteItinerary = async (req, res) => {
     // Delete itinerary
     await Itinerary.findByIdAndDelete(id);
 
-    console.log(`✅ Itinerary deleted: ${id} and its activities`);
-
     res.status(200).json({
       success: true,
       message: 'Xóa lịch trình thành công'
@@ -317,10 +309,6 @@ exports.addActivity = async (req, res) => {
       optional,
       notes
     } = req.body;
-
-    console.log('🆕 ADD ACTIVITY DEBUG:');
-    console.log('  - itineraryId:', itineraryId);
-    console.log('  - Request body:', req.body);
 
     // Validate itinerary exists
     const itinerary = await Itinerary.findById(itineraryId);
@@ -392,19 +380,14 @@ exports.addActivity = async (req, res) => {
 
     await activity.save();
 
-    // Add to itinerary activities array
-    console.log('  - Current activities in itinerary:', itinerary.activities.length);
     itinerary.activities.push(activity._id);
     await itinerary.save();
-    console.log('  - Activities after push:', itinerary.activities.length);
 
     // Populate activity relationships
     await activity.populate([
       { path: 'poi_id', select: 'name type location description' },
       { path: 'destination_id', select: 'name region country' }
     ]);
-
-    console.log(`✅ Activity added: ${activity._id} to itinerary ${itineraryId}`);
 
     res.status(201).json({
       success: true,
@@ -444,14 +427,8 @@ exports.updateActivity = async (req, res) => {
       notes
     } = req.body;
 
-    console.log('🔍 UPDATE ACTIVITY DEBUG:');
-    console.log('  - itineraryId:', itineraryId);
-    console.log('  - activityId:', activityId);
-    console.log('  - Request body:', req.body);
-
     // Validate activity exists
     const activity = await ItineraryActivity.findById(activityId);
-    console.log('  - Found activity:', activity ? activity._id : 'NOT FOUND');
     if (!activity) {
       return res.status(404).json({
         success: false,
@@ -523,17 +500,11 @@ exports.updateActivity = async (req, res) => {
     activity.updated_at = new Date();
     await activity.save();
 
-    console.log('✅ Activity updated successfully:');
-    console.log('  - Activity ID:', activity._id);
-    console.log('  - Updated fields:', Object.keys(req.body));
-
     // Populate relationships
     await activity.populate([
       { path: 'poi_id', select: 'name type location description' },
       { path: 'destination_id', select: 'name region country' }
     ]);
-
-    console.log(`✅ Activity updated: ${activityId}`);
 
     res.status(200).json({
       success: true,
@@ -597,8 +568,6 @@ exports.deleteActivity = async (req, res) => {
 
     // Delete activity
     await ItineraryActivity.findByIdAndDelete(activityId);
-
-    console.log(`✅ Activity deleted: ${activityId} from itinerary ${itineraryId}`);
 
     res.status(200).json({
       success: true,
@@ -999,8 +968,6 @@ exports.reorderActivities = async (req, res) => {
     // Update order
     itinerary.activities = activityIds;
     await itinerary.save();
-
-    console.log(`✅ Activities reordered for itinerary ${itineraryId}`);
 
     res.status(200).json({
       success: true,
