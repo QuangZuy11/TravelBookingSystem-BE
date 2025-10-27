@@ -160,7 +160,10 @@ serviceProviderSchema.pre('save', function (next) {
 
 // Virtual để check xem provider đã được verify chưa (TẤT CẢ licenses verified)
 serviceProviderSchema.virtual('is_verified').get(function () {
-    return this.licenses && this.licenses.length > 0 && this.licenses.every(license => license.verification_status === 'verified');
+    if (!this.licenses || this.licenses.length === 0) {
+        return false;
+    }
+    return this.licenses.every(license => license.verification_status === 'verified');
 });
 
 // Virtual để check xem đã được admin phê duyệt toàn bộ chưa (license verified + admin approved)

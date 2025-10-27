@@ -5,7 +5,6 @@ require("dotenv").config();
 
 const app = express();
 const mongoose = require("mongoose");
-
 // Import routes
 const tourRoutes = require("./routes/tourRoutes");
 const itineraryRoutes = require("./routes/itineraryRoutes");
@@ -19,6 +18,8 @@ const travelerHotelRoomRoutes = require("./routes/traveler/hotel-room.routes");
 const travelerHotelBookingRoutes = require("./routes/traveler/hotel-booking.routes");
 const adBookingRoutes = require("./routes/adBooking.routes");
 const travelerTourRoutes = require("./routes/traveler/TourRoutes");
+const travelerPromotionRoutes = require("./routes/traveler/promotion.routes");
+const providerPromotionRoutes = require("./routes/provider/promotion.routes");
 const aiItineraryRoutes = require('./routes/aiItinerary.routes');
 const poiRoutes = require('./routes/poi.routes');
 const destinationRoutes = require('./routes/destination.routes');
@@ -41,6 +42,7 @@ app.get("/", (req, res) => {
 
 /// Traveler routes
 app.use("/api/traveler/hotels", travelerRoutes);
+app.use("/api/traveler/promotions", travelerPromotionRoutes);
 app.use("/api/traveler/hotels", travelerHotelRoomRoutes);
 app.use("/api/traveler/bookings", travelerHotelBookingRoutes);
 // Tour traveler
@@ -52,6 +54,7 @@ app.use("/api/tour", tourRoutes);
 app.use("/api/itineraries", itineraryRoutes);
 app.use("/api/budget-breakdowns", budgetRoutes);
 app.use("/api/hotel", hotelRoutes);
+app.use("/api/provider/promotions", providerPromotionRoutes);
 // flight functionality removed
 app.use("/api/provider", serviceProviderRoutes);
 // AI itinerary endpoints
@@ -82,3 +85,4 @@ mongoose
 // Server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+
