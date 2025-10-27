@@ -16,11 +16,10 @@ const tourSchema = new mongoose.Schema(
       ref: "ServiceProvider",
       required: true,
     },
-    destination_id: {
+    destination_id: [{
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Destination",
-      required: true // Tour PHẢI thuộc một destination
-    },
+      ref: "Destination"
+    }],
     price: {
       type: Number,
       required: true,

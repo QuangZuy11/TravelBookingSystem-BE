@@ -29,28 +29,6 @@ const itinerarySchema = new mongoose.Schema({
         type: String,
         enum: ['breakfast', 'lunch', 'dinner', 'snack']
     }],
-    accommodation: {
-        name: String,
-        type: {
-            type: String,
-            enum: ['hotel', 'resort', 'homestay', 'camping', 'guesthouse', 'other']
-        },
-        address: String,
-        check_in: String,
-        check_out: String,
-        rating: Number
-    },
-    transportation: {
-        type: {
-            type: String,
-            enum: ['bus', 'train', 'car', 'boat', 'walking', 'other']
-        },
-        details: String,
-        departure_time: String,
-        arrival_time: String,
-        departure_location: String,
-        arrival_location: String
-    },
     activities: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'ItineraryActivity'

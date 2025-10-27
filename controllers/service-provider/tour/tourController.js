@@ -274,6 +274,7 @@ exports.getTourById = async (req, res) => {
             provider_id: req.params.providerId
         })
             .populate('provider_id', 'company_name email phone rating')
+            .populate('destination_id', 'name') // Populate destinations array
             .populate({
                 path: 'itineraries',
                 select: 'title description duration days activities meals accommodation transportation notes day_number',
@@ -296,9 +297,31 @@ exports.getTourById = async (req, res) => {
             });
         }
 
+        // Clean up response data
+        const tourObj = tour.toObject();
+
+        // Clean up itineraries: remove null accommodation and transportation
+        if (tourObj.itineraries && tourObj.itineraries.length > 0) {
+            tourObj.itineraries = tourObj.itineraries.map(itinerary => {
+                if (itinerary.accommodation === null) {
+                    delete itinerary.accommodation;
+                }
+                if (itinerary.transportation === null) {
+                    delete itinerary.transportation;
+                }
+                return itinerary;
+            });
+        }
+
+        // Clean up pricing: only keep base_price
+        if (tourObj.pricing) {
+            const basePrice = tourObj.pricing.base_price;
+            tourObj.pricing = { base_price: basePrice };
+        }
+
         res.status(200).json({
             success: true,
-            data: tour
+            data: tourObj
         });
     } catch (error) {
         console.error('❌ Get tour error:', error);
@@ -330,6 +353,7 @@ exports.getAllProviderTours = async (req, res) => {
             .skip(skip)
             .limit(parseInt(limit))
             .populate('provider_id', 'company_name email phone')
+            .populate('destination_id', 'name') // Populate destinations array
             .select('-__v');
 
         const total = await Tour.countDocuments(query);

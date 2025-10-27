@@ -7,17 +7,14 @@ const getAllToursForTraveler = async (req, res) => {
 
     let query = {};
 
-    // 🔍 Tìm kiếm theo tên tour hoặc địa điểm
+    // 🔍 Tìm kiếm theo tên tour
     if (search) {
-      query.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { location: { $regex: search, $options: "i" } },
-      ];
+      query.title = { $regex: search, $options: "i" };
     }
 
-    // 🎯 Lọc theo điểm đến
+    // 🎯 Lọc theo điểm đến (destination_id)
     if (destination && destination !== "all") {
-      query.location = { $regex: destination, $options: "i" };
+      query.destination_id = destination; // Filter by destination ObjectId
     }
 
     // 💰 Lọc theo khoảng giá
@@ -28,8 +25,8 @@ const getAllToursForTraveler = async (req, res) => {
       }
     }
 
-    // 🧾 Truy vấn từ Mongo
-    let tours = await Tour.find(query);
+    // 🧾 Truy vấn từ Mongo với populate destination
+    let tours = await Tour.find(query).populate('destination_id', 'name');
 
     // 🔽 Sắp xếp theo yêu cầu
     if (sortBy === "price-low") {
@@ -44,8 +41,11 @@ const getAllToursForTraveler = async (req, res) => {
     const formattedTours = tours.map((tour) => ({
       id: tour._id,
       name: tour.title,
-      destination: tour.location,
-      duration: tour.duration_hours,
+      destinations: tour.destination_id ? tour.destination_id.map(d => ({
+        id: d._id,
+        name: d.name
+      })) : [], // Array of {id, name}
+      duration: tour.duration || tour.duration_hours,
       price: tour.price,
       rating: parseFloat(tour.rating),
       reviews: parseInt(tour.total_rating),
@@ -71,7 +71,7 @@ const getAllToursForTraveler = async (req, res) => {
 // 🧭 Lấy chi tiết 1 tour theo id
 const getTourById = async (req, res) => {
   try {
-    const tour = await Tour.findById(req.params.id);
+    const tour = await Tour.findById(req.params.id).populate('destination_id', 'name');
     if (!tour) {
       return res.status(404).json({
         success: false,
@@ -82,8 +82,11 @@ const getTourById = async (req, res) => {
     const formattedTour = {
       id: tour._id,
       name: tour.title,
-      destination: tour.location,
-      duration: tour.duration_hours,
+      destinations: tour.destination_id ? tour.destination_id.map(d => ({
+        id: d._id,
+        name: d.name
+      })) : [], // Array of {id, name}
+      duration: tour.duration || tour.duration_hours,
       price: tour.price,
       rating: parseFloat(tour.rating),
       reviews: parseInt(tour.total_rating),
