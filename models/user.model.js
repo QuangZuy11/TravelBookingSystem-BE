@@ -12,6 +12,8 @@ const userSchema = new mongoose.Schema(
       default: "active",
     },
     ban_reason: { type: String },
+    resetPasswordToken: { type: String, default: null },
+    resetPasswordExpires: { type: Date, default: null },
   },
   {
     timestamps: true,

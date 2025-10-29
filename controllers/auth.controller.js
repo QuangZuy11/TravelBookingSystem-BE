@@ -1,7 +1,9 @@
+const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const User = require('../models/user.model');
 const Role = require('../models/role.model');
 const ServiceProvider = require('../models/service-provider.model');
-const bcrypt = require('bcryptjs');
+const { sendMail } = require('../services/email.service');
 const jwt = require('jsonwebtoken');
 
 // Helper function để tạo token
@@ -148,4 +150,91 @@ exports.login = async (req, res) => {
         console.error(err.message);
         res.status(500).json({ success: false, message: "Lỗi máy chủ" });
     }
+};
+
+// @route POST /api/auth/forgot-password
+// @body  { email }
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    if (!email) return res.status(400).json({ success: false, message: 'Thiếu email' });
+
+    const user = await User.findOne({ email });
+    // Trả về message chung để tránh lộ user tồn tại hay không
+    if (!user) {
+      return res.json({ success: true, message: 'Nếu email hợp lệ, liên kết đặt lại đã được gửi.' });
+    }
+
+    // Tạo token và lưu dạng hash
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const hashed = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+    user.resetPasswordToken = hashed;
+    user.resetPasswordExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 phút
+    await user.save();
+
+    const frontend = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const resetLink = `${frontend}/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
+
+    await sendMail({
+      to: user.email,
+      subject: 'Đặt lại mật khẩu - Travel Booking',
+      text: `Nhấp vào liên kết để đặt lại mật khẩu (hạn 15 phút): ${resetLink}`,
+      html: `
+        <p>Chào ${user.name || 'bạn'},</p>
+        <p>Nhấp vào liên kết dưới đây để đặt lại mật khẩu (hạn 15 phút):</p>
+        <p><a href="${resetLink}">${resetLink}</a></p>
+        <p>Nếu không phải bạn yêu cầu, hãy bỏ qua email này.</p>
+      `,
+    });
+
+    // Dev support: trả resetLink khi không có SMTP (để bạn test nhanh)
+    const reveal = process.env.SMTP_HOST ? undefined : { resetLink };
+
+    return res.json({
+      success: true,
+      message: 'Nếu email hợp lệ, liên kết đặt lại đã được gửi.',
+      ...reveal,
+    });
+  } catch (err) {
+    console.error('forgotPassword error:', err);
+    return res.status(500).json({ success: false, message: 'Lỗi gửi yêu cầu đặt lại mật khẩu' });
+  }
+};
+
+// @route POST /api/auth/reset-password
+// @body  { email, token, newPassword }
+exports.resetPassword = async (req, res) => {
+  try {
+    const { email, token, newPassword } = req.body || {};
+    if (!email || !token || !newPassword) {
+      return res.status(400).json({ success: false, message: 'Thiếu dữ liệu' });
+    }
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({ success: false, message: 'Mật khẩu tối thiểu 6 ký tự' });
+    }
+
+    const hashed = crypto.createHash('sha256').update(token).digest('hex');
+    const user = await User.findOne({
+      email,
+      resetPasswordToken: hashed,
+      resetPasswordExpires: { $gt: new Date() },
+    });
+
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'Token không hợp lệ hoặc đã hết hạn' });
+    }
+
+    // Cập nhật mật khẩu
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+    user.resetPasswordToken = null;
+    user.resetPasswordExpires = null;
+    await user.save();
+
+    return res.json({ success: true, message: 'Đặt lại mật khẩu thành công. Vui lòng đăng nhập.' });
+  } catch (err) {
+    console.error('resetPassword error:', err);
+    return res.status(500).json({ success: false, message: 'Lỗi đặt lại mật khẩu' });
+  }
 };

@@ -25,6 +25,7 @@ const poiRoutes = require('./routes/poi.routes');
 const destinationRoutes = require('./routes/destination.routes');
 const fileUploadRoutes = require('./routes/fileUpload.routes');
 const imageProxyRoutes = require('./routes/imageProxy.routes');
+const chatRoutes = require("./routes/chat.routes");
 
 // Middleware
 app.use(cors());
@@ -74,6 +75,8 @@ app.use("/api/profiles", require("./routes/profile.routes"));
 // Admin routes
 app.use("/api/admin/service-providers", adminServiceProviderRoutes);
 app.use("/api/admin", require("./routes/admin/admin.routes"));
+// Chat routes
+app.use('/api/chat', chatRoutes);
 // Trong server.js
 // ... các routes khác
 
