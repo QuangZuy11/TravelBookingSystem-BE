@@ -23,13 +23,6 @@ const buildActiveQuery = ({ targetType, targetId, providerId }) => {
     query.providerId = providerId;
   }
 
-  query.$expr = {
-    $or: [
-      { $lt: ['$usageCount', '$usageLimit'] },
-      { $eq: ['$usageLimit', null] },
-    ],
-  };
-
   return query;
 };
 

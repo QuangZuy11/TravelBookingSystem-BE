@@ -9,7 +9,7 @@ const hotelSchema = new mongoose.Schema({
     destination_id: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Destination',
-        required: false // Optional: hotel có thể không thuộc destination nào
+        required: false // Optional: hotel may not belong to any destination
     },
     name: {
         type: String,
@@ -98,6 +98,10 @@ const hotelSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    promotions: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Promotion'
+    }],
     createdAt: {
         type: Date,
         default: Date.now

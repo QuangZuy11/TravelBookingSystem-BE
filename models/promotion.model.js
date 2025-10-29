@@ -58,16 +58,6 @@ const promotionSchema = new mongoose.Schema(
       type: Number,
       min: 1,
     },
-    usageCount: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-    minSpend: {
-      type: Number,
-      min: 0,
-      default: 0,
-    },
     status: {
       type: String,
       enum: ['active', 'inactive', 'expired'],
