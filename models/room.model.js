@@ -53,10 +53,12 @@ const roomSchema = new mongoose.Schema({
         checkIn: Date,
         checkOut: Date
     }],
+    // xem xét bỏ
     lastCleaned: {
         type: Date,
         default: Date.now
     },
+    //xem xét bỏ 
     maintenanceHistory: [{
         date: Date,
         description: String,
@@ -73,14 +75,14 @@ const roomSchema = new mongoose.Schema({
 });
 
 // Middleware to update hotel's room count
-roomSchema.post('save', async function(doc) {
+roomSchema.post('save', async function (doc) {
     const Hotel = mongoose.model('Hotel');
     await Hotel.findByIdAndUpdate(doc.hotelId, {
         $inc: { totalRooms: 1 }
     });
 });
 
-roomSchema.post('remove', async function(doc) {
+roomSchema.post('remove', async function (doc) {
     const Hotel = mongoose.model('Hotel');
     await Hotel.findByIdAndUpdate(doc.hotelId, {
         $inc: { totalRooms: -1 }
