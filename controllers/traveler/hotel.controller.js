@@ -89,13 +89,27 @@ exports.searchHotels = async (req, res) => {
 
         const skip = (Number(page) - 1) * Number(limit);
 
-        const hotels = await Hotel.find(searchQuery)
+        // Sử dụng withAvailableRooms để tự động tính availableRooms
+        const hotelsRaw = await Hotel.find(searchQuery)
             .populate('providerId', 'name email phone') // Lấy thông tin nhà cung cấp
             .populate('reviews.userId', 'name email') // Lấy thông tin người review
             .sort(sortOptions)
             .skip(skip)
             .limit(Number(limit))
             .select('-reviews -__v');
+
+        // Tính availableRooms cho từng hotel
+        const Room = require('../../models/room.model');
+        const hotels = await Promise.all(
+            hotelsRaw.map(async (hotel) => {
+                const hotelObj = hotel.toObject();
+                hotelObj.availableRooms = await Room.countDocuments({
+                    hotelId: hotel._id,
+                    status: 'available'
+                });
+                return hotelObj;
+            })
+        );
 
         const totalCount = await Hotel.countDocuments(searchQuery);
         const totalPages = Math.ceil(totalCount / Number(limit));
@@ -162,9 +176,17 @@ exports.getHotelById = async (req, res) => {
             });
         }
 
+        // Tính availableRooms
+        const Room = require('../../models/room.model');
+        const hotelObj = hotel.toObject();
+        hotelObj.availableRooms = await Room.countDocuments({
+            hotelId: hotel._id,
+            status: 'available'
+        });
+
         res.status(200).json({
             success: true,
-            data: hotel,
+            data: hotelObj,
             message: 'Lấy thông tin khách sạn thành công'
         });
     } catch (error) {
@@ -281,11 +303,24 @@ exports.getFeaturedHotels = async (req, res) => {
     try {
         const { limit = 6 } = req.query;
 
-        const featuredHotels = await Hotel.find({ status: 'active' })
+        const featuredHotelsRaw = await Hotel.find({ status: 'active' })
             .populate('providerId', 'name')
             .sort({ rating: -1, bookingsCount: -1 })
             .limit(Number(limit))
             .select('-reviews -__v');
+
+        // Tính availableRooms cho từng hotel
+        const Room = require('../../models/room.model');
+        const featuredHotels = await Promise.all(
+            featuredHotelsRaw.map(async (hotel) => {
+                const hotelObj = hotel.toObject();
+                hotelObj.availableRooms = await Room.countDocuments({
+                    hotelId: hotel._id,
+                    status: 'available'
+                });
+                return hotelObj;
+            })
+        );
 
         res.status(200).json({
             success: true,

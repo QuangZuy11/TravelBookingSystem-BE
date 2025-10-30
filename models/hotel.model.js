@@ -108,4 +108,35 @@ const hotelSchema = new mongoose.Schema({
     }
 });
 
+// Method: Cập nhật lại availableRooms từ Room collection
+hotelSchema.methods.updateAvailableRooms = async function () {
+    const Room = mongoose.model('Room');
+    const availableCount = await Room.countDocuments({
+        hotelId: this._id,
+        status: 'available'
+    });
+
+    this.availableRooms = availableCount;
+    await this.save();
+
+    return availableCount;
+};
+
+// Static method: Cập nhật availableRooms cho nhiều hotels
+hotelSchema.statics.updateAllAvailableRooms = async function () {
+    const Room = mongoose.model('Room');
+    const hotels = await this.find();
+
+    for (const hotel of hotels) {
+        const availableCount = await Room.countDocuments({
+            hotelId: hotel._id,
+            status: 'available'
+        });
+
+        await this.findByIdAndUpdate(hotel._id, {
+            availableRooms: availableCount
+        });
+    }
+};
+
 module.exports = mongoose.model('Hotel', hotelSchema, 'HOTELS');

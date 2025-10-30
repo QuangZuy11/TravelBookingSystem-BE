@@ -4,6 +4,23 @@ const hotelBookingController = require('../../controllers/traveler/hotel-booking
 const authMiddleware = require('../../middlewares/auth.middleware');
 
 /**
+ * @route   POST /api/traveler/bookings/reserve
+ * @desc    Tạo booking tạm thời (reserved) khi user click "Đặt phòng"
+ * @access  Private (User đã đăng nhập)
+ * @body    {String} hotel_room_id - ID của phòng
+ * @body    {Date} check_in_date - Ngày check-in
+ * @body    {Date} check_out_date - Ngày check-out
+ */
+router.post('/reserve', authMiddleware, hotelBookingController.createReservedBooking);
+
+/**
+ * @route   POST /api/traveler/bookings/:bookingId/cancel
+ * @desc    Hủy booking reserved khi user đóng modal (chưa thanh toán)
+ * @access  Private (User đã đăng nhập)
+ */
+router.post('/:bookingId/cancel', authMiddleware, hotelBookingController.cancelReservedBooking);
+
+/**
  * @route   GET /api/traveler/bookings/:bookingId/payment-info
  * @desc    Lấy thông tin thanh toán để hiển thị khi click button thanh toán
  * @access  Private (User đã đăng nhập)

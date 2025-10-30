@@ -77,9 +77,16 @@ const roomSchema = new mongoose.Schema({
 // Middleware to update hotel's room count
 roomSchema.post('save', async function (doc) {
     const Hotel = mongoose.model('Hotel');
-    await Hotel.findByIdAndUpdate(doc.hotelId, {
-        $inc: { totalRooms: 1 }
-    });
+
+    // Nếu là room mới, tăng totalRooms
+    if (this.isNew) {
+        await Hotel.findByIdAndUpdate(doc.hotelId, {
+            $inc: { totalRooms: 1 }
+        });
+    }
+
+    // Update availableRooms dựa trên status
+    await updateHotelAvailableRooms(doc.hotelId);
 });
 
 roomSchema.post('remove', async function (doc) {
@@ -87,6 +94,33 @@ roomSchema.post('remove', async function (doc) {
     await Hotel.findByIdAndUpdate(doc.hotelId, {
         $inc: { totalRooms: -1 }
     });
+
+    // Update availableRooms sau khi xóa room
+    await updateHotelAvailableRooms(doc.hotelId);
 });
+
+// Middleware: Update availableRooms khi status thay đổi
+roomSchema.post('findOneAndUpdate', async function (doc) {
+    if (doc) {
+        await updateHotelAvailableRooms(doc.hotelId);
+    }
+});
+
+// Helper function để update availableRooms của Hotel
+async function updateHotelAvailableRooms(hotelId) {
+    const Room = mongoose.model('Room');
+    const Hotel = mongoose.model('Hotel');
+
+    // Đếm số phòng có status = 'available'
+    const availableCount = await Room.countDocuments({
+        hotelId: hotelId,
+        status: 'available'
+    });
+
+    // Update availableRooms
+    await Hotel.findByIdAndUpdate(hotelId, {
+        availableRooms: availableCount
+    });
+}
 
 module.exports = mongoose.model('Room', roomSchema, 'HOTEL_ROOMS');

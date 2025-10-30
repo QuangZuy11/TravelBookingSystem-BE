@@ -5,6 +5,10 @@ require("dotenv").config();
 
 const app = express();
 const mongoose = require("mongoose");
+
+// Import booking cleanup service
+const bookingCleanupService = require('./services/booking-cleanup.service');
+
 // Import routes
 const tourRoutes = require("./routes/tourRoutes");
 const itineraryRoutes = require("./routes/itineraryRoutes");
@@ -79,8 +83,14 @@ app.use("/api/admin", require("./routes/admin/admin.routes"));
 
 mongoose
   .connect(process.env.MONGO_URI)
-  .then(() => console.log("✅ MongoDB connected"))
+  .then(() => {
+    console.log("✅ MongoDB connected");
+
+    // Khởi động booking cleanup service sau khi connect DB thành công
+    bookingCleanupService.start();
+  })
   .catch((err) => console.error(err));
+
 // Server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));

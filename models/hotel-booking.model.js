@@ -73,13 +73,17 @@ const hotelBookingSchema = new mongoose.Schema({
     booking_status: {
         type: String,
         enum: {
-            values: ['pending', 'confirmed', 'cancelled'],
+            values: ['reserved', 'pending', 'confirmed', 'cancelled'],
             message: '{VALUE} không phải trạng thái đặt phòng hợp lệ'
         },
         default: 'pending'
     },
 
-
+    // Thời gian hết hạn giữ phòng (cho status 'reserved')
+    // Tự động hủy sau 5 phút nếu không thanh toán
+    reserve_expire_time: {
+        type: Date
+    },
 
     // Ngày hủy
     cancelled_at: {
@@ -124,10 +128,15 @@ hotelBookingSchema.pre('save', async function (next) {
             return next(new Error('Phòng không tồn tại'));
         }
 
+        // Nếu booking status là 'reserved', set thời gian hết hạn 5 phút
+        if (this.booking_status === 'reserved') {
+            this.reserve_expire_time = new Date(Date.now() + 5 * 60 * 1000); // 5 phút
+        }
+
         // Kiểm tra phòng có đang được đặt trong khoảng thời gian này không
         const overlappingBooking = await this.constructor.findOne({
             hotel_room_id: this.hotel_room_id,
-            booking_status: { $in: ['confirmed', 'checked_in', 'pending'] },
+            booking_status: { $in: ['confirmed', 'reserved'] },
             $or: [
                 {
                     check_in_date: { $lt: this.check_out_date },
@@ -158,16 +167,30 @@ hotelBookingSchema.pre('save', async function (next) {
 hotelBookingSchema.post('save', async function (doc) {
     const Room = mongoose.model('Room');
 
-    // Thêm booking vào room
-    await Room.findByIdAndUpdate(doc.hotel_room_id, {
-        $addToSet: {
-            bookings: {
-                bookingId: doc._id,
-                checkIn: doc.check_in_date,
-                checkOut: doc.check_out_date
+    // Nếu booking mới được tạo với status 'reserved', update room status
+    if (doc.booking_status === 'reserved') {
+        await Room.findByIdAndUpdate(doc.hotel_room_id, {
+            status: 'reserved',
+            $addToSet: {
+                bookings: {
+                    bookingId: doc._id,
+                    checkIn: doc.check_in_date,
+                    checkOut: doc.check_out_date
+                }
             }
-        }
-    });
+        });
+    } else {
+        // Thêm booking vào room
+        await Room.findByIdAndUpdate(doc.hotel_room_id, {
+            $addToSet: {
+                bookings: {
+                    bookingId: doc._id,
+                    checkIn: doc.check_in_date,
+                    checkOut: doc.check_out_date
+                }
+            }
+        });
+    }
 });
 
 // Method: Tính số đêm
