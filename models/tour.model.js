@@ -53,6 +53,12 @@ const tourSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    promotions: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Promotion',
+      },
+    ],
     created_at: {
       type: Date,
       default: Date.now,

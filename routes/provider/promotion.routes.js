@@ -8,5 +8,8 @@ router.use(authMiddleware, requireAnyVerifiedLicense);
 
 router.post('/', promotionController.createPromotion);
 router.get('/', promotionController.getMyPromotions);
+router.get('/:promotionId', promotionController.getPromotionById);
+router.patch('/:promotionId', promotionController.updatePromotion);
+router.delete('/:promotionId', promotionController.deletePromotion);
 
 module.exports = router;
