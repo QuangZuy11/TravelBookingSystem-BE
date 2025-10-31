@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const authMiddleware = require("../../middlewares/auth.middleware");
 
 const {
   createFeedback,
@@ -9,8 +10,8 @@ const {
   deleteFeedback,
 } = require("../../controllers/traveler/feedback.controller");
 
-// 📝 Tạo mới feedback
-router.post("/", async (req, res, next) => {
+// 📝 Tạo mới feedback (cần authentication)
+router.post("/", authMiddleware, async (req, res, next) => {
   try {
     await createFeedback(req, res);
   } catch (error) {
@@ -36,8 +37,8 @@ router.get("/user/:userId", async (req, res, next) => {
   }
 });
 
-// ✏️ Cập nhật feedback
-router.put("/:id", async (req, res, next) => {
+// ✏️ Cập nhật feedback (cần authentication)
+router.put("/:id", authMiddleware, async (req, res, next) => {
   try {
     await updateFeedback(req, res);
   } catch (error) {
@@ -45,8 +46,8 @@ router.put("/:id", async (req, res, next) => {
   }
 });
 
-// ❌ Xóa feedback
-router.delete("/:id", async (req, res, next) => {
+// ❌ Xóa feedback (cần authentication)
+router.delete("/:id", authMiddleware, async (req, res, next) => {
   try {
     await deleteFeedback(req, res);
   } catch (error) {

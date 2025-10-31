@@ -201,11 +201,15 @@ const getTourById = async (req, res) => {
           usersMap[user._id.toString()] = user;
         });
 
-        // Format feedbacks
+        // Format feedbacks - đảm bảo user_id là string hoặc ObjectId
         feedbacks = rawFeedbacks.map((fb) => ({
           _id: fb._id,
           id: fb._id,
-          user_id: fb.user_id,
+          user_id: fb.user_id
+            ? fb.user_id.toString
+              ? fb.user_id.toString()
+              : fb.user_id
+            : null,
           tour_id: fb.tour_id,
           comment: fb.comment,
           rating: fb.rating,
@@ -247,6 +251,15 @@ const getTourById = async (req, res) => {
       itineraries: itineraries || [],
       feedbacks: feedbacks.map((fb) => ({
         id: fb._id || fb.id,
+        user_id: fb.user_id
+          ? typeof fb.user_id === "object" && fb.user_id.toString
+            ? fb.user_id.toString()
+            : fb.user_id
+          : fb.user_id_populated?._id
+          ? typeof fb.user_id_populated._id === "object"
+            ? fb.user_id_populated._id.toString()
+            : fb.user_id_populated._id
+          : null,
         user: fb.user_id_populated
           ? fb.user_id_populated.name
           : "Người dùng ẩn danh",
