@@ -20,20 +20,20 @@ const adBookingRoutes = require("./routes/adBooking.routes");
 const travelerTourRoutes = require("./routes/traveler/TravelerTourRoutes");
 const travelerPromotionRoutes = require("./routes/traveler/promotion.routes");
 const providerPromotionRoutes = require("./routes/provider/promotion.routes");
-const aiItineraryRoutes = require('./routes/aiItinerary.routes');
-const poiRoutes = require('./routes/poi.routes');
-const destinationRoutes = require('./routes/destination.routes');
-const fileUploadRoutes = require('./routes/fileUpload.routes');
-const imageProxyRoutes = require('./routes/imageProxy.routes');
-
+const aiItineraryRoutes = require("./routes/aiItinerary.routes");
+const poiRoutes = require("./routes/poi.routes");
+const destinationRoutes = require("./routes/destination.routes");
+const fileUploadRoutes = require("./routes/fileUpload.routes");
+const imageProxyRoutes = require("./routes/imageProxy.routes");
+const travelerFeedbackRoutes = require("./routes/traveler/feedback.routes");
 // Middleware
 app.use(cors());
 // Increase payload limit for file uploads (50MB for JSON, 50MB for URL-encoded)
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 // Serve static files from public directory (for test pages)
-app.use('/public', express.static(path.join(__dirname, 'public')));
+app.use("/public", express.static(path.join(__dirname, "public")));
 
 // Routes
 app.get("/", (req, res) => {
@@ -45,6 +45,7 @@ app.use("/api/traveler/hotels", travelerRoutes);
 app.use("/api/traveler/promotions", travelerPromotionRoutes);
 app.use("/api/traveler/hotels", travelerHotelRoomRoutes);
 app.use("/api/traveler/bookings", travelerHotelBookingRoutes);
+app.use("/api/traveler/feedbacks", travelerFeedbackRoutes);
 // Tour traveler
 app.use("/api/traveler/tours", travelerTourRoutes);
 //AD_booking
@@ -62,11 +63,11 @@ app.use("/api/ai-itineraries", aiItineraryRoutes);
 // POI endpoints
 app.use("/api/poi", poiRoutes);
 // Destination endpoints
-app.use('/api/destinations', destinationRoutes);
+app.use("/api/destinations", destinationRoutes);
 // File upload endpoints
-app.use('/api/upload', fileUploadRoutes);
+app.use("/api/upload", fileUploadRoutes);
 // Image proxy endpoint (for bypassing CORS on Google Drive images)
-app.use('/api', imageProxyRoutes);
+app.use("/api", imageProxyRoutes);
 // Auth routes
 app.use("/api/auth", require("./routes/auth.routes"));
 app.use("/api/auth/service-provider", serviceProviderAuthRoutes);
@@ -84,4 +85,3 @@ mongoose
 // Server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
-
