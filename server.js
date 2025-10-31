@@ -25,6 +25,7 @@ const poiRoutes = require('./routes/poi.routes');
 const destinationRoutes = require('./routes/destination.routes');
 const fileUploadRoutes = require('./routes/fileUpload.routes');
 const imageProxyRoutes = require('./routes/imageProxy.routes');
+const termsPolicyRoutes = require('./routes/termsPolicy.routes');
 
 // Middleware
 app.use(cors());
@@ -67,6 +68,8 @@ app.use('/api/destinations', destinationRoutes);
 app.use('/api/upload', fileUploadRoutes);
 // Image proxy endpoint (for bypassing CORS on Google Drive images)
 app.use('/api', imageProxyRoutes);
+// Terms & Policies endpoints
+app.use('/api/terms-policies', termsPolicyRoutes);
 // Auth routes
 app.use("/api/auth", require("./routes/auth.routes"));
 app.use("/api/auth/service-provider", serviceProviderAuthRoutes);

@@ -7,7 +7,7 @@ const ServiceProvider = require('../../models/service-provider.model');
 const TARGET_TYPES = ['hotel', 'tour'];
 const ALLOWED_STATUSES = ['active', 'inactive', 'expired'];
 
-const addPromotionReference = async (targetType, targetId, promotionId) => {
+const addPromotionReference = async (targetType, targetId, promotionId) => { // thêm id khuyến mãi vào mảng promotion của hotel hoặc tour
   if (!targetType || !targetId || !promotionId) {
     return;
   }
@@ -87,7 +87,7 @@ const findProviderFromRequest = async (req) => { // xác định xem đang gọi
   return provider;
 };
 
-const ensureTargetBelongsToProvider = async (targetType, targetId, providerId) => {
+const ensureTargetBelongsToProvider = async (targetType, targetId, providerId) => { // để xác định xem khuyến mãi thuộc về hotel hay tour của provider đó không
   if (!mongoose.Types.ObjectId.isValid(targetId)) {
     const error = new Error('Invalid target id');
     error.statusCode = 400;
