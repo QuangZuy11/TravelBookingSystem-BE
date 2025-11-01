@@ -180,8 +180,6 @@ exports.getHotelStatistics = async (req, res) => {
 
 // Create new hotel
 exports.createHotel = async (req, res) => {
-    console.log('📝 Creating hotel with body:', req.body);
-    console.log('📁 Files received:', req.files ? req.files.length : 0);
 
     let createdHotel = null;
 
@@ -202,9 +200,7 @@ exports.createHotel = async (req, res) => {
                 if (hotelData[field] && typeof hotelData[field] === 'string') {
                     try {
                         hotelData[field] = JSON.parse(hotelData[field]);
-                        console.log(`✅ Parsed ${field} from string to object/array`);
                     } catch (e) {
-                        console.log(`⚠️ Could not parse ${field}, keeping as string`);
                     }
                 }
             });
@@ -217,11 +213,9 @@ exports.createHotel = async (req, res) => {
             images: [] // Will be updated after upload
         });
 
-        console.log('✅ Hotel created:', createdHotel._id);
 
         // 2. Upload images to Google Drive if provided
         if (req.files && req.files.length > 0) {
-            console.log(`📤 Uploading ${req.files.length} images to Drive...`);
 
             const uploadedFiles = await googleDriveService.uploadFiles(
                 req.files,
@@ -234,7 +228,6 @@ exports.createHotel = async (req, res) => {
             createdHotel.images = imageUrls;
             await createdHotel.save();
 
-            console.log(`✅ Uploaded ${imageUrls.length} images successfully`);
         }
 
         res.status(201).json({
@@ -251,7 +244,6 @@ exports.createHotel = async (req, res) => {
         if (createdHotel) {
             try {
                 await Hotel.findByIdAndDelete(createdHotel._id);
-                console.log('🔄 Rolled back hotel creation');
             } catch (rollbackError) {
                 console.error('❌ Rollback failed:', rollbackError);
             }
@@ -270,11 +262,6 @@ exports.createHotel = async (req, res) => {
 
 // Update hotel
 exports.updateHotel = async (req, res) => {
-    console.log('\n🏨 === UPDATE HOTEL CONTROLLER ===');
-    console.log('Hotel ID:', req.params.id);
-    console.log('Provider ID:', req.params.providerId);
-    console.log('Files received:', req.files ? req.files.length : 0);
-    console.log('Body fields:', req.body ? Object.keys(req.body).join(', ') : 'EMPTY');
 
     try {
         // Initialize req.body if undefined/null
@@ -289,9 +276,7 @@ exports.updateHotel = async (req, res) => {
             if (req.body[field] && typeof req.body[field] === 'string') {
                 try {
                     req.body[field] = JSON.parse(req.body[field]);
-                    console.log(`✅ Parsed ${field} from string to object/array`);
                 } catch (e) {
-                    console.log(`⚠️ Could not parse ${field}, keeping as string`);
                 }
             }
         });
@@ -301,25 +286,20 @@ exports.updateHotel = async (req, res) => {
         // Get existing images from frontend (ONLY images user wants to keep)
         // Frontend sends existing_images = array of URLs to keep (can be reordered, some deleted)
         const existingImages = req.body.existing_images || [];
-        console.log(`📸 Keeping ${existingImages.length} existing images`);
 
         if (req.files && req.files.length > 0) {
-            console.log('📋 Uploaded files:');
             req.files.forEach((file, i) => {
-                console.log(`   ${i + 1}. ${file.originalname} (${(file.size / 1024).toFixed(2)} KB)`);
             });
 
             // Import Google Drive service
             const googleDriveService = require('../../../services/googleDrive.service');
 
-            console.log('☁️ Uploading to Google Drive...');
             const uploadedFiles = await googleDriveService.uploadFiles(
                 req.files,
                 `hotels/${req.params.id}`
             );
 
             const newImageUrls = uploadedFiles.map(f => f.direct_url);
-            console.log(`✅ Uploaded ${newImageUrls.length} new images to Google Drive`);
 
             // Combine: existing (kept by user) + new uploaded
             finalImageUrls = [...existingImages, ...newImageUrls];
@@ -330,11 +310,9 @@ exports.updateHotel = async (req, res) => {
         }
 
         req.body.images = finalImageUrls;
-        console.log(`🖼️ Final images: ${finalImageUrls.length} (kept: ${existingImages.length}, new: ${req.files ? req.files.length : 0})`);
 
         delete req.body.existing_images;
 
-        console.log('💾 Updating hotel in database...');
         const hotel = await Hotel.findOneAndUpdate(
             { _id: req.params.id, providerId: req.params.providerId },
             req.body,

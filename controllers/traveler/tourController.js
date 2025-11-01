@@ -14,9 +14,9 @@ const getAllToursForTraveler = async (req, res) => {
       query.title = { $regex: search, $options: "i" };
     }
 
-    // 🎯 Lọc theo điểm đến (destination_id)
+    // 🎯 Lọc theo điểm đến (destination string)
     if (destination && destination !== "all") {
-      query.destination_id = destination;
+      query.destination = destination;
     }
 
     // 💰 Lọc theo khoảng giá (vd: 1000000-5000000)
@@ -27,8 +27,8 @@ const getAllToursForTraveler = async (req, res) => {
       }
     }
 
-    // 🧾 Truy vấn từ Mongo với populate destination
-    let tours = await Tour.find(query).populate("destination_id", "name");
+    // 🧾 Truy vấn từ Mongo (destination is a string, no populate needed)
+    let tours = await Tour.find(query);
 
     // 🔽 Sắp xếp
     if (sortBy === "price-low") {
@@ -76,12 +76,8 @@ const getAllToursForTraveler = async (req, res) => {
     const formattedTours = tours.map((tour) => ({
       id: tour._id,
       name: tour.title,
-      destination: tour.destination_id
-        ? {
-            id: tour.destination_id._id,
-            name: tour.destination_id.name,
-          }
-        : null,
+      // destination is a free-form string saved on tour.destination
+      destination: tour.destination || null,
       duration: tour.duration || tour.duration_hours,
       price: tour.price,
       rating: parseFloat(tour.rating) || 0,
@@ -120,10 +116,7 @@ const getAllToursForTraveler = async (req, res) => {
 // 🧭 Lấy chi tiết 1 tour theo ID
 const getTourById = async (req, res) => {
   try {
-    const tour = await Tour.findById(req.params.id).populate(
-      "destination_id",
-      "name"
-    );
+    const tour = await Tour.findById(req.params.id);
     if (!tour) {
       return res.status(404).json({
         success: false,
@@ -152,7 +145,6 @@ const getTourById = async (req, res) => {
         .find({ tour_id: tourIdString })
         .toArray();
 
-      console.log(
         `🔍 Query FEEDBACKS with string "${tourIdString}" - Found:`,
         rawFeedbacks.length
       );
@@ -162,7 +154,6 @@ const getTourById = async (req, res) => {
         rawFeedbacks = await collection
           .find({ tour_id: tourObjectId })
           .toArray();
-        console.log(
           `🔍 Query FEEDBACKS with ObjectId - Found:`,
           rawFeedbacks.length
         );
@@ -171,14 +162,10 @@ const getTourById = async (req, res) => {
       // Nếu vẫn không tìm thấy, thử query tất cả để xem cấu trúc
       if (rawFeedbacks.length === 0) {
         const allFeedbacks = await collection.find({}).limit(5).toArray();
-        console.log("🔍 Sample feedbacks in FEEDBACKS:", allFeedbacks.length);
         if (allFeedbacks.length > 0) {
-          console.log(
             "🔍 Sample feedback structure:",
             JSON.stringify(allFeedbacks[0], null, 2)
           );
-          console.log("🔍 Sample tour_id:", allFeedbacks[0].tour_id);
-          console.log(
             "🔍 Sample tour_id type:",
             typeof allFeedbacks[0].tour_id
           );
@@ -232,12 +219,7 @@ const getTourById = async (req, res) => {
     const formattedTour = {
       id: tour._id,
       name: tour.title,
-      destination: tour.destination_id
-        ? {
-            id: tour.destination_id._id,
-            name: tour.destination_id.name,
-          }
-        : null,
+      destination: tour.destination || null,
       duration: tour.duration || tour.duration_hours,
       price: tour.price,
       rating: parseFloat(tour.rating) || 0,
@@ -256,10 +238,10 @@ const getTourById = async (req, res) => {
             ? fb.user_id.toString()
             : fb.user_id
           : fb.user_id_populated?._id
-          ? typeof fb.user_id_populated._id === "object"
-            ? fb.user_id_populated._id.toString()
-            : fb.user_id_populated._id
-          : null,
+            ? typeof fb.user_id_populated._id === "object"
+              ? fb.user_id_populated._id.toString()
+              : fb.user_id_populated._id
+            : null,
         user: fb.user_id_populated
           ? fb.user_id_populated.name
           : "Người dùng ẩn danh",

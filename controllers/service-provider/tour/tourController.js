@@ -12,7 +12,7 @@ exports.getProviderDashboardStats = async (req, res) => {
         const stats = await Promise.all([
             // Tour Stats
             Tour.aggregate([
-                { $match: { providerId: mongoose.Types.ObjectId(providerId) } },
+                { $match: { provider_id: new mongoose.Types.ObjectId(providerId) } },
                 {
                     $group: {
                         _id: null,
@@ -22,33 +22,15 @@ exports.getProviderDashboardStats = async (req, res) => {
                                 $cond: [{ $eq: ["$status", "active"] }, 1, 0]
                             }
                         },
-                        totalBookings: { $sum: "$bookedCount" },
-                        totalRevenue: { $sum: { $multiply: ["$price", "$bookedCount"] } },
                         averageRating: { $avg: "$rating" }
                     }
                 }
             ]),
 
-            // Recent Tour Bookings
+            // Popular Tours (based on rating)
             Tour.aggregate([
-                { $match: { providerId: mongoose.Types.ObjectId(providerId) } },
-                {
-                    $lookup: {
-                        from: 'bookings',
-                        localField: '_id',
-                        foreignField: 'tourId',
-                        as: 'recentBookings'
-                    }
-                },
-                { $unwind: '$recentBookings' },
-                { $sort: { 'recentBookings.createdAt': -1 } },
-                { $limit: 5 }
-            ]),
-
-            // Popular Tours
-            Tour.aggregate([
-                { $match: { providerId: mongoose.Types.ObjectId(providerId) } },
-                { $sort: { bookedCount: -1 } },
+                { $match: { provider_id: new mongoose.Types.ObjectId(providerId) } },
+                { $sort: { rating: -1, total_rating: -1 } },
                 { $limit: 5 }
             ])
         ]);
@@ -59,15 +41,13 @@ exports.getProviderDashboardStats = async (req, res) => {
                 statistics: stats[0][0] || {
                     totalTours: 0,
                     activeTours: 0,
-                    totalBookings: 0,
-                    totalRevenue: 0,
                     averageRating: 0
                 },
-                recentBookings: stats[1] || [],
-                popularTours: stats[2] || []
+                popularTours: stats[1] || []
             }
         });
     } catch (error) {
+        console.error('Dashboard stats error:', error);
         res.status(500).json({
             success: false,
             error: 'Server Error'
@@ -79,14 +59,12 @@ exports.getProviderDashboardStats = async (req, res) => {
 exports.getTourStatistics = async (req, res) => {
     try {
         const stats = await Tour.aggregate([
-            { $match: { providerId: req.params.providerId } },
+            { $match: { provider_id: new mongoose.Types.ObjectId(req.params.providerId) } },
             {
                 $group: {
                     _id: null,
                     totalTours: { $sum: 1 },
-                    totalBookings: { $sum: '$bookedCount' },
-                    averageRating: { $avg: '$rating' },
-                    totalRevenue: { $sum: { $multiply: ['$price', '$bookedCount'] } }
+                    averageRating: { $avg: '$rating' }
                 }
             }
         ]);
@@ -126,7 +104,7 @@ exports.createTour = async (req, res) => {
                     try {
                         tourData[field] = JSON.parse(tourData[field]);
                     } catch (e) {
-                        console.log(`⚠️ Could not parse ${field}, keeping as string`);
+                        // Keep as string if JSON parse fails
                     }
                 }
             });
@@ -206,7 +184,7 @@ exports.updateTour = async (req, res) => {
                 try {
                     req.body[field] = JSON.parse(req.body[field]);
                 } catch (e) {
-                    console.log(`⚠️ Could not parse ${field}, keeping as string`);
+                    // Keep as string if JSON parse fails
                 }
             }
         });
@@ -218,7 +196,6 @@ exports.updateTour = async (req, res) => {
         );
 
         if (!tour) {
-            console.log('❌ Tour not found');
             return res.status(404).json({
                 success: false,
                 error: 'Tour not found'
@@ -253,14 +230,11 @@ exports.getTourById = async (req, res) => {
             provider_id: req.params.providerId
         })
             .populate('provider_id', 'company_name email phone rating')
-            .populate('destination_id', 'name') // Populate destinations array
+            // destination is stored as a string now; no populate
             .populate({
                 path: 'itineraries',
-                select: 'title description duration days activities meals accommodation transportation notes day_number',
-                populate: {
-                    path: 'activities',
-                    select: 'title description time duration location category pricing order'
-                }
+                select: 'title description activities meals notes day_number'
+                // No need to populate activities - they are simple array objects now
             });
         // Note: Reviews populate removed - will be added in separate endpoint
         // .populate({
@@ -332,7 +306,7 @@ exports.getAllProviderTours = async (req, res) => {
             .skip(skip)
             .limit(parseInt(limit))
             .populate('provider_id', 'company_name email phone')
-            .populate('destination_id', 'name') // Populate destinations array
+            // destination is stored as a string now; no populate
             .select('-__v');
 
         const total = await Tour.countDocuments(query);
@@ -432,19 +406,19 @@ exports.updateTourStatus = async (req, res) => {
                 });
             }
 
-            if (!tour.available_dates || tour.available_dates.length === 0) {
+            if (!tour.price || tour.price < 1000) {
                 return res.status(400).json({
                     success: false,
-                    message: 'Không thể kích hoạt tour chưa có ngày khởi hành',
-                    error: 'Tour must have at least one available date to be activated'
+                    message: 'Không thể kích hoạt tour chưa có giá hợp lệ',
+                    error: 'Tour must have a valid price (at least 1,000 VND) to be activated'
                 });
             }
 
-            if (!tour.pricing || !tour.pricing.adult) {
+            if (!tour.title || !tour.description) {
                 return res.status(400).json({
                     success: false,
-                    message: 'Không thể kích hoạt tour chưa có giá',
-                    error: 'Tour must have pricing information to be activated'
+                    message: 'Không thể kích hoạt tour chưa đầy đủ thông tin',
+                    error: 'Tour must have title and description to be activated'
                 });
             }
         }

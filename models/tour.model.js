@@ -20,10 +20,12 @@ const tourSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    destination_id: [{
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Destination"
-    }],
+    // destination stored as a free-form string (name/place) instead of ObjectId
+    destination: {
+      type: String,
+      required: false,
+      default: null
+    },
     price: {
       type: Number,
       required: true,

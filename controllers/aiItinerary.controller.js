@@ -1,7 +1,7 @@
 const AiItineraryRequest = require('../models/ai_itinerary_request.model');
 const AiGeneratedItinerary = require('../models/ai_generated_itineraries.model');
 const Itinerary = require('../models/itinerary.model');
-const ItineraryActivity = require('../models/itinerary-activity.model');
+// const ItineraryActivity = require('../models/itinerary-activity.model'); // Removed - activities are now simple array
 const Destination = require('../models/destination.model');
 const PointOfInterest = require('../models/point-of-interest.model');
 const Tour = require('../models/tour.model');
@@ -34,7 +34,6 @@ const addMinutesToTime = (timeStr, minutesToAdd) => {
 exports.createRequest = async (req, res) => {
   try {
     const payload = req.body;
-    console.log('🛰️ AI Request payload:', JSON.stringify(payload).slice(0, 1000));
     // Expect payload: { user_id, destination, destination_id (optional), start_date, end_date, duration_days, participant_number, age_range, budget_level, preferences }
 
     // If destination_id not provided, try to find it by destination name
@@ -42,7 +41,6 @@ exports.createRequest = async (req, res) => {
       const destination = await Destination.findOne({ name: new RegExp('^' + payload.destination + '$', 'i') });
       if (destination) {
         payload.destination_id = destination._id;
-        console.log(`📍 Auto-matched destination_id: ${destination._id}`);
       }
     }
 
@@ -62,8 +60,6 @@ exports.generateItineraryFromRequest = async (req, res) => {
     const request = await AiItineraryRequest.findById(requestId);
     if (!request) return res.status(404).json({ success: false, message: 'Request not found' });
 
-    console.log(`🛰️ Generating itinerary for request ${requestId}`);
-    console.log(`📋 Request details:`, {
       destination: request.destination,
       preferences: request.preferences,
       budget_total: request.budget_total,
@@ -79,7 +75,6 @@ exports.generateItineraryFromRequest = async (req, res) => {
 
     // CASE 1: User doesn't know where to go - AI suggests destination
     if (!request.destination && !request.destination_id) {
-      console.log('🤔 User has no destination - asking AI for suggestion...');
 
       try {
         // Get all available destinations from DB
@@ -98,7 +93,6 @@ exports.generateItineraryFromRequest = async (req, res) => {
           availableDestinations
         });
 
-        console.log('💡 AI suggested destination:', suggestion);
 
         // Save AI suggestion
         request.ai_suggested_destination = suggestion.suggested_destination_name;
@@ -109,7 +103,6 @@ exports.generateItineraryFromRequest = async (req, res) => {
         destination = await Destination.findById(suggestion.suggested_destination_id);
         destinationName = suggestion.suggested_destination_name;
 
-        console.log('✅ Using AI suggested destination:', destinationName);
       } catch (aiErr) {
         console.warn('⚠️ AI destination suggestion failed:', aiErr.message);
         // Fallback: pick random popular destination
@@ -120,7 +113,6 @@ exports.generateItineraryFromRequest = async (req, res) => {
           request.ai_suggested_destination = fallbackDest.name;
           request.ai_suggested_destination_id = fallbackDest._id;
           await request.save();
-          console.log('🔄 Fallback to popular destination:', destinationName);
         } else {
           return res.status(400).json({
             success: false,
@@ -131,7 +123,6 @@ exports.generateItineraryFromRequest = async (req, res) => {
     }
     // CASE 2: User specified destination
     else {
-      console.log('� User specified destination:', request.destination || 'by ID');
 
       // Find destination (sử dụng field 'name' theo Destination model)
       if (request.destination_id) {
@@ -150,7 +141,6 @@ exports.generateItineraryFromRequest = async (req, res) => {
       destinationName = destination?.name || request.destination;
     }
 
-    console.log('🛰️ Final destination:', destinationName, '| ID:', destination?._id);
 
     // Fetch POIs for destination, order by rating (sử dụng 'destinationId' theo POI model)
     let pois = [];
@@ -166,7 +156,6 @@ exports.generateItineraryFromRequest = async (req, res) => {
         .sort({ 'ratings.average': -1 })
         .limit(30);
     }
-    console.log('🛰️ Found POIs:', pois.length);
 
     // Determine number of days
     const days = request.duration_days || (() => {
@@ -179,13 +168,11 @@ exports.generateItineraryFromRequest = async (req, res) => {
       return Math.min(5, Math.max(1, Math.floor((pois.length || 3) / 3)));
     })();
 
-    console.log('📅 Duration:', days, 'days');
 
     // Try to call AI service to generate structured plan
     let aiPlan = null;
     try {
       aiPlan = await aiService.generateItinerary({ request, destination, pois, days });
-      console.log('🛰️ AI produced plan:', Array.isArray(aiPlan.days) ? `days=${aiPlan.days.length}` : 'invalid');
     } catch (aiErr) {
       console.warn('⚠️ AI service failed or not configured, falling back to heuristic:', aiErr.message);
     }
@@ -245,7 +232,6 @@ exports.generateItineraryFromRequest = async (req, res) => {
       }
     } else {
       // Fallback heuristic: Smart scheduling based on POI recommended duration + travel time
-      console.log('🛰️ Using smart heuristic scheduling with duration + travel time');
 
       // Constants
       const DAY_START_HOUR = 8; // 8:00 AM
@@ -301,7 +287,6 @@ exports.generateItineraryFromRequest = async (req, res) => {
         dayMinutes[bestDay] += totalTimeNeeded;
       }
 
-      console.log('🛰️ Balanced distribution:', dayPicks.map((picks, i) =>
         `Day ${i + 1}: ${picks.length} POIs (${(dayMinutes[i] / 60).toFixed(1)}h)`
       ).join(', '));
 
@@ -419,7 +404,6 @@ exports.generateFromPayload = async (req, res) => {
 exports.getUserItineraries = async (req, res) => {
   try {
     const { userId } = req.params;
-    console.log(`🛰️ Fetching itineraries for user ${userId}`);
 
     // Find all requests by this user
     const requests = await AiItineraryRequest.find({ user_id: userId })
@@ -450,7 +434,6 @@ exports.getUserItineraries = async (req, res) => {
 exports.getItineraryById = async (req, res) => {
   try {
     const { itineraryId } = req.params;
-    console.log(`🛰️ Fetching itinerary ${itineraryId}`);
 
     const itinerary = await AiGeneratedItinerary.findById(itineraryId);
 
@@ -519,7 +502,6 @@ exports.getItineraryById = async (req, res) => {
 exports.getUserRequests = async (req, res) => {
   try {
     const { userId } = req.params;
-    console.log(`🛰️ Fetching requests for user ${userId}`);
 
     const requests = await AiItineraryRequest.find({ user_id: userId })
       .sort({ created_at: -1 })
@@ -540,7 +522,6 @@ exports.getUserRequests = async (req, res) => {
 exports.deleteItinerary = async (req, res) => {
   try {
     const { itineraryId } = req.params;
-    console.log(`🛰️ Deleting itinerary ${itineraryId}`);
 
     const itinerary = await AiGeneratedItinerary.findById(itineraryId);
 
@@ -578,7 +559,6 @@ exports.updateItineraryDay = async (req, res) => {
   try {
     const { itineraryDayId } = req.params;
     const { title, description } = req.body;
-    console.log(`🛰️ Updating itinerary day ${itineraryDayId}`);
 
     const itinerary = await Itinerary.findById(itineraryDayId);
 
@@ -611,7 +591,6 @@ exports.updateActivity = async (req, res) => {
   try {
     const { activityId } = req.params;
     const updateData = req.body; // { activity_name, start_time, end_time, duration_hours, description, cost, optional }
-    console.log(`🛰️ Updating activity ${activityId}`, updateData);
 
     const activity = await ItineraryActivity.findById(activityId);
 
@@ -633,11 +612,9 @@ exports.updateActivity = async (req, res) => {
       }
     });
 
-    console.log(`📝 Fields updated: ${fieldsUpdated.join(', ')}`);
 
     // Save changes
     const savedActivity = await activity.save();
-    console.log(`✅ Activity saved to DB`);
 
     // Populate POI data if exists
     await savedActivity.populate('poi_id');
@@ -658,7 +635,6 @@ exports.addActivity = async (req, res) => {
   try {
     const { itineraryDayId } = req.params;
     const activityData = req.body; // { poi_id, activity_name, start_time, end_time, duration_hours, description, cost, optional }
-    console.log(`🛰️ Adding activity to day ${itineraryDayId}`);
 
     const itinerary = await Itinerary.findById(itineraryDayId);
 
@@ -703,7 +679,6 @@ exports.addActivity = async (req, res) => {
 exports.deleteActivity = async (req, res) => {
   try {
     const { activityId } = req.params;
-    console.log(`🛰️ Deleting activity ${activityId}`);
 
     const activity = await ItineraryActivity.findById(activityId);
 
@@ -740,7 +715,6 @@ exports.reorderActivities = async (req, res) => {
   try {
     const { itineraryDayId } = req.params;
     const { activityIds } = req.body; // Array of activity IDs in new order
-    console.log(`🛰️ Reordering activities for day ${itineraryDayId}`, activityIds);
 
     const itinerary = await Itinerary.findById(itineraryDayId);
 
@@ -768,7 +742,6 @@ exports.reorderActivities = async (req, res) => {
     await itinerary.save();
 
     // Recalculate times for all activities based on new order
-    console.log(`📅 Recalculating times for ${activityIds.length} activities`);
 
     const DAY_START_HOUR = 8;
     const TRAVEL_TIME_MINUTES = 30;
@@ -779,7 +752,6 @@ exports.reorderActivities = async (req, res) => {
       const activity = await ItineraryActivity.findById(activityId).populate('poi_id');
 
       if (!activity) {
-        console.log(`⚠️  Activity ${activityId} not found, skipping`);
         continue;
       }
 
@@ -802,7 +774,6 @@ exports.reorderActivities = async (req, res) => {
       activity.duration_hours = durationMinutes / 60;
 
       await activity.save();
-      console.log(`✅ Updated activity ${i + 1}: ${activity.activity_name} (${currentTime} - ${endTime})`);
 
       // Calculate next start time (add travel time if not last activity)
       if (i < activityIds.length - 1) {

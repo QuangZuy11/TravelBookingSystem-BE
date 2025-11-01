@@ -21,13 +21,18 @@ const itinerarySchema = new mongoose.Schema(
             type: String,
             trim: true
         },
-        meals: [{
-            type: String,
-            enum: ['breakfast', 'lunch', 'dinner', 'snack']
-        }],
+        // Simple activities array with time + action (no more complex activity references)
         activities: [{
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'ItineraryActivity'
+            time: {
+                type: String,
+                required: true,
+                trim: true
+            },
+            action: {
+                type: String,
+                required: true,
+                trim: true
+            }
         }],
         notes: String,
         created_at: {

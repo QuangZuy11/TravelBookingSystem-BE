@@ -85,7 +85,6 @@ exports.createFeedback = async (req, res) => {
       });
     }
 
-    console.log("🔍 Creating feedback:", {
       user_id: userObjectId,
       tour_id: tourObjectId,
       comment,
@@ -111,7 +110,6 @@ exports.createFeedback = async (req, res) => {
 
     await feedback.save();
 
-    console.log("✅ Feedback created:", feedback._id);
 
     // Cập nhật rating trung bình cho tour
     const allFeedbacks = await Feedback.find({ tour_id: tourObjectId });

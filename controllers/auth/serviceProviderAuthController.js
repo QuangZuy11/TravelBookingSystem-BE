@@ -49,7 +49,6 @@ exports.registerServiceProvider = async (req, res) => {
             serviceType = serviceType[0];
         }
 
-        console.log('📝 Service Provider Registration Request:', {
             email: email || company_email,
             name: name || contact_person,
             company_name,
@@ -73,7 +72,6 @@ exports.registerServiceProvider = async (req, res) => {
         if (!userPassword) {
             // Auto-generate password từ company_name + random
             userPassword = `${company_name.replace(/\s/g, '')}@${Math.random().toString(36).slice(-8)}`;
-            console.log(`⚠️ Auto-generated password: ${userPassword}`);
         }
         
         if (!userEmail) {
@@ -212,7 +210,6 @@ exports.registerServiceProvider = async (req, res) => {
                 role_name: 'ServiceProvider',
                 permissions: ['manage_own_services', 'view_bookings', 'manage_licenses']
             });
-            console.log('✅ Created service_provider role');
         }
         
         // Hash password
@@ -230,7 +227,6 @@ exports.registerServiceProvider = async (req, res) => {
 
         await user.save();
 
-        console.log(`✅ User created: ${user._id} (${userEmail})`);
 
         // ===== CREATE SERVICE PROVIDER =====
         
@@ -255,10 +251,6 @@ exports.registerServiceProvider = async (req, res) => {
 
         await serviceProvider.save();
 
-        console.log(`✅ Service Provider created: ${serviceProvider._id}`);
-        console.log(`   Company: ${company_name}`);
-        console.log(`   Service: ${serviceType}`);
-        console.log(`   Licenses: ${formattedLicenses.length} pending verification`);
 
         // ===== GENERATE JWT TOKEN =====
         
@@ -372,7 +364,6 @@ exports.createProviderProfile = async (req, res) => {
             serviceType = serviceType[0];
         }
 
-        console.log('📝 Create Service Provider Profile Request:', {
             userId,
             company_name,
             service_type: serviceType
@@ -534,10 +525,6 @@ exports.createProviderProfile = async (req, res) => {
 
         await serviceProvider.save();
 
-        console.log(`✅ Service Provider profile created: ${serviceProvider._id}`);
-        console.log(`   Company: ${company_name}`);
-        console.log(`   Service: ${serviceType}`);
-        console.log(`   Licenses: ${formattedLicenses.length} pending verification`);
 
         // ===== RESPONSE =====
         
@@ -663,7 +650,6 @@ exports.updateServiceProviderProfile = async (req, res) => {
         serviceProvider.updated_at = new Date();
         await serviceProvider.save();
 
-        console.log(`✅ Service Provider updated: ${serviceProvider._id}`);
 
         res.status(200).json({
             success: true,

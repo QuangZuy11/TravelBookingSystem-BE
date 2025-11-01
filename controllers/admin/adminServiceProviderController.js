@@ -115,7 +115,6 @@ exports.updateAdminVerification = async (req, res) => {
         // Update admin verification
         await provider.updateAdminVerification(approved, adminId, rejection_reason);
 
-        console.log(`✅ Admin ${approved ? 'approved' : 'rejected'} provider: ${provider.company_name}`);
 
         res.status(200).json({
             success: true,
@@ -210,7 +209,6 @@ exports.updateLicenseVerification = async (req, res) => {
 
         await provider.save();
 
-        console.log(`✅ Admin ${status} license ${license.license_number} for ${provider.company_name}`);
 
         res.status(200).json({
             success: true,
