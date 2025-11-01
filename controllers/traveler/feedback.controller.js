@@ -85,6 +85,8 @@ exports.createFeedback = async (req, res) => {
       });
     }
 
+    // Tạo feedback mới
+    const feedback = new Feedback({
       user_id: userObjectId,
       tour_id: tourObjectId,
       comment,
@@ -99,14 +101,6 @@ exports.createFeedback = async (req, res) => {
         message: "Không tìm thấy tour này.",
       });
     }
-
-    // Tạo feedback mới
-    const feedback = new Feedback({
-      user_id: userObjectId,
-      tour_id: tourObjectId,
-      comment,
-      rating,
-    });
 
     await feedback.save();
 
@@ -232,7 +226,7 @@ exports.deleteFeedback = async (req, res) => {
     const avgRating =
       allFeedbacks.length > 0
         ? allFeedbacks.reduce((sum, f) => sum + f.rating, 0) /
-          allFeedbacks.length
+        allFeedbacks.length
         : 0;
 
     await Tour.findByIdAndUpdate(tour_id, {

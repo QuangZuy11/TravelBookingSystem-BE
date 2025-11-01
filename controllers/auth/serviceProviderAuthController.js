@@ -22,7 +22,7 @@ exports.registerServiceProvider = async (req, res) => {
             password,
             name, // Tên đầy đủ
             phone,
-            
+
             // Service Provider info
             company_name,
             contact_person,
@@ -36,7 +36,7 @@ exports.registerServiceProvider = async (req, res) => {
 
         // Support cả 'type' và 'service_types', nhưng CHỈ nhận 1 loại dịch vụ
         let serviceType = service_types || type;
-        
+
         // Nếu là array, chỉ lấy phần tử đầu tiên và warn
         if (Array.isArray(serviceType)) {
             if (serviceType.length > 1) {
@@ -49,31 +49,24 @@ exports.registerServiceProvider = async (req, res) => {
             serviceType = serviceType[0];
         }
 
-            email: email || company_email,
-            name: name || contact_person,
-            company_name,
-            service_type: serviceType,
-            licenses: licenses?.map(l => ({ type: l.service_type, number: l.license_number }))
-        });
-
         // ===== VALIDATION =====
-        
+
         // User email: dùng company_email nếu không có email riêng
         const userEmail = email || company_email;
         const userName = name || contact_person;
         const userPhone = phone || company_phone;
-        
+
         // Company info: dùng user info nếu không có company info riêng
         const finalCompanyEmail = company_email || email;
         const finalCompanyPhone = company_phone || phone;
-        
+
         // Password: tự động generate nếu không có
         let userPassword = password;
         if (!userPassword) {
             // Auto-generate password từ company_name + random
             userPassword = `${company_name.replace(/\s/g, '')}@${Math.random().toString(36).slice(-8)}`;
         }
-        
+
         if (!userEmail) {
             return res.status(400).json({
                 success: false,
@@ -120,8 +113,8 @@ exports.registerServiceProvider = async (req, res) => {
         }
 
         // Validate license count based on service type
-    const hotelLicenses = licenses.filter(l => l.service_type === 'hotel');
-    const tourLicenses = licenses.filter(l => l.service_type === 'tour');
+        const hotelLicenses = licenses.filter(l => l.service_type === 'hotel');
+        const tourLicenses = licenses.filter(l => l.service_type === 'tour');
         // Tour chỉ được có 1 license
         if (tourLicenses.length > 1) {
             return res.status(400).json({
@@ -130,7 +123,7 @@ exports.registerServiceProvider = async (req, res) => {
                 error: 'Tour service type can only have 1 license'
             });
         }
-        
+
         for (const license of licenses) {
             if (!license.service_type || !license.license_number) {
                 return res.status(400).json({
@@ -165,7 +158,7 @@ exports.registerServiceProvider = async (req, res) => {
             'licenses.license_number': { $in: licenseNumbers }
         });
         if (existingLicense) {
-            const duplicateLicense = existingLicense.licenses.find(l => 
+            const duplicateLicense = existingLicense.licenses.find(l =>
                 licenseNumbers.includes(l.license_number)
             );
             return res.status(400).json({
@@ -175,11 +168,11 @@ exports.registerServiceProvider = async (req, res) => {
             });
         }
 
-    // NOTE: Không cần check service_types.length === licenses.length nữa
-    // Vì hotel có thể có nhiều licenses, tour chỉ 1
+        // NOTE: Không cần check service_types.length === licenses.length nữa
+        // Vì hotel có thể có nhiều licenses, tour chỉ 1
 
         // ===== CHECK EXISTING USER =====
-        
+
         const existingUser = await User.findOne({ email: userEmail.toLowerCase() });
         if (existingUser) {
             return res.status(400).json({
@@ -190,7 +183,7 @@ exports.registerServiceProvider = async (req, res) => {
         }
 
         // Check existing company
-        const existingCompany = await ServiceProvider.findOne({ 
+        const existingCompany = await ServiceProvider.findOne({
             company_name: { $regex: new RegExp(`^${company_name}$`, 'i') }
         });
         if (existingCompany) {
@@ -202,7 +195,7 @@ exports.registerServiceProvider = async (req, res) => {
         }
 
         // ===== CREATE USER =====
-        
+
         // Find or create service_provider role
         let serviceProviderRole = await Role.findOne({ role_name: 'ServiceProvider' });
         if (!serviceProviderRole) {
@@ -211,7 +204,7 @@ exports.registerServiceProvider = async (req, res) => {
                 permissions: ['manage_own_services', 'view_bookings', 'manage_licenses']
             });
         }
-        
+
         // Hash password
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(userPassword, salt);
@@ -229,7 +222,7 @@ exports.registerServiceProvider = async (req, res) => {
 
 
         // ===== CREATE SERVICE PROVIDER =====
-        
+
         // Format licenses array
         const formattedLicenses = licenses.map(license => ({
             service_type: license.service_type,
@@ -253,9 +246,9 @@ exports.registerServiceProvider = async (req, res) => {
 
 
         // ===== GENERATE JWT TOKEN =====
-        
+
         const token = jwt.sign(
-            { 
+            {
                 user_id: user._id,
                 email: user.email,
                 role: 'ServiceProvider',
@@ -266,11 +259,11 @@ exports.registerServiceProvider = async (req, res) => {
         );
 
         // ===== RESPONSE =====
-        
+
         res.status(201).json({
             success: true,
-            message: password 
-                ? 'Đăng ký thành công! Tài khoản của bạn đang chờ xác minh.' 
+            message: password
+                ? 'Đăng ký thành công! Tài khoản của bạn đang chờ xác minh.'
                 : `Đăng ký thành công! Mật khẩu tự động: ${userPassword}`,
             data: {
                 token,
@@ -341,7 +334,7 @@ exports.createProviderProfile = async (req, res) => {
 
         // Get user from token (set by auth middleware)
         const userId = req.user?.user_id || req.user?._id || req.user?.id;
-        
+
         if (!userId) {
             return res.status(401).json({
                 success: false,
@@ -352,7 +345,7 @@ exports.createProviderProfile = async (req, res) => {
 
         // Accept both 'type' and 'service_types', nhưng CHỈ nhận 1 loại dịch vụ
         let serviceType = service_types || type;
-        
+
         if (Array.isArray(serviceType)) {
             if (serviceType.length > 1) {
                 return res.status(400).json({
@@ -364,10 +357,12 @@ exports.createProviderProfile = async (req, res) => {
             serviceType = serviceType[0];
         }
 
+        // Validation data
+        const validationData = {
             userId,
             company_name,
             service_type: serviceType
-        });
+        };
 
         const existingProvider = await ServiceProvider.findOne({ user_id: userId });
         if (existingProvider) {
@@ -421,8 +416,8 @@ exports.createProviderProfile = async (req, res) => {
         }
 
         // Validate license count
-    const hotelLicenses = licenses.filter(l => l.service_type === 'hotel');
-    const tourLicenses = licenses.filter(l => l.service_type === 'tour');
+        const hotelLicenses = licenses.filter(l => l.service_type === 'hotel');
+        const tourLicenses = licenses.filter(l => l.service_type === 'tour');
         if (tourLicenses.length > 1) {
             return res.status(400).json({
                 success: false,
@@ -430,7 +425,7 @@ exports.createProviderProfile = async (req, res) => {
                 error: 'Tour service type can only have 1 license'
             });
         }
-        
+
         // no flight validations (flight feature removed)
 
         // Validate each license
@@ -468,7 +463,7 @@ exports.createProviderProfile = async (req, res) => {
             'licenses.license_number': { $in: licenseNumbers }
         });
         if (existingLicense) {
-            const duplicateLicense = existingLicense.licenses.find(l => 
+            const duplicateLicense = existingLicense.licenses.find(l =>
                 licenseNumbers.includes(l.license_number)
             );
             return res.status(400).json({
@@ -479,7 +474,7 @@ exports.createProviderProfile = async (req, res) => {
         }
 
         // Check company name
-        const existingCompany = await ServiceProvider.findOne({ 
+        const existingCompany = await ServiceProvider.findOne({
             company_name: { $regex: new RegExp(`^${company_name}$`, 'i') }
         });
         if (existingCompany) {
@@ -491,7 +486,7 @@ exports.createProviderProfile = async (req, res) => {
         }
 
         // ===== UPDATE USER ROLE =====
-        
+
         let serviceProviderRole = await Role.findOne({ role_name: 'ServiceProvider' });
         if (!serviceProviderRole) {
             serviceProviderRole = await Role.create({
@@ -499,12 +494,12 @@ exports.createProviderProfile = async (req, res) => {
                 permissions: ['manage_own_services', 'view_bookings', 'manage_licenses']
             });
         }
-        
+
         user.role = serviceProviderRole._id;
         await user.save();
 
         // ===== CREATE SERVICE PROVIDER =====
-        
+
         const formattedLicenses = licenses.map(license => ({
             service_type: license.service_type,
             license_number: license.license_number,
@@ -527,7 +522,7 @@ exports.createProviderProfile = async (req, res) => {
 
 
         // ===== RESPONSE =====
-        
+
         res.status(201).json({
             success: true,
             message: 'Tạo Service Provider profile thành công! Đang chờ xác minh.',

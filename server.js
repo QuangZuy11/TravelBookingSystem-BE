@@ -67,6 +67,8 @@ app.use("/api/provider/promotions", providerPromotionRoutes);
 app.use("/api/provider", serviceProviderRoutes);
 // AI itinerary endpoints
 app.use("/api/ai-itineraries", aiItineraryRoutes);
+// Fast AI endpoints (optimized for speed)
+app.use("/api/fast-ai", require("./routes/fastAI.routes"));
 // POI endpoints
 app.use("/api/poi", poiRoutes);
 // Destination endpoints

@@ -145,30 +145,17 @@ const getTourById = async (req, res) => {
         .find({ tour_id: tourIdString })
         .toArray();
 
-        `🔍 Query FEEDBACKS with string "${tourIdString}" - Found:`,
-        rawFeedbacks.length
-      );
-
       // Nếu không tìm thấy, thử với ObjectId
       if (rawFeedbacks.length === 0) {
         rawFeedbacks = await collection
           .find({ tour_id: tourObjectId })
           .toArray();
-          `🔍 Query FEEDBACKS with ObjectId - Found:`,
-          rawFeedbacks.length
-        );
       }
 
       // Nếu vẫn không tìm thấy, thử query tất cả để xem cấu trúc
       if (rawFeedbacks.length === 0) {
         const allFeedbacks = await collection.find({}).limit(5).toArray();
         if (allFeedbacks.length > 0) {
-            "🔍 Sample feedback structure:",
-            JSON.stringify(allFeedbacks[0], null, 2)
-          );
-            "🔍 Sample tour_id type:",
-            typeof allFeedbacks[0].tour_id
-          );
         }
       }
 
