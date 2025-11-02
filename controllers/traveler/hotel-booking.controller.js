@@ -53,12 +53,12 @@ exports.createReservedBooking = async (req, res) => {
             });
         }
 
-        // Kiểm tra phòng có available không
-        if (room.status !== 'available') {
+        // Kiểm tra phòng có đang maintenance không
+        if (room.status === 'maintenance') {
             await session.abortTransaction();
             return res.status(400).json({
                 success: false,
-                message: `Phòng không khả dụng. Trạng thái hiện tại: ${room.status}`
+                message: 'Phòng đang trong trạng thái bảo trì'
             });
         }
 
@@ -80,6 +80,26 @@ exports.createReservedBooking = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: 'Ngày check-out phải sau ngày check-in'
+            });
+        }
+
+        // Kiểm tra phòng có available trong khoảng thời gian này không
+        const { isAvailable, conflictBookings } = await HotelBooking.checkRoomAvailability(
+            hotel_room_id,
+            checkIn,
+            checkOut
+        );
+
+        if (!isAvailable) {
+            await session.abortTransaction();
+            return res.status(400).json({
+                success: false,
+                message: 'Phòng đã được đặt trong khoảng thời gian này',
+                conflictDates: conflictBookings.map(b => ({
+                    checkIn: b.check_in_date,
+                    checkOut: b.check_out_date,
+                    status: b.booking_status
+                }))
             });
         }
 
@@ -230,11 +250,10 @@ exports.cancelReservedBooking = async (req, res) => {
         booking.cancelled_at = new Date();
         await booking.save({ session });
 
-        // Trả phòng về trạng thái 'available'
+        // Xóa booking khỏi room's bookings array (không cần update status)
         await Room.findByIdAndUpdate(
             booking.hotel_room_id._id,
             {
-                status: 'available',
                 $pull: {
                     bookings: { bookingId: booking._id }
                 }
@@ -246,7 +265,7 @@ exports.cancelReservedBooking = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            message: 'Hủy booking thành công. Phòng đã được trả về trạng thái available.',
+            message: 'Hủy booking thành công.',
             data: {
                 bookingId: booking._id,
                 bookingStatus: booking.booking_status,

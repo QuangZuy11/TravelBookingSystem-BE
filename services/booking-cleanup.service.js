@@ -126,12 +126,11 @@ class BookingCleanupService {
                 { new: true }
             );
 
-            // 2. Trả room về trạng thái 'available' (atomic operation)
+            // 2. Xóa booking khỏi room's bookings array (không cần update status)
             if (booking.hotel_room_id) {
                 await Room.findByIdAndUpdate(
                     booking.hotel_room_id._id,
                     {
-                        status: 'available',
                         $pull: {
                             bookings: { bookingId: booking._id }
                         }
@@ -139,7 +138,7 @@ class BookingCleanupService {
                     { new: true }
                 );
 
-                console.log(`✓ Room ${booking.hotel_room_id.roomNumber} released back to available`);
+                console.log(`✓ Room ${booking.hotel_room_id.roomNumber} booking cancelled and removed`);
             }
 
         } catch (error) {
