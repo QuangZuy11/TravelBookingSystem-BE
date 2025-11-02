@@ -137,7 +137,52 @@ exports.createReservedBooking = async (req, res) => {
             }
         ]);
 
-        const hotel = newBooking.hotel_room_id.hotelId;
+        console.log('📊 Populated booking data:');
+        console.log('- Room ID:', newBooking.hotel_room_id?._id);
+        console.log('- Hotel ID:', newBooking.hotel_room_id?.hotelId?._id);
+        console.log('- Hotel populated:', !!newBooking.hotel_room_id?.hotelId);
+
+        const populatedRoom = newBooking.hotel_room_id;
+        const hotel = populatedRoom?.hotelId;
+
+        // Validate populated data
+        if (!populatedRoom) {
+            console.error('❌ Room not populated');
+            return res.status(500).json({
+                success: false,
+                message: 'Lỗi: Không thể lấy thông tin phòng'
+            });
+        }
+
+        if (!hotel) {
+            console.error('❌ Hotel not populated for room:', populatedRoom._id);
+            console.warn('⚠️ Continuing without hotel info - Room may not have hotelId reference');
+
+            // Return booking without hotel info
+            return res.status(201).json({
+                success: true,
+                data: {
+                    bookingId: newBooking._id,
+                    room: {
+                        type: populatedRoom.type,
+                        roomNumber: populatedRoom.roomNumber,
+                        floor: populatedRoom.floor,
+                        pricePerNight: populatedRoom.pricePerNight
+                    },
+                    booking: {
+                        checkInDate: newBooking.check_in_date,
+                        checkOutDate: newBooking.check_out_date,
+                        nights: nights,
+                        totalAmount: parseFloat(newBooking.total_amount),
+                        bookingStatus: newBooking.booking_status,
+                        reserveExpireTime: newBooking.reserve_expire_time
+                    }
+                },
+                message: 'Tạo booking thành công. Vui lòng thanh toán trong 2 phút.',
+                warning: 'Thông tin khách sạn không khả dụng'
+            });
+        }
+
         const hotelAddress = hotel.address
             ? `${hotel.address.street || ''}, ${hotel.address.city || ''}, ${hotel.address.state || ''}, ${hotel.address.country || ''}`.replace(/^,\s*|,\s*$/g, '').replace(/,\s*,/g, ',')
             : 'Không có thông tin địa chỉ';
@@ -151,10 +196,10 @@ exports.createReservedBooking = async (req, res) => {
                     address: hotelAddress
                 },
                 room: {
-                    type: room.type,
-                    roomNumber: room.roomNumber,
-                    floor: room.floor,
-                    pricePerNight: room.pricePerNight
+                    type: populatedRoom.type,
+                    roomNumber: populatedRoom.roomNumber,
+                    floor: populatedRoom.floor,
+                    pricePerNight: populatedRoom.pricePerNight
                 },
                 booking: {
                     checkInDate: newBooking.check_in_date,
@@ -169,7 +214,10 @@ exports.createReservedBooking = async (req, res) => {
         });
 
     } catch (error) {
-        await session.abortTransaction();
+        // Only abort if transaction is still active
+        if (session.inTransaction()) {
+            await session.abortTransaction();
+        }
         console.error('Create Reserved Booking Error:', error);
         res.status(500).json({
             success: false,

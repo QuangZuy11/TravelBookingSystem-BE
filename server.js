@@ -20,6 +20,7 @@ const adminServiceProviderRoutes = require("./routes/admin/adminServiceProviderR
 const travelerRoutes = require("./routes/traveler/hotel.routes");
 const travelerHotelRoomRoutes = require("./routes/traveler/hotel-room.routes");
 const travelerHotelBookingRoutes = require("./routes/traveler/hotel-booking.routes");
+const travelerHotelPaymentRoutes = require("./routes/traveler/hotel-payment.routes");
 const adBookingRoutes = require("./routes/adBooking.routes");
 const travelerTourRoutes = require("./routes/traveler/TravelerTourRoutes");
 const travelerPromotionRoutes = require("./routes/traveler/promotion.routes");
@@ -32,6 +33,7 @@ const imageProxyRoutes = require("./routes/imageProxy.routes");
 const travelerFeedbackRoutes = require("./routes/traveler/feedback.routes");
 const chatRoutes = require("./routes/chat.routes");
 const termsPolicyRoutes = require('./routes/termsPolicy.routes');
+const webhookRoutes = require('./routes/webhook.routes');
 
 // Middleware
 app.use(cors());
@@ -52,6 +54,7 @@ app.use("/api/traveler/hotels", travelerRoutes);
 app.use("/api/traveler/promotions", travelerPromotionRoutes);
 app.use("/api/traveler/hotels", travelerHotelRoomRoutes);
 app.use("/api/traveler/bookings", travelerHotelBookingRoutes);
+app.use("/api/traveler/hotel-payments", travelerHotelPaymentRoutes);
 app.use("/api/traveler/feedbacks", travelerFeedbackRoutes);
 // Tour traveler
 app.use("/api/traveler/tours", travelerTourRoutes);
@@ -88,6 +91,8 @@ app.use("/api/admin/service-providers", adminServiceProviderRoutes);
 app.use("/api/admin", require("./routes/admin/admin.routes"));
 // Chat routes
 app.use('/api/chat', chatRoutes);
+// Webhook routes (PayOS callbacks - no authentication)
+app.use('/api/webhooks', webhookRoutes);
 // Trong server.js
 // ... các routes khác
 
