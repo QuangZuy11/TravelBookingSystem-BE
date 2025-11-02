@@ -920,7 +920,6 @@ const aiItineraryController = {
           lastUpdated: new Date().toISOString(), // Add timestamp to force refresh
           updated: hasUpdateData, // Flag to indicate if this was an update
           days: customizedDays.map(day => {
-            // ✅ Use unified formatting method for consistent response
             const formattedDay = Itinerary.formatResponse(day);
             return {
               dayNumber: day.day_number,

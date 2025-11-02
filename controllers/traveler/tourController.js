@@ -43,12 +43,13 @@ const getAllToursForTraveler = async (req, res) => {
       );
     }
 
-    // 🗺️ Lấy itineraries cho tất cả tours
+    // 🗺️ Lấy itineraries cho tất cả tours (UNIFIED ARCHITECTURE)
     const tourIds = tours.map((tour) => tour._id);
     const allItineraries = await Itinerary.find({
-      tour_id: { $in: tourIds },
+      origin_id: { $in: tourIds },
+      type: 'tour'
     })
-      .sort({ tour_id: 1, day: 1 })
+      .sort({ origin_id: 1, day_number: 1 })
       .lean();
 
     // 🗣️ Lấy feedbacks cho tất cả tours
@@ -61,7 +62,7 @@ const getAllToursForTraveler = async (req, res) => {
     const feedbacksByTourId = {};
 
     allItineraries.forEach((it) => {
-      const id = it.tour_id.toString();
+      const id = it.origin_id.toString();  // Use origin_id instead of tour_id
       if (!itinerariesByTourId[id]) itinerariesByTourId[id] = [];
       itinerariesByTourId[id].push(it);
     });
@@ -72,23 +73,53 @@ const getAllToursForTraveler = async (req, res) => {
       feedbacksByTourId[id].push(fb);
     });
 
-    // 🧩 Chuẩn hóa dữ liệu trả về
+    // 🧩 Chuẩn hóa dữ liệu trả về với MORE INFORMATION
     const formattedTours = tours.map((tour) => ({
       id: tour._id,
       name: tour.title,
       // destination is a free-form string saved on tour.destination
       destination: tour.destination || null,
       duration: tour.duration || tour.duration_hours,
+
+      // ✅ Price & Rating Info
       price: tour.price,
       rating: parseFloat(tour.rating) || 0,
       total_rating: parseInt(tour.total_rating) || 0,
+
+      // ✅ Media & Description
       image: tour.image,
       highlights: tour.highlights,
       description: tour.description,
       included_services: tour.included_services,
+
+      // ✅ NEW Advanced Fields
+      difficulty: tour.difficulty || 'easy',
+      meeting_point: tour.meeting_point || {
+        address: null,
+        instructions: null
+      },
+      capacity: tour.capacity || {
+        max_participants: null,
+        min_participants: null
+      },
+      available_dates: tour.available_dates || [],
+      status: tour.status || 'draft',
+
+      // ✅ Meta Info  
       provider_id: tour.provider_id,
       created_at: tour.created_at,
-      itineraries: itinerariesByTourId[tour._id.toString()] || [],
+
+      // ✅ Related Data
+      itineraries: (itinerariesByTourId[tour._id.toString()] || []).map(itinerary => {
+        // Use unified response formatting for consistency
+        const formatted = Itinerary.formatResponse ? Itinerary.formatResponse(itinerary) : itinerary;
+        return {
+          ...formatted,
+          // Legacy compatibility
+          day: formatted.day_number || itinerary.day_number,
+          tour_id: itinerary.origin_id
+        };
+      }),
       feedbacks:
         (feedbacksByTourId[tour._id.toString()] || []).map((fb) => ({
           id: fb._id,
@@ -127,9 +158,12 @@ const getTourById = async (req, res) => {
     // 🔍 Chuyển đổi ID sang ObjectId cho itineraries
     const tourObjectId = new mongoose.Types.ObjectId(req.params.id);
 
-    // 🔍 Lấy itineraries riêng biệt
-    const itineraries = await Itinerary.find({ tour_id: tourObjectId })
-      .sort({ day: 1 })
+    // 🔍 Lấy itineraries với UNIFIED ARCHITECTURE (origin_id + type)
+    const itineraries = await Itinerary.find({
+      origin_id: tourObjectId,
+      type: 'tour'
+    })
+      .sort({ day_number: 1 })
       .lean();
 
     // 🔍 Lấy feedbacks riêng biệt - Query trực tiếp từ collection FEEDBACKS
@@ -208,16 +242,46 @@ const getTourById = async (req, res) => {
       name: tour.title,
       destination: tour.destination || null,
       duration: tour.duration || tour.duration_hours,
+
+      // ✅ Price & Rating Info
       price: tour.price,
       rating: parseFloat(tour.rating) || 0,
       total_rating: parseInt(tour.total_rating) || 0,
+
+      // ✅ Media & Description
       image: tour.image,
       highlights: tour.highlights,
       description: tour.description,
       included_services: tour.included_services,
+
+      // ✅ NEW Advanced Fields from updated tour model
+      difficulty: tour.difficulty || 'easy',
+      meeting_point: tour.meeting_point || {
+        address: null,
+        instructions: null
+      },
+      capacity: tour.capacity || {
+        max_participants: null,
+        min_participants: null
+      },
+      available_dates: tour.available_dates || [],
+      status: tour.status || 'draft',
+
+      // ✅ Meta Info
       provider_id: tour.provider_id,
       created_at: tour.created_at,
-      itineraries: itineraries || [],
+
+      // ✅ Related Data (với unified format)
+      itineraries: itineraries?.map(itinerary => {
+        // Use unified response formatting for consistency
+        const formatted = Itinerary.formatResponse ? Itinerary.formatResponse(itinerary) : itinerary;
+        return {
+          ...formatted,
+          // Legacy compatibility
+          day: formatted.day_number || itinerary.day_number,
+          tour_id: itinerary.origin_id
+        };
+      }) || [],
       feedbacks: feedbacks.map((fb) => ({
         id: fb._id || fb.id,
         user_id: fb.user_id
