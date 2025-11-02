@@ -39,6 +39,54 @@ const tourSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    difficulty: {
+      type: String,
+      enum: ['easy', 'moderate', 'hard'],
+      default: 'easy'
+    },
+    meeting_point: {
+      address: {
+        type: String,
+        required: false
+      },
+      instructions: {
+        type: String,
+        required: false
+      }
+    },
+    capacity: {
+      max_participants: {
+        type: Number,
+        required: true,
+        min: 1
+      },
+      min_participants: {
+        type: Number,
+        required: true,
+        min: 1
+      }
+    },
+    available_dates: [{
+      date: {
+        type: Date,
+        required: true
+      },
+      available_slots: {
+        type: Number,
+        required: true,
+        min: 0
+      },
+      status: {
+        type: String,
+        enum: ['available', 'full', 'cancelled'],
+        default: 'available'
+      }
+    }],
+    status: {
+      type: String,
+      enum: ['draft', 'published', 'archived'],
+      default: 'draft'
+    },
     image: {
       type: String,
       required: true,

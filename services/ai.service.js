@@ -182,9 +182,32 @@ JSON format:
       console.error('❌ All JSON parsing methods failed');
       console.error('Parse error:', parseErr.message);
 
-      // Fallback: Generate a simple itinerary structure
-      console.log('🔄 Generating fallback itinerary...');
-      parsed = generateFallbackItinerary(destination, duration, budget, interests);
+      try {
+        // Method 3: Try to fix common JSON issues
+        console.log('🔧 Attempting JSON repair...');
+        let repairedJson = content;
+
+        // Fix incomplete JSON by adding missing closing braces
+        const openBraces = (repairedJson.match(/\{/g) || []).length;
+        const closeBraces = (repairedJson.match(/\}/g) || []).length;
+        const missingBraces = openBraces - closeBraces;
+
+        if (missingBraces > 0) {
+          repairedJson += '}'.repeat(missingBraces);
+        }
+
+        // Try parsing the repaired JSON
+        parsed = JSON.parse(repairedJson);
+        console.log('✅ JSON repair successful!');
+
+      } catch (repairErr) {
+        console.error('❌ JSON repair also failed');
+        console.error('Repair error:', repairErr.message);
+
+        // Fallback: Generate a simple itinerary structure
+        console.log('🔄 Generating fallback itinerary...');
+        parsed = generateFallbackItinerary(destination, duration, budget, requestData.preferences || requestData.interests || []);
+      }
     }
   }
 
@@ -219,7 +242,30 @@ const generateFallbackItinerary = (destination, duration, budget, interests) => 
     'adventure': ['Motorbike tour', 'Rock climbing', 'Kayaking', 'Trekking'],
     'entertainment': ['Water puppet show', 'Night market', 'Rooftop bars', 'Local festivals'],
     'relaxation': ['Spa treatment', 'Hot springs', 'Beach time', 'Meditation centers'],
-    'shopping': ['Local markets', 'Souvenir shopping', 'Art galleries', 'Handicraft stores']
+    'shopping': ['Local markets', 'Souvenir shopping', 'Art galleries', 'Handicraft stores'],
+    'sightseeing': ['City landmarks', 'Scenic viewpoints', 'Architecture tour', 'Photo walks'],
+    'transport': ['Airport transfer', 'Train journey', 'Bus travel', 'Local transport']
+  };
+
+  // Valid activity types that match the controller validation
+  const validTypes = ['food', 'transport', 'sightseeing', 'entertainment', 'accommodation',
+    'shopping', 'nature', 'culture', 'adventure', 'relaxation', 'history', 'other'];
+
+  // Map interests to valid types
+  const mapInterestToValidType = (interest) => {
+    const normalizedInterest = interest.toLowerCase();
+    if (validTypes.includes(normalizedInterest)) {
+      return normalizedInterest;
+    }
+    // Default mappings for common interests
+    const mappings = {
+      'cultural': 'culture',
+      'historical': 'history',
+      'outdoor': 'nature',
+      'nightlife': 'entertainment',
+      'dining': 'food'
+    };
+    return mappings[normalizedInterest] || 'sightseeing';
   };
 
   const timeSlots = ['08:00', '10:30', '12:30', '15:00', '18:30'];
@@ -231,7 +277,7 @@ const generateFallbackItinerary = (destination, duration, budget, interests) => 
     const currentLocation = locations[(day - 1) % locations.length];
 
     // Morning activity
-    const morningInterest = interests[0] || 'culture';
+    const morningInterest = mapInterestToValidType(interests[0] || 'culture');
     const morningActivities = vietnameseActivities[morningInterest] || vietnameseActivities['culture'];
     dayActivities.push({
       time: '08:00',
@@ -253,7 +299,7 @@ const generateFallbackItinerary = (destination, duration, budget, interests) => 
     });
 
     // Afternoon activity
-    const afternoonInterest = interests[1] || interests[0] || 'nature';
+    const afternoonInterest = mapInterestToValidType(interests[1] || interests[0] || 'nature');
     const afternoonActivities = vietnameseActivities[afternoonInterest] || vietnameseActivities['nature'];
     dayActivities.push({
       time: '14:30',
@@ -265,7 +311,7 @@ const generateFallbackItinerary = (destination, duration, budget, interests) => 
     });
 
     // Evening activity/dinner
-    const eveningInterest = interests[2] || 'food';
+    const eveningInterest = mapInterestToValidType(interests[2] || 'food');
     const eveningActivities = vietnameseActivities[eveningInterest] || vietnameseActivities['food'];
     dayActivities.push({
       time: '18:30',

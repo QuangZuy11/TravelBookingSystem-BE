@@ -65,7 +65,7 @@ app.use("/api/hotel", hotelRoutes);
 app.use("/api/provider/promotions", providerPromotionRoutes);
 // flight functionality removed
 app.use("/api/provider", serviceProviderRoutes);
-// AI itinerary endpoints
+// AI itinerary endpoints - UNIFIED ARCHITECTURE: origin_id + type classification (tour | ai_gen | customized)
 app.use("/api/ai-itineraries", aiItineraryRoutes);
 // Fast AI endpoints (optimized for speed)
 app.use("/api/fast-ai", require("./routes/fastAI.routes"));

@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const mongoose = require("mongoose");
 
 const {
   getAllToursForTraveler,
@@ -14,7 +15,18 @@ router.get("/", async (req, res, next) => {
   }
 });
 
-router.get("/:id", async (req, res, next) => {
+// Custom validation for tour ID with specific message
+const validateTourId = (req, res, next) => {
+  if (!req.params.id || !mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return res.status(400).json({
+      success: false,
+      message: "ID tour không hợp lệ",
+    });
+  }
+  next();
+};
+
+router.get("/:id", validateTourId, async (req, res, next) => {
   try {
     await getTourById(req, res);
   } catch (error) {

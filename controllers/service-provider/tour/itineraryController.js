@@ -9,13 +9,14 @@ const mongoose = require('mongoose');
 
 /**
  * @route   POST /api/itineraries
- * @desc    Tạo itinerary mới cho tour
+ * @desc    Tạo itinerary mới cho tour (UNIFIED ARCHITECTURE: origin_id + type)
  * @access  Private (Provider)
  */
 exports.createItinerary = async (req, res) => {
   try {
     const {
-      tour_id,
+      origin_id,
+      type = 'tour',
       day_number,
       title,
       description,
@@ -23,56 +24,62 @@ exports.createItinerary = async (req, res) => {
     } = req.body;
 
     // Validate required fields
-    if (!tour_id || !day_number || !title) {
+    if (!origin_id || !day_number || !title) {
       return res.status(400).json({
         success: false,
         message: 'Vui lòng cung cấp đầy đủ thông tin',
-        error: 'Missing required fields: tour_id, day_number, title'
+        error: 'Missing required fields: origin_id, day_number, title'
       });
     }
 
-    // Validate tour exists
-    const tour = await Tour.findById(tour_id);
-    if (!tour) {
-      return res.status(404).json({
-        success: false,
-        message: 'Không tìm thấy tour',
-        error: 'Tour not found'
-      });
-    }
-
-    // Validate activities array format
-    if (activities && Array.isArray(activities)) {
-      for (const activity of activities) {
-        if (!activity.time || !activity.action) {
-          return res.status(400).json({
-            success: false,
-            message: 'Mỗi activity phải có time và action',
-            error: 'Each activity must have time and action'
-          });
-        }
+    // For tour type, validate tour exists
+    if (type === 'tour') {
+      const tour = await Tour.findById(origin_id);
+      if (!tour) {
+        return res.status(404).json({
+          success: false,
+          message: 'Không tìm thấy tour',
+          error: 'Tour not found'
+        });
       }
     }
 
-    // Create itinerary
+    // ✅ UNIFIED VALIDATION: Use schema static method
+    const validation = Itinerary.validateActivities(activities, type);
+    if (!validation.valid) {
+      return res.status(400).json({
+        success: false,
+        message: validation.error,
+        error: validation.error
+      });
+    }
+
+    // ✅ UNIFIED NORMALIZATION: Use schema static method
+    const normalizedActivities = Itinerary.normalizeActivities(activities, type);
+
+    // Create itinerary with UNIFIED architecture
     const itinerary = new Itinerary({
-      tour_id,
+      origin_id,
+      type,       // 'tour' for this controller
       day_number,
       title,
       description,
-      activities: activities || []
+      activities: normalizedActivities
     });
 
     await itinerary.save();
 
+    // ✅ UNIFIED RESPONSE: Use schema static method
+    const formattedResponse = Itinerary.formatResponse(itinerary);
+
     res.status(201).json({
       success: true,
       message: 'Tạo lịch trình thành công',
-      data: itinerary
+      data: formattedResponse
     });
 
   } catch (error) {
-    console.error('❌ Error creating itinerary:', error);
+    console.error('❌ Error creating tour itinerary:', error);
     res.status(500).json({
       success: false,
       message: 'Lỗi server khi tạo lịch trình',
@@ -83,7 +90,7 @@ exports.createItinerary = async (req, res) => {
 
 /**
  * @route   GET /api/itineraries/tour/:tourId
- * @desc    Lấy tất cả itineraries của tour
+ * @desc    Lấy tất cả itineraries của tour (UNIFIED ARCHITECTURE)
  * @access  Public
  */
 exports.getTourItineraries = async (req, res) => {
@@ -100,17 +107,25 @@ exports.getTourItineraries = async (req, res) => {
       });
     }
 
-    const itineraries = await Itinerary.find({ tour_id: tourId })
-      .sort({ day_number: 1 });
+    // ✅ UNIFIED QUERY: Use origin_id + type filter
+    const itineraries = await Itinerary.find({
+      origin_id: tourId,
+      type: 'tour'  // Only get tour type itineraries
+    }).sort({ day_number: 1 });
+
+    // ✅ UNIFIED RESPONSE: Format all itineraries consistently
+    const formattedItineraries = itineraries.map(itinerary =>
+      Itinerary.formatResponse(itinerary)
+    );
 
     res.status(200).json({
       success: true,
-      count: itineraries.length,
-      data: itineraries
+      count: formattedItineraries.length,
+      data: formattedItineraries
     });
 
   } catch (error) {
-    console.error('❌ Error getting itineraries:', error);
+    console.error('❌ Error getting tour itineraries:', error);
     res.status(500).json({
       success: false,
       message: 'Lỗi server khi lấy lịch trình',
@@ -121,7 +136,7 @@ exports.getTourItineraries = async (req, res) => {
 
 /**
  * @route   GET /api/itineraries/:id
- * @desc    Lấy chi tiết itinerary
+ * @desc    Lấy chi tiết itinerary (UNIFIED RESPONSE)
  * @access  Public
  */
 exports.getItineraryById = async (req, res) => {
@@ -138,13 +153,16 @@ exports.getItineraryById = async (req, res) => {
       });
     }
 
+    // ✅ UNIFIED RESPONSE: Use schema static method
+    const formattedResponse = Itinerary.formatResponse(itinerary);
+
     res.status(200).json({
       success: true,
-      data: itinerary
+      data: formattedResponse
     });
 
   } catch (error) {
-    console.error('❌ Error getting itinerary:', error);
+    console.error('❌ Error getting itinerary details:', error);
     res.status(500).json({
       success: false,
       message: 'Lỗi server khi lấy chi tiết lịch trình',
@@ -155,7 +173,7 @@ exports.getItineraryById = async (req, res) => {
 
 /**
  * @route   PUT /api/itineraries/:id
- * @desc    Cập nhật itinerary
+ * @desc    Cập nhật itinerary (UNIFIED VALIDATION)
  * @access  Private (Provider)
  */
 exports.updateItinerary = async (req, res) => {
@@ -178,16 +196,15 @@ exports.updateItinerary = async (req, res) => {
       });
     }
 
-    // Validate activities array format if provided
-    if (activities && Array.isArray(activities)) {
-      for (const activity of activities) {
-        if (!activity.time || !activity.action) {
-          return res.status(400).json({
-            success: false,
-            message: 'Mỗi activity phải có time và action',
-            error: 'Each activity must have time and action'
-          });
-        }
+    // ✅ UNIFIED VALIDATION: Use schema static method
+    if (activities !== undefined) {
+      const validation = Itinerary.validateActivities(activities, itinerary.type);
+      if (!validation.valid) {
+        return res.status(400).json({
+          success: false,
+          message: validation.error,
+          error: validation.error
+        });
       }
     }
 
@@ -195,19 +212,26 @@ exports.updateItinerary = async (req, res) => {
     if (day_number !== undefined) itinerary.day_number = day_number;
     if (title !== undefined) itinerary.title = title;
     if (description !== undefined) itinerary.description = description;
-    if (activities !== undefined) itinerary.activities = activities;
+
+    // ✅ UNIFIED NORMALIZATION: Use schema static method
+    if (activities !== undefined) {
+      itinerary.activities = Itinerary.normalizeActivities(activities, itinerary.type);
+    }
 
     itinerary.updated_at = new Date();
     await itinerary.save();
 
+    // ✅ UNIFIED RESPONSE: Use schema static method
+    const formattedResponse = Itinerary.formatResponse(itinerary);
+
     res.status(200).json({
       success: true,
       message: 'Cập nhật lịch trình thành công',
-      data: itinerary
+      data: formattedResponse
     });
 
   } catch (error) {
-    console.error('❌ Error updating itinerary:', error);
+    console.error('❌ Error updating tour itinerary:', error);
     res.status(500).json({
       success: false,
       message: 'Lỗi server khi cập nhật lịch trình',

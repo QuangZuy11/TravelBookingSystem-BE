@@ -1,43 +1,46 @@
 const express = require('express');
 const router = express.Router();
-const aiCtrl = require('../controllers/aiItinerary.controller');
+const aiItineraryController = require('../controllers/aiItinerary.controller');
+const finalDayController = require('../controllers/finalDay.controller');
+const authMiddleware = require('../middlewares/auth.middleware');
+const { validateObjectId } = require('../middlewares/validateObjectId.middleware');
 
-// Create a request
-router.post('/requests', aiCtrl.createRequest);
+// Apply authentication to all routes
+router.use(authMiddleware);
 
-// Generate itinerary from a stored request
-router.post('/generate/:requestId', aiCtrl.generateItineraryFromRequest);
+// List all AI itineraries for a user
+router.get('/user/:userId', aiItineraryController.getUserItineraries);
 
-// Direct generate from payload (no prior request)
-router.post('/generate', aiCtrl.generateFromPayload);
+// Generate AI itinerary → AI_GENERATED_ITINERARIES → ITINERARIES (origin_id = AI_GENERATED_ITINERARIES._id, type = ai_gen)
+router.post('/generate', aiItineraryController.generateFromPayload);
 
-// Get all itineraries for a user
-router.get('/user/:userId', aiCtrl.getUserItineraries);
+// Get AI itinerary details (general endpoint for frontend)
+router.get('/:aiGeneratedId', validateObjectId('aiGeneratedId'), aiItineraryController.getItineraryDetails);
 
-// Get all requests for a user
-router.get('/requests/user/:userId', aiCtrl.getUserRequests);
+// View original AI itinerary (type='ai_gen')
+router.get('/:aiGeneratedId/original', aiItineraryController.getOriginalItinerary);
 
-// Get a specific itinerary by ID
-router.get('/:itineraryId', aiCtrl.getItineraryById);
+// Check/Get customizable version (type='customized')
+router.get('/:aiGeneratedId/customize', aiItineraryController.getCustomizableItinerary);
 
-// Delete an itinerary
-router.delete('/:itineraryId', aiCtrl.deleteItinerary);
+// Initialize customization (clone ai_gen → customized with same origin_id)
+router.post('/:aiGeneratedId/initialize-customize', aiItineraryController.initializeCustomization);
 
-// ===== EDIT ENDPOINTS =====
+// Unified customize endpoint - handles both initialization and retrieval (for frontend)
+router.put('/:aiGeneratedId/customize', validateObjectId('aiGeneratedId'), aiItineraryController.customizeItinerary);
 
-// Update itinerary day (title, description)
-router.put('/day/:itineraryDayId', aiCtrl.updateItineraryDay);
+// Delete AI itinerary (both AI record and associated day records)
+router.delete('/:aiGeneratedId', validateObjectId('aiGeneratedId'), aiItineraryController.deleteItinerary);
 
-// Update an activity
-router.put('/activity/:activityId', aiCtrl.updateActivity);
+// Day-level operations (only work on type='customized' records)
+router.put('/:aiGeneratedId/days/:dayNumber', finalDayController.updateDay);
 
-// Add new activity to a day
-router.post('/day/:itineraryDayId/activities', aiCtrl.addActivity);
+// Activity operations within customized days
+router.post('/:aiGeneratedId/days/:dayNumber/activities', finalDayController.addActivity);
+router.put('/:aiGeneratedId/days/:dayNumber/activities/:activityId', finalDayController.updateActivity);
+router.delete('/:aiGeneratedId/days/:dayNumber/activities/:activityId', finalDayController.deleteActivity);
 
-// Delete an activity
-router.delete('/activity/:activityId', aiCtrl.deleteActivity);
-
-// Reorder activities in a day
-router.put('/day/:itineraryDayId/reorder', aiCtrl.reorderActivities);
+// Reorder activities within a day
+router.put('/:aiGeneratedId/days/:dayNumber/reorder', finalDayController.reorderActivities);
 
 module.exports = router;
