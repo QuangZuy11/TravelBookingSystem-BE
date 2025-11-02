@@ -18,6 +18,12 @@ router.post('/', itineraryController.createItinerary);
 router.get('/tour/:tourId', itineraryController.getTourItineraries);
 
 /**
+ * Get itineraries by origin_id and type (UNIFIED QUERY)
+ * GET /api/itineraries?origin_id=xxx&type=tour
+ */
+router.get('/', itineraryController.getItinerariesByQuery);
+
+/**
  * Get single itinerary by ID
  * GET /api/itineraries/:id
  */

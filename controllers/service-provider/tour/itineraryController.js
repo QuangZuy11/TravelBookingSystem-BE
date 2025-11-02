@@ -89,6 +89,74 @@ exports.createItinerary = async (req, res) => {
 };
 
 /**
+ * @route   GET /api/itineraries?origin_id=xxx&type=tour
+ * @desc    Lấy itineraries theo query parameters (UNIFIED ARCHITECTURE)
+ * @access  Public
+ */
+exports.getItinerariesByQuery = async (req, res) => {
+  try {
+    const { origin_id, type } = req.query;
+
+    // Validate required parameters
+    if (!origin_id || !type) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vui lòng cung cấp origin_id và type',
+        error: 'Missing required query parameters: origin_id, type'
+      });
+    }
+
+    // Validate type
+    const validTypes = ['tour', 'ai_gen', 'customized'];
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Type không hợp lệ',
+        error: `Type must be one of: ${validTypes.join(', ')}`
+      });
+    }
+
+    // For tour type, validate tour exists
+    if (type === 'tour') {
+      const tour = await Tour.findById(origin_id);
+      if (!tour) {
+        return res.status(404).json({
+          success: false,
+          message: 'Không tìm thấy tour',
+          error: 'Tour not found'
+        });
+      }
+    }
+
+    // ✅ UNIFIED QUERY: Get itineraries by origin_id + type
+    const itineraries = await Itinerary.find({
+      origin_id: origin_id,
+      type: type
+    }).sort({ day_number: 1 });
+
+    // ✅ UNIFIED RESPONSE: Format all itineraries consistently
+    const formattedItineraries = itineraries.map(itinerary =>
+      Itinerary.formatResponse(itinerary)
+    );
+
+    res.status(200).json({
+      success: true,
+      count: formattedItineraries.length,
+      data: formattedItineraries,
+      query: { origin_id, type } // Include query params in response for debugging
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting itineraries by query:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi server khi lấy lịch trình',
+      error: error.message
+    });
+  }
+};
+
+/**
  * @route   GET /api/itineraries/tour/:tourId
  * @desc    Lấy tất cả itineraries của tour (UNIFIED ARCHITECTURE)
  * @access  Public
