@@ -7,7 +7,7 @@ const User = require('../../models/user.model');
 /**
  * Tạo booking tạm thời (reserved) khi user click "Đặt phòng"
  * @route POST /api/traveler/bookings/reserve
- * @desc Tạo booking với status 'reserved', lock phòng trong 5 phút
+ * @desc Tạo booking với status 'reserved', lock phòng trong 2 phút
  * @access Private (User đã đăng nhập)
  */
 exports.createReservedBooking = async (req, res) => {
@@ -150,7 +150,7 @@ exports.createReservedBooking = async (req, res) => {
                     reserveExpireTime: newBooking.reserve_expire_time
                 }
             },
-            message: 'Tạo booking thành công. Vui lòng thanh toán trong 5 phút.'
+            message: 'Tạo booking thành công. Vui lòng thanh toán trong 2 phút.'
         });
 
     } catch (error) {

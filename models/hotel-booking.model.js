@@ -128,9 +128,9 @@ hotelBookingSchema.pre('save', async function (next) {
             return next(new Error('Phòng không tồn tại'));
         }
 
-        // Nếu booking status là 'reserved', set thời gian hết hạn 5 phút
+        // Nếu booking status là 'reserved', set thời gian hết hạn 2 phút
         if (this.booking_status === 'reserved') {
-            this.reserve_expire_time = new Date(Date.now() + 5 * 60 * 1000); // 5 phút
+            this.reserve_expire_time = new Date(Date.now() + 2 * 60 * 1000); // 2 phút
         }
 
         // Kiểm tra phòng có đang được đặt trong khoảng thời gian này không

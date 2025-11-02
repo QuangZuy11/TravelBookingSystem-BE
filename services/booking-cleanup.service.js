@@ -5,7 +5,7 @@ const Room = require('../models/room.model');
 
 /**
  * Service để tự động cleanup các booking hết hạn
- * Chạy mỗi 1 phút để kiểm tra và hủy các booking 'reserved' đã quá 5 phút
+ * Chạy mỗi 1 phút để kiểm tra và hủy các booking 'reserved' đã quá 2 phút
  */
 class BookingCleanupService {
     constructor() {
