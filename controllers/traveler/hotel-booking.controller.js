@@ -17,11 +17,6 @@ exports.createReservedBooking = async (req, res) => {
     try {
         const { hotel_room_id, check_in_date, check_out_date } = req.body;
 
-        console.log('=== Create Reserved Booking ===');
-        console.log('Room ID:', hotel_room_id);
-        console.log('User ID:', req.user?._id);
-        console.log('Check-in:', check_in_date);
-        console.log('Check-out:', check_out_date);
 
         // Kiểm tra xem user đã được authenticate chưa
         if (!req.user || !req.user._id) {
@@ -199,9 +194,6 @@ exports.cancelReservedBooking = async (req, res) => {
     try {
         const { bookingId } = req.params;
 
-        console.log('=== Cancel Reserved Booking ===');
-        console.log('Booking ID:', bookingId);
-        console.log('User ID:', req.user?._id);
 
         // Kiểm tra xem user đã được authenticate chưa
         if (!req.user || !req.user._id) {
@@ -296,9 +288,6 @@ exports.getBookingPaymentInfo = async (req, res) => {
     try {
         const { bookingId } = req.params;
 
-        console.log('=== Get Booking Payment Info ===');
-        console.log('Booking ID:', bookingId);
-        console.log('User ID:', req.user?._id);
 
         // Kiểm tra xem user đã được authenticate chưa
         if (!req.user || !req.user._id) {

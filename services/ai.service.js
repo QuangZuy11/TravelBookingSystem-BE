@@ -1,31 +1,39 @@
-const fetch = global.fetch || require('node-fetch');
+const Groq = require('groq-sdk');
 
-const callOpenAI = async (messages, maxTokens = 1200) => {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) throw new Error('OPENAI_API_KEY not set');
+// Initialize Groq client
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY
+});
 
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${key}`
-    },
-    body: JSON.stringify({
-      model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
-      messages,
+const callGroqAI = async (messages, maxTokens = 1200) => {
+  const key = process.env.GROQ_API_KEY;
+  if (!key) throw new Error('GROQ_API_KEY not set in environment variables');
+
+  try {
+    const chatCompletion = await groq.chat.completions.create({
+      messages: messages,
+      model: process.env.GROQ_MODEL || 'llama3-8b-8192', // Fast and good model
       temperature: 0.7,
-      max_tokens: maxTokens
-    })
-  });
+      max_tokens: maxTokens,
+      top_p: 1,
+      stream: false
+    });
 
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`OpenAI error: ${res.status} ${txt}`);
+    const content = chatCompletion.choices?.[0]?.message?.content;
+    if (!content) {
+      throw new Error('No content received from Groq API');
+    }
+
+    return content;
+  } catch (error) {
+    if (error.status === 429) {
+      throw new Error('Groq API rate limit exceeded. Please try again later.');
+    } else if (error.status === 401) {
+      throw new Error('Invalid Groq API key. Please check your GROQ_API_KEY.');
+    } else {
+      throw new Error(`Groq API error: ${error.message}`);
+    }
   }
-
-  const data = await res.json();
-  const content = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-  return content;
 };
 
 /**
@@ -66,7 +74,7 @@ Return ONLY this JSON format:
     { role: 'user', content: user }
   ];
 
-  const content = await callOpenAI(messages, 500);
+  const content = await callGroqAI(messages, 500);
 
   // Parse JSON response
   let parsed = null;
@@ -82,96 +90,277 @@ Return ONLY this JSON format:
 };
 
 /**
- * generateItinerary: sends request + DB data to AI and expects structured JSON response.
- * If OPENAI_API_KEY is not present, this service will throw and caller should fallback.
+ * Fast AI itinerary generation - optimized for speed and token efficiency
+ * No destination validation needed, accepts destination as string (can contain multiple places)
  */
-exports.generateItinerary = async ({ request, destination, pois, days }) => {
-  // Build compact POI list to send (sử dụng đúng field names từ POI model)
-  const poiSummaries = (pois || []).map(p => ({
-    id: p._id,
-    name: p.name, // Đổi từ poi_name sang name
-    description: p.description || '',
-    type: p.type || 'other',
-    rating: p.ratings?.average || 0, // Đổi từ rating sang ratings.average
-    entryFee: p.entryFee?.adult || 0, // Đổi từ price sang entryFee.adult
-    recommendedDuration: p.recommendedDuration || { hours: 2, minutes: 0 }
-  }));
+exports.generateItinerary = async (requestData) => {
+  // Extract data with simplified structure
+  const {
+    destination,     // String có thể chứa nhiều địa điểm cách nhau bằng dấu ,
+    duration = 3,    // Số ngày
+    budget = 5000000, // Ngân sách
+    interests = [],   // Sở thích
+    travelStyle = "balanced", // relaxed, balanced, active
+    participant_number = 2,
+    user_id
+  } = requestData;
 
-  // Build natural language prompt
-  const destinationName = destination?.name || request.destination || request.ai_suggested_destination;
-  const budgetText = request.budget_total
-    ? `${(request.budget_total / 1000000).toFixed(1)} triệu VND`
-    : request.budget_level === 'high' ? 'cao cấp' : request.budget_level === 'low' ? 'tiết kiệm' : 'trung bình';
+  // Ultra-specific prompt to force valid JSON output
+  const system = `You must return ONLY a valid JSON object. No markdown, no explanations, no additional text. Just pure JSON.`;
 
-  const ageRangeText = request.age_range && request.age_range.length > 0
-    ? `tuổi ${request.age_range.join(', ')}`
-    : 'mọi lứa tuổi';
+  const user = `Generate ${duration}-day Vietnam travel itinerary:
+- Destinations: ${destination}
+- Budget: ${budget.toLocaleString()} VND (${participant_number} people)  
+- Interests: ${interests.join(', ')}
+- Style: ${travelStyle}
 
-  const preferencesText = request.preferences && request.preferences.length > 0
-    ? request.preferences.join(', ')
-    : 'tham quan chung';
+Return exactly this JSON structure with real activities:
 
-  const system = `You are a professional travel itinerary planner. Create a detailed day-by-day itinerary in JSON format based on the user's natural language request and available points of interest.`;
-
-  const user = `Hãy tạo lịch trình chi tiết ${days} ngày cho chuyến đi đến ${destinationName} dành cho ${request.participant_number} người ${ageRangeText}, ngân sách ${budgetText}, ưu tiên ${preferencesText}.
-
-Available Points of Interest:
-${JSON.stringify(poiSummaries, null, 2)}
-
-Create a ${days}-day itinerary that:
-1. Matches the user's interests: ${preferencesText}
-2. Fits the budget: ${budgetText}
-3. Suitable for ${request.participant_number} people aged ${ageRangeText}
-4. Includes meals, activities, and attractions
-5. Realistic timing (8 AM - 6 PM daily, 30 min travel between locations)
-
-Return ONLY valid JSON in this format:
+JSON format:
 {
+  "title": "Trip title",
+  "total_budget": ${budget},
   "days": [
     {
-      "day_number": 1,
-      "title": "Day 1 - [Theme/Area]",
-      "description": "Brief overview of the day",
+      "day": 1,
+      "theme": "Day theme",
       "activities": [
-        { 
-          "activity_name": "Activity name", 
-          "poi_id": "<poi id from list or null>", 
-          "start_time": "HH:MM",
-          "end_time": "HH:MM",
-          "duration_hours": 2.5,
-          "description": "What to do here",
-          "cost": 100000,
-          "optional": false
+        {
+          "time": "08:00",
+          "activity": "Activity name",
+          "location": "Location name", 
+          "cost": 200000,
+          "duration": "2 hours",
+          "type": "sightseeing|food|transport|accommodation"
         }
-      ]
+      ],
+      "day_total": 800000
     }
   ]
-}
-
-Do not add any text outside the JSON object.`;
+}`;
 
   const messages = [
     { role: 'system', content: system },
     { role: 'user', content: user }
   ];
 
-  const content = await callOpenAI(messages, 2000);
+  // Use shorter max_tokens for faster response
+  const content = await callGroqAI(messages, 1200);
 
-  // Try to parse JSON from the response (AI should return JSON)
+  // Enhanced JSON parsing with error recovery
   let parsed = null;
   try {
+    // Try direct parsing first
     parsed = JSON.parse(content);
   } catch (err) {
-    // Try to extract JSON substring
-    const m = content && content.match(/\{[\s\S]*\}$/);
-    if (m) parsed = JSON.parse(m[0]);
-    else throw new Error('Failed to parse AI response as JSON');
+    console.log('❌ Direct JSON parsing failed, trying recovery methods...');
+    console.log('Raw AI response length:', content.length);
+    console.log('Raw AI response preview:', content.substring(0, 500) + '...');
+
+    try {
+      // Method 1: Extract JSON block between curly braces
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        console.log('🔧 Attempting to parse extracted JSON...');
+        parsed = JSON.parse(jsonMatch[0]);
+      } else {
+        // Method 2: Try to find JSON starting with {"title" or {"days"
+        const titleMatch = content.match(/\{"title"[\s\S]*\}/);
+        const daysMatch = content.match(/\{"days"[\s\S]*\}/);
+
+        if (titleMatch) {
+          console.log('🔧 Found title-based JSON, attempting parse...');
+          parsed = JSON.parse(titleMatch[0]);
+        } else if (daysMatch) {
+          console.log('🔧 Found days-based JSON, attempting parse...');
+          parsed = JSON.parse(daysMatch[0]);
+        } else {
+          throw new Error('No valid JSON pattern found in AI response');
+        }
+      }
+    } catch (parseErr) {
+      console.error('❌ All JSON parsing methods failed');
+      console.error('Parse error:', parseErr.message);
+
+      try {
+        // Method 3: Try to fix common JSON issues
+        console.log('🔧 Attempting JSON repair...');
+        let repairedJson = content;
+
+        // Fix incomplete JSON by adding missing closing braces
+        const openBraces = (repairedJson.match(/\{/g) || []).length;
+        const closeBraces = (repairedJson.match(/\}/g) || []).length;
+        const missingBraces = openBraces - closeBraces;
+
+        if (missingBraces > 0) {
+          repairedJson += '}'.repeat(missingBraces);
+        }
+
+        // Try parsing the repaired JSON
+        parsed = JSON.parse(repairedJson);
+        console.log('✅ JSON repair successful!');
+
+      } catch (repairErr) {
+        console.error('❌ JSON repair also failed');
+        console.error('Repair error:', repairErr.message);
+
+        // Fallback: Generate a simple itinerary structure
+        console.log('🔄 Generating fallback itinerary...');
+        parsed = generateFallbackItinerary(destination, duration, budget, requestData.preferences || requestData.interests || []);
+      }
+    }
+  }
+
+  // Validate required structure
+  if (!parsed.days || !Array.isArray(parsed.days)) {
+    throw new Error('Invalid itinerary structure: missing days array');
   }
 
   return parsed;
 };
 
+// Enhanced fallback itinerary generator when AI parsing fails
+const generateFallbackItinerary = (destination, duration, budget, interests) => {
+  const dailyBudget = Math.floor(budget / duration);
+
+  // Split destination into multiple locations if comma-separated
+  const locations = destination.split(',').map(loc => loc.trim());
+  const mainLocation = locations[0];
+
+  const fallback = {
+    title: `Discover ${locations.length > 1 ? locations.join(' & ') : destination}`,
+    total_budget: budget,
+    days: []
+  };
+
+  // Enhanced activity templates based on Vietnamese destinations
+  const vietnameseActivities = {
+    'culture': ['Visit ancient temples', 'Explore old quarter', 'Traditional craft villages', 'Cultural museums'],
+    'history': ['Historical sites tour', 'War museums', 'Ancient citadel', 'Heritage walking tour'],
+    'food': ['Street food tour', 'Local cooking class', 'Traditional restaurant', 'Market food tasting'],
+    'nature': ['National park visit', 'Boat cruise', 'Cave exploration', 'Mountain hiking'],
+    'adventure': ['Motorbike tour', 'Rock climbing', 'Kayaking', 'Trekking'],
+    'entertainment': ['Water puppet show', 'Night market', 'Rooftop bars', 'Local festivals'],
+    'relaxation': ['Spa treatment', 'Hot springs', 'Beach time', 'Meditation centers'],
+    'shopping': ['Local markets', 'Souvenir shopping', 'Art galleries', 'Handicraft stores'],
+    'sightseeing': ['City landmarks', 'Scenic viewpoints', 'Architecture tour', 'Photo walks'],
+    'transport': ['Airport transfer', 'Train journey', 'Bus travel', 'Local transport']
+  };
+
+  // Valid activity types that match the controller validation
+  const validTypes = ['food', 'transport', 'sightseeing', 'entertainment', 'accommodation',
+    'shopping', 'nature', 'culture', 'adventure', 'relaxation', 'history', 'other'];
+
+  // Map interests to valid types
+  const mapInterestToValidType = (interest) => {
+    const normalizedInterest = interest.toLowerCase();
+    if (validTypes.includes(normalizedInterest)) {
+      return normalizedInterest;
+    }
+    // Default mappings for common interests
+    const mappings = {
+      'cultural': 'culture',
+      'historical': 'history',
+      'outdoor': 'nature',
+      'nightlife': 'entertainment',
+      'dining': 'food'
+    };
+    return mappings[normalizedInterest] || 'sightseeing';
+  };
+
+  const timeSlots = ['08:00', '10:30', '12:30', '15:00', '18:30'];
+  const mealTimes = ['breakfast', 'lunch', 'dinner'];
+
+  for (let day = 1; day <= duration; day++) {
+    const dayActivities = [];
+    let dayTotal = 0;
+    const currentLocation = locations[(day - 1) % locations.length];
+
+    // Morning activity
+    const morningInterest = mapInterestToValidType(interests[0] || 'culture');
+    const morningActivities = vietnameseActivities[morningInterest] || vietnameseActivities['culture'];
+    dayActivities.push({
+      time: '08:00',
+      activity: `${morningActivities[Math.floor(Math.random() * morningActivities.length)]} in ${currentLocation}`,
+      location: currentLocation,
+      cost: Math.floor(dailyBudget * 0.25),
+      duration: '2.5 hours',
+      type: morningInterest
+    });
+
+    // Lunch
+    dayActivities.push({
+      time: '12:00',
+      activity: `Traditional Vietnamese lunch at local restaurant`,
+      location: `${currentLocation} local restaurant`,
+      cost: Math.floor(dailyBudget * 0.15),
+      duration: '1.5 hours',
+      type: 'food'
+    });
+
+    // Afternoon activity
+    const afternoonInterest = mapInterestToValidType(interests[1] || interests[0] || 'nature');
+    const afternoonActivities = vietnameseActivities[afternoonInterest] || vietnameseActivities['nature'];
+    dayActivities.push({
+      time: '14:30',
+      activity: `${afternoonActivities[Math.floor(Math.random() * afternoonActivities.length)]} near ${currentLocation}`,
+      location: currentLocation,
+      cost: Math.floor(dailyBudget * 0.35),
+      duration: '3 hours',
+      type: afternoonInterest
+    });
+
+    // Evening activity/dinner
+    const eveningInterest = mapInterestToValidType(interests[2] || 'food');
+    const eveningActivities = vietnameseActivities[eveningInterest] || vietnameseActivities['food'];
+    dayActivities.push({
+      time: '18:30',
+      activity: `${eveningActivities[Math.floor(Math.random() * eveningActivities.length)]} in ${currentLocation}`,
+      location: currentLocation,
+      cost: Math.floor(dailyBudget * 0.25),
+      duration: '2 hours',
+      type: eveningInterest
+    });
+
+    dayTotal = dayActivities.reduce((sum, act) => sum + act.cost, 0);
+
+    fallback.days.push({
+      day: day,
+      theme: `Day ${day} - ${currentLocation} ${interests[0] || 'Culture'} & ${interests[1] || 'Nature'}`,
+      activities: dayActivities,
+      day_total: dayTotal
+    });
+  }
+
+  return fallback;
+};
+
+// Export the callGroqAI function for direct use
+exports.callGroqAI = callGroqAI;
+
 // Export a helper that gracefully falls back to throwing when no API key
 exports.callAIOrThrow = async (opts) => {
   return exports.generateItinerary(opts);
+};
+
+// Test function to verify Groq API connection
+exports.testGroqConnection = async () => {
+  try {
+    const messages = [
+      { role: 'user', content: 'Hello, respond with "Groq API is working!" if you can see this message.' }
+    ];
+
+    const response = await callGroqAI(messages, 50);
+    return {
+      success: true,
+      message: 'Groq API connection successful',
+      response: response
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: 'Groq API connection failed',
+      error: error.message
+    };
+  }
 };

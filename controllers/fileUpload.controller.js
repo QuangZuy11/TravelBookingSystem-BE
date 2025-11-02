@@ -9,7 +9,7 @@ const Room = require('../models/room.model');
 const Tour = require('../models/tour.model');
 const Review = require('../models/review.model');
 const ServiceProvider = require('../models/service-provider.model');
-const ItineraryActivity = require('../models/itinerary-activity.model');
+// const ItineraryActivity = require('../models/itinerary-activity.model'); // Removed - activities are now simple array
 const Destination = require('../models/destination.model');
 const PointOfInterest = require('../models/point-of-interest.model');
 
@@ -19,16 +19,12 @@ const PointOfInterest = require('../models/point-of-interest.model');
  * @access  Private (Provider)
  */
 exports.uploadHotelImages = async (req, res) => {
-    console.log('\n🏨 === UPLOAD HOTEL IMAGES CONTROLLER ===');
-    console.log('Hotel ID:', req.params.hotelId);
-    console.log('Files received:', req.files ? req.files.length : 0);
 
     try {
         const { hotelId } = req.params;
         const files = req.files;
 
         if (!files || files.length === 0) {
-            console.log('❌ No files provided');
             return res.status(400).json({
                 success: false,
                 message: 'Vui lòng chọn ít nhất 1 file để upload',
@@ -36,37 +32,27 @@ exports.uploadHotelImages = async (req, res) => {
             });
         }
 
-        console.log('📋 Files details:');
         files.forEach((file, i) => {
-            console.log(`   ${i + 1}. ${file.originalname} (${(file.size / 1024).toFixed(2)} KB, ${file.mimetype})`);
         });
 
         // Check hotel exists
-        console.log('🔍 Checking if hotel exists...');
         const hotel = await Hotel.findById(hotelId);
         if (!hotel) {
-            console.log('❌ Hotel not found');
             return res.status(404).json({
                 success: false,
                 message: 'Không tìm thấy khách sạn',
                 error: 'Hotel not found'
             });
         }
-        console.log('✅ Hotel found:', hotel.name);
 
         // Upload to Google Drive
-        console.log('☁️ Starting Google Drive upload...');
         const uploadedFiles = await googleDriveService.uploadFiles(files, `hotels/${hotelId}`);
 
         // Update hotel images in database
-        console.log('💾 Updating hotel database...');
         const imageUrls = uploadedFiles.map(f => f.direct_url);
         hotel.images = [...hotel.images, ...imageUrls]; // Append new images
         await hotel.save();
 
-        console.log(`✅ SUCCESS: Uploaded ${uploadedFiles.length} images for hotel ${hotelId}`);
-        console.log(`   Total hotel images now: ${hotel.images.length}`);
-        console.log('🏨 === UPLOAD HOTEL IMAGES COMPLETE ===\n');
 
         res.status(200).json({
             success: true,

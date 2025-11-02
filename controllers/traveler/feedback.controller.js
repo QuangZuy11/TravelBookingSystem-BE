@@ -85,7 +85,8 @@ exports.createFeedback = async (req, res) => {
       });
     }
 
-    console.log("🔍 Creating feedback:", {
+    // Tạo feedback mới
+    const feedback = new Feedback({
       user_id: userObjectId,
       tour_id: tourObjectId,
       comment,
@@ -101,17 +102,8 @@ exports.createFeedback = async (req, res) => {
       });
     }
 
-    // Tạo feedback mới
-    const feedback = new Feedback({
-      user_id: userObjectId,
-      tour_id: tourObjectId,
-      comment,
-      rating,
-    });
-
     await feedback.save();
 
-    console.log("✅ Feedback created:", feedback._id);
 
     // Cập nhật rating trung bình cho tour
     const allFeedbacks = await Feedback.find({ tour_id: tourObjectId });
@@ -234,7 +226,7 @@ exports.deleteFeedback = async (req, res) => {
     const avgRating =
       allFeedbacks.length > 0
         ? allFeedbacks.reduce((sum, f) => sum + f.rating, 0) /
-          allFeedbacks.length
+        allFeedbacks.length
         : 0;
 
     await Tour.findByIdAndUpdate(tour_id, {

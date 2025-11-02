@@ -112,30 +112,15 @@ router.delete('/itineraries/:id',
     itineraryController.deleteItinerary
 );
 
-// Itinerary Activities - Require verification
-router.post('/itineraries/:id/activities',
-    authMiddleware,
-    checkServiceProviderVerification('tour'),
-    itineraryController.addActivity
-);
+// Itinerary Activities - NOW MANAGED AS SIMPLE ARRAY
+// Activities are managed directly in itinerary.activities array via PUT /itineraries/:id
+// No separate activity endpoints needed
 
-router.put('/itineraries/:id/activities/:activityId',
-    authMiddleware,
-    checkServiceProviderVerification('tour'),
-    itineraryController.updateActivity
-);
-
-router.delete('/itineraries/:id/activities/:activityId',
-    authMiddleware,
-    checkServiceProviderVerification('tour'),
-    itineraryController.deleteActivity
-);
-
-// Itinerary Budget Breakdown
-router.post('/itineraries/:id/budget', itineraryController.addBudgetBreakdown);
-router.get('/itineraries/:id/budget', itineraryController.getBudgetBreakdown);
-router.put('/itineraries/:id/budget/:budgetId', itineraryController.updateBudgetItem);
-router.delete('/itineraries/:id/budget/:budgetId', itineraryController.deleteBudgetItem);
+// Itinerary Budget Breakdown - DISABLED (use separate budgetRoutes if needed)
+// router.post('/itineraries/:id/budget', itineraryController.addBudgetBreakdown);
+// router.get('/itineraries/:id/budget', itineraryController.getBudgetBreakdown);
+// router.put('/itineraries/:id/budget/:budgetId', itineraryController.updateBudgetItem);  
+// router.delete('/itineraries/:id/budget/:budgetId', itineraryController.deleteBudgetItem);
 
 // ===== BOOKING MANAGEMENT =====
 
