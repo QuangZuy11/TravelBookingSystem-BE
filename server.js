@@ -28,6 +28,7 @@ const adBookingRoutes = require("./routes/adBooking.routes");
 const travelerTourRoutes = require("./routes/traveler/TravelerTourRoutes");
 const travelerPromotionRoutes = require("./routes/traveler/promotion.routes");
 const providerPromotionRoutes = require("./routes/provider/promotion.routes");
+const providerHotelBookingManagementRoutes = require("./routes/provider/hotel-booking-management.routes");
 const aiItineraryRoutes = require("./routes/aiItinerary.routes");
 const poiRoutes = require("./routes/poi.routes");
 const destinationRoutes = require("./routes/destination.routes");
@@ -71,6 +72,7 @@ app.use("/api/itineraries", itineraryRoutes);
 app.use("/api/budget-breakdowns", budgetRoutes);
 app.use("/api/hotel", hotelRoutes);
 app.use("/api/provider/promotions", providerPromotionRoutes);
+app.use("/api/provider/hotel-bookings", providerHotelBookingManagementRoutes);
 // flight functionality removed
 app.use("/api/provider", serviceProviderRoutes);
 // AI itinerary endpoints - UNIFIED ARCHITECTURE: origin_id + type classification (tour | ai_gen | customized)
