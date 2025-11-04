@@ -23,6 +23,30 @@ router.use(requireProvider);
 router.get('/statistics', bookingController.getStatistics);
 
 /**
+ * @route   GET /api/provider/hotel-bookings/statistics/daily
+ * @desc    Lấy thống kê doanh thu theo ngày
+ * @access  Private (Provider only)
+ * @query   start_date, end_date, year, month (optional)
+ */
+router.get('/statistics/daily', bookingController.getDailyStatistics);
+
+/**
+ * @route   GET /api/provider/hotel-bookings/statistics/monthly
+ * @desc    Lấy thống kê doanh thu theo tháng
+ * @access  Private (Provider only)
+ * @query   year, start_date, end_date (optional)
+ */
+router.get('/statistics/monthly', bookingController.getMonthlyStatistics);
+
+/**
+ * @route   GET /api/provider/hotel-bookings/statistics/yearly
+ * @desc    Lấy thống kê doanh thu theo năm
+ * @access  Private (Provider only)
+ * @query   start_year, end_year (optional)
+ */
+router.get('/statistics/yearly', bookingController.getYearlyStatistics);
+
+/**
  * @route   GET /api/provider/hotel-bookings/:bookingId
  * @desc    Lấy chi tiết 1 booking
  * @access  Private (Provider only)

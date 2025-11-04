@@ -136,6 +136,320 @@ exports.getStatistics = async (req, res) => {
 };
 
 /**
+ * Thống kê doanh thu theo ngày
+ * @route GET /api/provider/hotel-bookings/statistics/daily
+ * @desc Lấy doanh thu theo từng ngày (để vẽ line chart)
+ * @access Private (Provider only)
+ */
+exports.getDailyStatistics = async (req, res) => {
+    try {
+        const userId = req.user._id || req.user.id;
+        const { start_date, end_date, year, month } = req.query;
+
+        // Lấy danh sách room IDs của provider
+        let roomIds = await getProviderRoomIds(userId);
+
+        if (roomIds.length === 0) {
+            return res.status(200).json({
+                success: true,
+                data: []
+            });
+        }
+
+        // Build date range
+        let startDate, endDate;
+        if (year && month) {
+            // Nếu có year & month → lấy tháng đó
+            startDate = new Date(year, month - 1, 1);
+            endDate = new Date(year, month, 0, 23, 59, 59, 999);
+        } else if (start_date && end_date) {
+            // Nếu có start_date & end_date → dùng custom range
+            startDate = new Date(start_date);
+            endDate = new Date(end_date);
+            endDate.setHours(23, 59, 59, 999);
+        } else {
+            // Mặc định: 30 ngày gần nhất
+            endDate = new Date();
+            startDate = new Date();
+            startDate.setDate(startDate.getDate() - 30);
+        }
+
+        console.log('📅 Daily stats range:', startDate, 'to', endDate);
+
+        // Aggregate by day
+        const dailyStats = await HotelBooking.aggregate([
+            {
+                $match: {
+                    hotel_room_id: { $in: roomIds },
+                    created_at: { $gte: startDate, $lte: endDate }
+                }
+            },
+            {
+                $group: {
+                    _id: {
+                        year: { $year: '$created_at' },
+                        month: { $month: '$created_at' },
+                        day: { $dayOfMonth: '$created_at' }
+                    },
+                    total_revenue: {
+                        $sum: {
+                            $cond: [
+                                {
+                                    $and: [
+                                        { $eq: ['$payment_status', 'paid'] },
+                                        { $in: ['$booking_status', ['confirmed', 'completed']] }
+                                    ]
+                                },
+                                { $toDouble: '$total_amount' },
+                                0
+                            ]
+                        }
+                    },
+                    total_bookings: {
+                        $sum: {
+                            $cond: [
+                                { $in: ['$booking_status', ['reserved', 'confirmed', 'completed']] },
+                                1,
+                                0
+                            ]
+                        }
+                    }
+                }
+            },
+            {
+                $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 }
+            }
+        ]);
+
+        // Format response
+        const formattedData = dailyStats.map(stat => ({
+            date: `${stat._id.year}-${String(stat._id.month).padStart(2, '0')}-${String(stat._id.day).padStart(2, '0')}`,
+            revenue: Math.round(stat.total_revenue),
+            bookings: stat.total_bookings
+        }));
+
+        res.status(200).json({
+            success: true,
+            data: formattedData
+        });
+
+    } catch (error) {
+        console.error('❌ Get Daily Statistics Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi lấy thống kê theo ngày',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+/**
+ * Thống kê doanh thu theo tháng
+ * @route GET /api/provider/hotel-bookings/statistics/monthly
+ * @desc Lấy doanh thu theo từng tháng (để vẽ bar chart)
+ * @access Private (Provider only)
+ */
+exports.getMonthlyStatistics = async (req, res) => {
+    try {
+        const userId = req.user._id || req.user.id;
+        const { year, start_date, end_date } = req.query;
+
+        // Lấy danh sách room IDs của provider
+        let roomIds = await getProviderRoomIds(userId);
+
+        if (roomIds.length === 0) {
+            return res.status(200).json({
+                success: true,
+                data: []
+            });
+        }
+
+        // Build date range
+        let startDate, endDate;
+        if (year) {
+            // Nếu có year → lấy cả năm
+            startDate = new Date(year, 0, 1);
+            endDate = new Date(year, 11, 31, 23, 59, 59, 999);
+        } else if (start_date && end_date) {
+            startDate = new Date(start_date);
+            endDate = new Date(end_date);
+            endDate.setHours(23, 59, 59, 999);
+        } else {
+            // Mặc định: năm hiện tại
+            const currentYear = new Date().getFullYear();
+            startDate = new Date(currentYear, 0, 1);
+            endDate = new Date(currentYear, 11, 31, 23, 59, 59, 999);
+        }
+
+        console.log('📅 Monthly stats range:', startDate, 'to', endDate);
+
+        // Aggregate by month
+        const monthlyStats = await HotelBooking.aggregate([
+            {
+                $match: {
+                    hotel_room_id: { $in: roomIds },
+                    created_at: { $gte: startDate, $lte: endDate }
+                }
+            },
+            {
+                $group: {
+                    _id: {
+                        year: { $year: '$created_at' },
+                        month: { $month: '$created_at' }
+                    },
+                    total_revenue: {
+                        $sum: {
+                            $cond: [
+                                {
+                                    $and: [
+                                        { $eq: ['$payment_status', 'paid'] },
+                                        { $in: ['$booking_status', ['confirmed', 'completed']] }
+                                    ]
+                                },
+                                { $toDouble: '$total_amount' },
+                                0
+                            ]
+                        }
+                    },
+                    total_bookings: {
+                        $sum: {
+                            $cond: [
+                                { $in: ['$booking_status', ['reserved', 'confirmed', 'completed']] },
+                                1,
+                                0
+                            ]
+                        }
+                    }
+                }
+            },
+            {
+                $sort: { '_id.year': 1, '_id.month': 1 }
+            }
+        ]);
+
+        // Format response
+        const formattedData = monthlyStats.map(stat => ({
+            month: `${stat._id.year}-${String(stat._id.month).padStart(2, '0')}`,
+            year: stat._id.year,
+            month_number: stat._id.month,
+            revenue: Math.round(stat.total_revenue),
+            bookings: stat.total_bookings
+        }));
+
+        res.status(200).json({
+            success: true,
+            data: formattedData
+        });
+
+    } catch (error) {
+        console.error('❌ Get Monthly Statistics Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi lấy thống kê theo tháng',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+/**
+ * Thống kê doanh thu theo năm
+ * @route GET /api/provider/hotel-bookings/statistics/yearly
+ * @desc Lấy doanh thu theo từng năm
+ * @access Private (Provider only)
+ */
+exports.getYearlyStatistics = async (req, res) => {
+    try {
+        const userId = req.user._id || req.user.id;
+        const { start_year, end_year } = req.query;
+
+        // Lấy danh sách room IDs của provider
+        let roomIds = await getProviderRoomIds(userId);
+
+        if (roomIds.length === 0) {
+            return res.status(200).json({
+                success: true,
+                data: []
+            });
+        }
+
+        // Build date range
+        let startDate, endDate;
+        if (start_year && end_year) {
+            startDate = new Date(start_year, 0, 1);
+            endDate = new Date(end_year, 11, 31, 23, 59, 59, 999);
+        } else {
+            // Mặc định: 5 năm gần nhất
+            const currentYear = new Date().getFullYear();
+            startDate = new Date(currentYear - 4, 0, 1);
+            endDate = new Date(currentYear, 11, 31, 23, 59, 59, 999);
+        }
+
+        console.log('📅 Yearly stats range:', startDate, 'to', endDate);
+
+        // Aggregate by year
+        const yearlyStats = await HotelBooking.aggregate([
+            {
+                $match: {
+                    hotel_room_id: { $in: roomIds },
+                    created_at: { $gte: startDate, $lte: endDate }
+                }
+            },
+            {
+                $group: {
+                    _id: { year: { $year: '$created_at' } },
+                    total_revenue: {
+                        $sum: {
+                            $cond: [
+                                {
+                                    $and: [
+                                        { $eq: ['$payment_status', 'paid'] },
+                                        { $in: ['$booking_status', ['confirmed', 'completed']] }
+                                    ]
+                                },
+                                { $toDouble: '$total_amount' },
+                                0
+                            ]
+                        }
+                    },
+                    total_bookings: {
+                        $sum: {
+                            $cond: [
+                                { $in: ['$booking_status', ['reserved', 'confirmed', 'completed']] },
+                                1,
+                                0
+                            ]
+                        }
+                    }
+                }
+            },
+            {
+                $sort: { '_id.year': 1 }
+            }
+        ]);
+
+        // Format response
+        const formattedData = yearlyStats.map(stat => ({
+            year: stat._id.year,
+            revenue: Math.round(stat.total_revenue),
+            bookings: stat.total_bookings
+        }));
+
+        res.status(200).json({
+            success: true,
+            data: formattedData
+        });
+
+    } catch (error) {
+        console.error('❌ Get Yearly Statistics Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi lấy thống kê theo năm',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+/**
  * Lấy danh sách bookings (với filter và pagination)
  * @route GET /api/provider/hotel-bookings
  * @desc Hiển thị table danh sách bookings
