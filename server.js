@@ -7,7 +7,7 @@ const app = express();
 const mongoose = require("mongoose");
 
 // Import booking cleanup service
-const bookingCleanupService = require('./services/booking-cleanup.service');
+const bookingCleanupService = require("./services/booking-cleanup.service");
 
 // Import routes
 const tourRoutes = require("./routes/tourRoutes");
@@ -21,6 +21,8 @@ const travelerRoutes = require("./routes/traveler/hotel.routes");
 const travelerHotelRoomRoutes = require("./routes/traveler/hotel-room.routes");
 const travelerHotelBookingRoutes = require("./routes/traveler/hotel-booking.routes");
 const travelerHotelPaymentRoutes = require("./routes/traveler/hotel-payment.routes");
+const travelerTourBookingRoutes = require("./routes/traveler/tour-booking.routes");
+const travelerTourPaymentRoutes = require("./routes/traveler/tour-payment.routes");
 const adBookingRoutes = require("./routes/adBooking.routes");
 const travelerTourRoutes = require("./routes/traveler/TravelerTourRoutes");
 const travelerPromotionRoutes = require("./routes/traveler/promotion.routes");
@@ -32,8 +34,8 @@ const fileUploadRoutes = require("./routes/fileUpload.routes");
 const imageProxyRoutes = require("./routes/imageProxy.routes");
 const travelerFeedbackRoutes = require("./routes/traveler/feedback.routes");
 const chatRoutes = require("./routes/chat.routes");
-const termsPolicyRoutes = require('./routes/termsPolicy.routes');
-const webhookRoutes = require('./routes/webhook.routes');
+const termsPolicyRoutes = require("./routes/termsPolicy.routes");
+const webhookRoutes = require("./routes/webhook.routes");
 
 // Middleware
 app.use(cors());
@@ -58,6 +60,8 @@ app.use("/api/traveler/hotel-payments", travelerHotelPaymentRoutes);
 app.use("/api/traveler/feedbacks", travelerFeedbackRoutes);
 // Tour traveler
 app.use("/api/traveler/tours", travelerTourRoutes);
+app.use("/api/traveler/tour-bookings", travelerTourBookingRoutes);
+app.use("/api/traveler/tour-payments", travelerTourPaymentRoutes);
 //AD_booking
 app.use("/api/ad-bookings", adBookingRoutes);
 // Provider routes
@@ -79,9 +83,9 @@ app.use("/api/destinations", destinationRoutes);
 // File upload endpoints
 app.use("/api/upload", fileUploadRoutes);
 // Image proxy endpoint (for bypassing CORS on Google Drive images)
-app.use('/api', imageProxyRoutes);
+app.use("/api", imageProxyRoutes);
 // Terms & Policies endpoints
-app.use('/api/terms-policies', termsPolicyRoutes);
+app.use("/api/terms-policies", termsPolicyRoutes);
 // Auth routes
 app.use("/api/auth", require("./routes/auth.routes"));
 app.use("/api/auth/service-provider", serviceProviderAuthRoutes);
@@ -90,9 +94,9 @@ app.use("/api/profiles", require("./routes/profile.routes"));
 app.use("/api/admin/service-providers", adminServiceProviderRoutes);
 app.use("/api/admin", require("./routes/admin/admin.routes"));
 // Chat routes
-app.use('/api/chat', chatRoutes);
+app.use("/api/chat", chatRoutes);
 // Webhook routes (PayOS callbacks - no authentication)
-app.use('/api/webhooks', webhookRoutes);
+app.use("/api/webhooks", webhookRoutes);
 // Trong server.js
 // ... các routes khác
 
