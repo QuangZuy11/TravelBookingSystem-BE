@@ -45,16 +45,20 @@ const termsPolicySchema = new mongoose.Schema(
     },
     iconKey: {
       type: String,
-      default: null,
       trim: true,
+    },
+    policyType: {
+      type: String,
+      enum: ['TOUR', 'HOTEL'],
+      uppercase: true,
+      trim: true,
+      default: null,
     },
     highlight: {
       type: Boolean,
-      default: false,
     },
     color: {
       type: String,
-      default: 'teal',
       trim: true,
     },
     description: {
@@ -64,7 +68,7 @@ const termsPolicySchema = new mongoose.Schema(
     },
     items: {
       type: [termItemSchema],
-      default: [],
+      default: undefined,
     },
     order: {
       type: Number,
@@ -77,6 +81,7 @@ const termsPolicySchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    versionKey: false,
   }
 );
 

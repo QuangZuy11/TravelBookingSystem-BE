@@ -17,6 +17,7 @@ const hotelRoutes = require("./routes/hotelRoutes");
 const serviceProviderRoutes = require("./routes/serviceProviderRoutes");
 const serviceProviderAuthRoutes = require("./routes/serviceProviderAuthRoutes");
 const adminServiceProviderRoutes = require("./routes/admin/adminServiceProviderRoutes");
+const adminTermsPolicyRoutes = require("./routes/admin/termsPolicy.routes");
 const travelerRoutes = require("./routes/traveler/hotel.routes");
 const travelerHotelRoomRoutes = require("./routes/traveler/hotel-room.routes");
 const travelerHotelBookingRoutes = require("./routes/traveler/hotel-booking.routes");
@@ -85,6 +86,7 @@ app.use("/api/auth/service-provider", serviceProviderAuthRoutes);
 app.use("/api/profiles", require("./routes/profile.routes"));
 // Admin routes
 app.use("/api/admin/service-providers", adminServiceProviderRoutes);
+app.use("/api/admin/terms-policies", adminTermsPolicyRoutes);
 app.use("/api/admin", require("./routes/admin/admin.routes"));
 // Chat routes
 app.use('/api/chat', chatRoutes);

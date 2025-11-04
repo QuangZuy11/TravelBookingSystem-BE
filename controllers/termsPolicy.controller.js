@@ -1,9 +1,60 @@
 const TermsPolicy = require('../models/terms-policy.model');
 const ServiceProvider = require('../models/service-provider.model');
+const mongoose = require('mongoose');
+
+const PROMOTION_POLICY_ROLE = 'PROMOTION_TERMS';
 
 const normalizeRole = (role) => (role || '').toString().trim().toUpperCase();
 const normalizeTarget = (target) =>
   (target || '').toString().trim().toLowerCase().replace(/\s+/g, '_');
+const normalizePolicyType = (value) => {
+  if (!value && value !== 0) return null;
+  const normalized = value.toString().trim().toLowerCase();
+
+  if (normalized === 'tour' || normalized === 'hotel') {
+    return normalized;
+  }
+
+  if (normalized === 'traveler') {
+    return 'tour';
+  }
+
+  return null;
+};
+const toPolicyTypeEnum = (value) => {
+  const upper = (value || '').toString().trim().toUpperCase();
+  if (upper === 'TRAVELER') {
+    return 'TOUR';
+  }
+  return upper;
+};
+const buildPolicyTarget = (type) => `promotion_${type}`;
+const isValidObjectId = (value) => mongoose.Types.ObjectId.isValid(value);
+const policyTypeToLabel = (type) => {
+  const normalized = (type || '').toString().trim().toUpperCase();
+  if (!normalized) return '';
+
+  if (normalized === 'HOTEL') return 'Hotel';
+  if (normalized === 'TOUR') return 'Tour';
+  if (normalized === 'TRAVELER') return 'Traveler';
+
+  return normalized.charAt(0) + normalized.slice(1).toLowerCase();
+};
+const formatPromotionPolicy = (policy) => {
+  if (!policy) return null;
+  const doc = policy.toObject ? policy.toObject() : policy;
+  const rawType = doc.policyType || doc.promotionType;
+  return {
+    id: doc._id,
+    _id: doc._id,
+    title: doc.category,
+    type: policyTypeToLabel(rawType),
+    policyType: rawType,
+    description: doc.description || '',
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+  };
+};
 
 const parseBoolean = (value) => {
   if (typeof value === 'boolean') return value;
@@ -228,6 +279,200 @@ exports.getCurrentUserTermsPolicies = async (req, res) => {
       success: false,
       message:
         error.message || 'Failed to fetch terms & policies for current user',
+    });
+  }
+};
+
+exports.listPromotionTermsPolicies = async (req, res) => {
+  try {
+    const policies = await TermsPolicy.find({ role: PROMOTION_POLICY_ROLE })
+      .sort({ updatedAt: -1 })
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      count: policies.length,
+      data: policies.map(formatPromotionPolicy),
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch promotion terms policies',
+    });
+  }
+};
+
+exports.createPromotionTermsPolicy = async (req, res) => {
+  try {
+    const { type, policyType, title, description } = req.body || {};
+
+    const normalizedType = normalizePolicyType(policyType ?? type);
+    if (!normalizedType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Loại điều khoản không hợp lệ. Giá trị hợp lệ: Traveler hoặc Tour.',
+      });
+    }
+
+    const trimmedTitle = (title || '').toString().trim();
+    if (!trimmedTitle) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tiêu đề điều khoản là bắt buộc.',
+      });
+    }
+
+    const policy = await TermsPolicy.create({
+      target: buildPolicyTarget(normalizedType),
+      policyType: toPolicyTypeEnum(normalizedType),
+      role: PROMOTION_POLICY_ROLE,
+      category: trimmedTitle,
+      description:
+        description === null || description === undefined
+          ? ''
+          : description.toString(),
+      isActive: true,
+    });
+
+    return res.status(201).json({
+      success: true,
+      data: formatPromotionPolicy(policy),
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to create promotion terms policy',
+    });
+  }
+};
+
+exports.getPromotionTermsPolicyDetail = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!isValidObjectId(id)) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy điều khoản quảng cáo yêu cầu.',
+      });
+    }
+
+    const policy = await TermsPolicy.findOne({
+      _id: id,
+      role: PROMOTION_POLICY_ROLE,
+    }).lean();
+
+    if (!policy) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy điều khoản quảng cáo yêu cầu.',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: formatPromotionPolicy(policy),
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch promotion terms policy detail',
+    });
+  }
+};
+
+exports.updatePromotionTermsPolicy = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy điều khoản quảng cáo yêu cầu.',
+      });
+    }
+
+    const existing = await TermsPolicy.findOne({
+      _id: id,
+      role: PROMOTION_POLICY_ROLE,
+    });
+
+    if (!existing) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy điều khoản quảng cáo yêu cầu.',
+      });
+    }
+
+    const { type, policyType, title, description } = req.body || {};
+
+    const trimmedTitle = (title ?? '').toString().trim();
+    if (!trimmedTitle) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tiêu đề điều khoản là bắt buộc.',
+      });
+    }
+
+    const normalizedType = normalizePolicyType(policyType ?? type ?? existing.policyType);
+    if (!normalizedType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Loại điều khoản không hợp lệ. Giá trị hợp lệ: Tour hoặc Hotel.',
+      });
+    }
+
+    existing.category = trimmedTitle;
+    existing.description =
+      description === null || description === undefined
+        ? ''
+        : description.toString();
+    existing.policyType = toPolicyTypeEnum(normalizedType);
+    existing.target = buildPolicyTarget(normalizedType);
+
+    await existing.save();
+
+    return res.status(200).json({
+      success: true,
+      data: formatPromotionPolicy(existing),
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to update promotion terms policy',
+    });
+  }
+};
+
+exports.deletePromotionTermsPolicy = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy điều khoản quảng cáo yêu cầu.',
+      });
+    }
+
+    const policy = await TermsPolicy.findOneAndDelete({
+      _id: id,
+      role: PROMOTION_POLICY_ROLE,
+    });
+
+    if (!policy) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy điều khoản quảng cáo yêu cầu.',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Đã xóa điều khoản quảng cáo.',
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to delete promotion terms policy',
     });
   }
 };
