@@ -443,4 +443,99 @@ exports.getUserTourBookings = async (req, res) => {
   }
 };
 
+/**
+ * Lấy chi tiết một tour booking
+ * @route GET /api/traveler/tour-bookings/:bookingId
+ * @desc Lấy thông tin chi tiết của một tour booking
+ * @access Private
+ */
+exports.getTourBookingById = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({
+        success: false,
+        message: "Người dùng chưa được xác thực. Vui lòng đăng nhập.",
+      });
+    }
+
+    const userId = req.user._id;
+
+    // Validate bookingId format
+    if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+      return res.status(400).json({
+        success: false,
+        message: "ID booking không hợp lệ",
+      });
+    }
+
+    const booking = await TourBooking.findById(bookingId)
+      .populate({
+        path: "tour_id",
+        select:
+          "title name price image destination duration duration_hours description highlights included_services rating total_rating discount provider_id",
+      })
+      .populate({
+        path: "customer_id",
+        select: "name email",
+      });
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy booking",
+      });
+    }
+
+    // Kiểm tra quyền truy cập - kiểm tra cả trường hợp customer_id là object hoặc string
+    let customerId;
+    if (
+      booking.customer_id &&
+      typeof booking.customer_id === "object" &&
+      booking.customer_id._id
+    ) {
+      customerId = booking.customer_id._id.toString();
+    } else if (booking.customer_id) {
+      customerId = booking.customer_id.toString();
+    } else {
+      return res.status(403).json({
+        success: false,
+        message: "Booking không có thông tin khách hàng",
+      });
+    }
+
+    if (customerId !== userId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "Bạn không có quyền xem booking này",
+      });
+    }
+
+    // Convert to plain object và format dữ liệu
+    const bookingData = booking.toObject ? booking.toObject() : booking;
+
+    // Đảm bảo tour có đầy đủ thông tin
+    if (bookingData.tour_id) {
+      // Nếu tour có name nhưng không có title, dùng name
+      if (!bookingData.tour_id.title && bookingData.tour_id.name) {
+        bookingData.tour_id.title = bookingData.tour_id.name;
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      data: bookingData,
+      message: "Lấy thông tin booking thành công",
+    });
+  } catch (error) {
+    console.error("Get Tour Booking By ID Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Lỗi lấy thông tin booking",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
 module.exports = exports;

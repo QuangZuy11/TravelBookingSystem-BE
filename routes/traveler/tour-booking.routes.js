@@ -49,4 +49,15 @@ router.get(
  */
 router.get("/", authenticateUser, tourBookingController.getUserTourBookings);
 
+/**
+ * @route   GET /api/traveler/tour-bookings/:bookingId
+ * @desc    Lấy chi tiết một tour booking
+ * @access  Private
+ */
+router.get(
+  "/:bookingId",
+  authenticateUser,
+  tourBookingController.getTourBookingById
+);
+
 module.exports = router;
