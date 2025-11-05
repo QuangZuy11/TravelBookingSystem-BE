@@ -41,10 +41,6 @@ const roomSchema = new mongoose.Schema({
     description: {
         type: String
     },
-    area: {
-        type: Number, // in square meters
-        required: true
-    },
     bookings: [{
         bookingId: {
             type: mongoose.Schema.Types.ObjectId,
@@ -52,17 +48,6 @@ const roomSchema = new mongoose.Schema({
         },
         checkIn: Date,
         checkOut: Date
-    }],
-    // xem xét bỏ
-    lastCleaned: {
-        type: Date,
-        default: Date.now
-    },
-    //xem xét bỏ 
-    maintenanceHistory: [{
-        date: Date,
-        description: String,
-        cost: Number
     }],
     createdAt: {
         type: Date,

@@ -299,30 +299,26 @@ const getTourById = async (req, res) => {
               ? fb.user_id_populated._id.toString()
               : fb.user_id_populated._id
             : null,
-            ? typeof fb.user_id_populated._id === "object"
-          ? fb.user_id_populated._id.toString()
-          : fb.user_id_populated._id
-        : null,
         user: fb.user_id_populated
-        ? fb.user_id_populated.name
-        : "Người dùng ẩn danh",
+          ? fb.user_id_populated.name
+          : "Người dùng ẩn danh",
         comment: fb.comment,
         rating: fb.rating,
         created_at: fb.created_at || fb.createdAt,
       })),
-  };
+    };
 
-  res.status(200).json({
-    success: true,
-    data: formattedTour,
-  });
-} catch (error) {
-  console.error("❌ Lỗi khi lấy chi tiết tour:", error);
-  res.status(500).json({
-    success: false,
-    message: "Lỗi server khi lấy chi tiết tour",
-  });
-}
+    res.status(200).json({
+      success: true,
+      data: formattedTour,
+    });
+  } catch (error) {
+    console.error("❌ Lỗi khi lấy chi tiết tour:", error);
+    res.status(500).json({
+      success: false,
+      message: "Lỗi server khi lấy chi tiết tour",
+    });
+  }
 };
 
 module.exports = {

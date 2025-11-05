@@ -409,7 +409,6 @@ exports.getBookingPaymentInfo = async (req, res) => {
                 type: room.type,
                 roomNumber: room.roomNumber,
                 floor: room.floor,
-                area: room.area,
                 capacity: room.capacity,
                 pricePerNight: room.pricePerNight
             },

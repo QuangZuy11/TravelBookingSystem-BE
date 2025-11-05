@@ -97,7 +97,6 @@ exports.createTour = async (req, res) => {
                 'description', 'services', 'languages_offered', 'highlights',
                 'what_to_bring', 'available_dates', 'capacity', 'booking_info',
                 'pricing', 'meeting_point', 'accessibility', 'included_services'
-                'pricing', 'meeting_point', 'accessibility', 'included_services'
             ];
 
             fieldsToParseAsJSON.forEach(field => {
@@ -186,7 +185,6 @@ exports.updateTour = async (req, res) => {
         const fieldsToParseAsJSON = [
             'description', 'services', 'languages_offered', 'highlights',
             'what_to_bring', 'available_dates', 'capacity', 'booking_info',
-            'pricing', 'meeting_point', 'accessibility', 'included_services'
             'pricing', 'meeting_point', 'accessibility', 'included_services'
         ];
 

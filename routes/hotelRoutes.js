@@ -50,6 +50,16 @@ router.get('/provider/:providerId/hotels/:hotelId/bookings', hotelController.get
 router.get('/provider/:providerId/hotels/:hotelId/rooms', roomController.getHotelRooms);
 router.get('/provider/:providerId/hotels/:hotelId/rooms/:roomId', roomController.getRoomById);
 
+// CREATE rooms in bulk - Requires verified 'hotel' license
+// Supports shared image upload for all rooms
+router.post('/provider/:providerId/hotels/:hotelId/rooms/bulk',
+    authMiddleware,
+    checkServiceProviderVerification('hotel'),
+    uploadMiddleware.uploadMultipleImages, // Handle shared images for all rooms
+    uploadMiddleware.handleMulterError,
+    roomController.createRoomsBulk
+);
+
 // CREATE/UPDATE/DELETE room - Requires verified 'hotel' license
 // Supports optional file upload (multipart/form-data)
 router.post('/provider/:providerId/hotels/:hotelId/rooms',
@@ -82,10 +92,11 @@ router.put('/provider/:providerId/hotels/:hotelId/rooms/:roomId/status',
     roomController.updateRoomStatus
 );
 
-router.post('/provider/:providerId/hotels/:hotelId/rooms/:roomId/maintenance',
-    authMiddleware,
-    checkServiceProviderVerification('hotel'),
-    roomController.addMaintenanceRecord
-);
+// REMOVED: Maintenance record route - maintenanceHistory field no longer exists
+// router.post('/provider/:providerId/hotels/:hotelId/rooms/:roomId/maintenance',
+//     authMiddleware,
+//     checkServiceProviderVerification('hotel'),
+//     roomController.addMaintenanceRecord
+// );
 
 module.exports = router;

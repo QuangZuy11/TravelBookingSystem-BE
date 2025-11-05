@@ -70,6 +70,172 @@ exports.getRoomById = async (req, res) => {
     }
 };
 
+exports.createRoomsBulk = async (req, res) => {
+    let createdRooms = [];
+    let uploadedImageUrls = [];
+
+    try {
+        const hotel = await Hotel.findOne({
+            _id: req.params.hotelId,
+            providerId: req.params.providerId
+        });
+
+        if (!hotel) {
+            return res.status(404).json({
+                success: false,
+                error: 'Hotel not found'
+            });
+        }
+
+        // Parse room data if sent as multipart/form-data
+        let roomsData;
+        if (req.body.roomsData) {
+            roomsData = JSON.parse(req.body.roomsData);
+        } else {
+            roomsData = req.body.rooms || [];
+        }
+
+        if (!roomsData || !Array.isArray(roomsData) || roomsData.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Rooms array is required and cannot be empty'
+            });
+        }
+
+        // Parse JSON strings in each room data for array/object fields
+        const fieldsToParseAsJSON = ['amenities', 'images', 'bookings'];
+
+        roomsData = roomsData.map(roomData => {
+            const parsedRoom = { ...roomData };
+
+            fieldsToParseAsJSON.forEach(field => {
+                if (parsedRoom[field] && typeof parsedRoom[field] === 'string') {
+                    try {
+                        parsedRoom[field] = JSON.parse(parsedRoom[field]);
+                    } catch (e) {
+                        console.warn(`Failed to parse ${field} for room ${parsedRoom.roomNumber}:`, e.message);
+                        // Keep as empty array if parse fails for array fields
+                        if (['amenities', 'images', 'bookings'].includes(field)) {
+                            parsedRoom[field] = [];
+                        }
+                    }
+                }
+                // Ensure array fields are always arrays
+                if (['amenities', 'images', 'bookings'].includes(field) && !Array.isArray(parsedRoom[field])) {
+                    parsedRoom[field] = [];
+                }
+            });
+
+            return parsedRoom;
+        });
+
+        // 1. Upload shared images to Google Drive if provided
+        if (req.files && req.files.length > 0) {
+            console.log(`📸 Uploading ${req.files.length} shared images for ${roomsData.length} rooms`);
+
+            const uploadedFiles = await googleDriveService.uploadFiles(
+                req.files,
+                `hotels/${req.params.hotelId}/rooms/shared`
+            );
+
+            uploadedImageUrls = uploadedFiles.map(f => f.direct_url);
+            console.log(`✅ Uploaded shared images:`, uploadedImageUrls);
+        }
+
+        // 2. Validate all rooms before creating any
+        for (let i = 0; i < roomsData.length; i++) {
+            const roomData = roomsData[i];
+            if (!roomData.roomNumber) {
+                return res.status(400).json({
+                    success: false,
+                    error: `Room at index ${i} is missing roomNumber`
+                });
+            }
+
+            // Check if room number already exists in this hotel
+            const existingRoom = await Room.findOne({
+                hotelId: req.params.hotelId,
+                roomNumber: roomData.roomNumber
+            });
+
+            if (existingRoom) {
+                return res.status(400).json({
+                    success: false,
+                    error: `Room number ${roomData.roomNumber} already exists in this hotel`
+                });
+            }
+        }
+
+        // 3. Create all rooms with shared images
+        for (const roomData of roomsData) {
+            // Combine uploaded shared images with any specific room images
+            const roomImages = [
+                ...uploadedImageUrls, // Shared images for all rooms
+                ...(roomData.images || []) // Specific images for this room (if any)
+            ];
+
+            const newRoom = await Room.create({
+                ...roomData,
+                hotelId: req.params.hotelId,
+                images: roomImages
+            });
+            createdRooms.push(newRoom);
+        }
+
+        res.status(201).json({
+            success: true,
+            message: req.files && req.files.length > 0
+                ? `Successfully created ${createdRooms.length} rooms with ${uploadedImageUrls.length} shared images`
+                : `Successfully created ${createdRooms.length} rooms`,
+            count: createdRooms.length,
+            sharedImagesCount: uploadedImageUrls.length,
+            data: createdRooms
+        });
+
+    } catch (error) {
+        console.error('❌ Error creating rooms in bulk:', error);
+        console.error('Error details:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+        });
+
+        // Rollback: delete any rooms that were created
+        if (createdRooms.length > 0) {
+            try {
+                const roomIds = createdRooms.map(room => room._id);
+                await Room.deleteMany({ _id: { $in: roomIds } });
+                console.log(`🔄 Rolled back ${createdRooms.length} rooms due to error`);
+            } catch (rollbackError) {
+                console.error('❌ Rollback failed:', rollbackError);
+            }
+        }
+
+        // Enhanced error response
+        let errorResponse = {
+            success: false,
+            error: error.message
+        };
+
+        // Handle Mongoose validation errors
+        if (error.name === 'ValidationError' && error.errors) {
+            errorResponse.details = Object.keys(error.errors).map(key => ({
+                field: key,
+                message: error.errors[key].message,
+                value: error.errors[key].value
+            }));
+        }
+
+        // Handle duplicate key errors
+        if (error.code === 11000) {
+            errorResponse.error = 'Duplicate room number detected';
+            errorResponse.details = [{ field: 'roomNumber', message: 'Room number already exists' }];
+        }
+
+        res.status(400).json(errorResponse);
+    }
+};
+
 // Create new room
 exports.createRoom = async (req, res) => {
 
@@ -96,7 +262,7 @@ exports.createRoom = async (req, res) => {
             roomData = req.body;
 
             // Parse JSON strings in roomData for array/object fields
-            const fieldsToParseAsJSON = ['amenities', 'images', 'bookings', 'maintenanceHistory'];
+            const fieldsToParseAsJSON = ['amenities', 'images', 'bookings'];
 
             fieldsToParseAsJSON.forEach(field => {
                 if (roomData[field] && typeof roomData[field] === 'string') {
@@ -172,7 +338,7 @@ exports.updateRoom = async (req, res) => {
         }
 
         // Parse JSON strings in req.body for array/object fields
-        const fieldsToParseAsJSON = ['amenities', 'images', 'bookings', 'maintenanceHistory', 'existing_images'];
+        const fieldsToParseAsJSON = ['amenities', 'images', 'bookings', 'existing_images'];
 
         fieldsToParseAsJSON.forEach(field => {
             if (req.body[field] && typeof req.body[field] === 'string') {
@@ -384,50 +550,7 @@ exports.updateRoomStatus = async (req, res) => {
     }
 };
 
-// Add maintenance record
-exports.addMaintenanceRecord = async (req, res) => {
-    try {
-        const hotel = await Hotel.findOne({
-            _id: req.params.hotelId,
-            providerId: req.params.providerId
-        });
-
-        if (!hotel) {
-            return res.status(404).json({
-                success: false,
-                error: 'Hotel not found'
-            });
-        }
-
-        const room = await Room.findOneAndUpdate(
-            { _id: req.params.roomId, hotelId: req.params.hotelId },
-            {
-                $push: {
-                    maintenanceHistory: {
-                        date: new Date(),
-                        description: req.body.description,
-                        cost: req.body.cost
-                    }
-                }
-            },
-            { new: true, runValidators: true }
-        );
-
-        if (!room) {
-            return res.status(404).json({
-                success: false,
-                error: 'Room not found'
-            });
-        }
-
-        res.status(200).json({
-            success: true,
-            data: room
-        });
-    } catch (error) {
-        res.status(400).json({
-            success: false,
-            error: error.message
-        });
-    }
-};
+// Add maintenance record - REMOVED: maintenanceHistory field no longer exists
+// exports.addMaintenanceRecord = async (req, res) => {
+//     // Function removed because maintenanceHistory field was removed from Room model
+// };
