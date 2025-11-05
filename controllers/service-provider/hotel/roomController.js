@@ -72,8 +72,6 @@ exports.getRoomById = async (req, res) => {
 
 // Create new room
 exports.createRoom = async (req, res) => {
-    console.log('📝 Creating room with body:', req.body);
-    console.log('📁 Files received:', req.files ? req.files.length : 0);
 
     let createdRoom = null;
 
@@ -104,9 +102,7 @@ exports.createRoom = async (req, res) => {
                 if (roomData[field] && typeof roomData[field] === 'string') {
                     try {
                         roomData[field] = JSON.parse(roomData[field]);
-                        console.log(`✅ Parsed ${field} from string to object/array`);
                     } catch (e) {
-                        console.log(`⚠️ Could not parse ${field}, keeping as string`);
                     }
                 }
             });
@@ -119,11 +115,9 @@ exports.createRoom = async (req, res) => {
             images: [] // Will be updated after upload
         });
 
-        console.log('✅ Room created:', createdRoom._id);
 
         // 2. Upload images to Google Drive if provided
         if (req.files && req.files.length > 0) {
-            console.log(`📤 Uploading ${req.files.length} images to Drive...`);
 
             const uploadedFiles = await googleDriveService.uploadFiles(
                 req.files,
@@ -136,7 +130,6 @@ exports.createRoom = async (req, res) => {
             createdRoom.images = imageUrls;
             await createdRoom.save();
 
-            console.log(`✅ Uploaded ${imageUrls.length} images successfully`);
         }
 
         res.status(201).json({
@@ -153,7 +146,6 @@ exports.createRoom = async (req, res) => {
         if (createdRoom) {
             try {
                 await Room.findByIdAndDelete(createdRoom._id);
-                console.log('🔄 Rolled back room creation');
             } catch (rollbackError) {
                 console.error('❌ Rollback failed:', rollbackError);
             }
@@ -172,11 +164,6 @@ exports.createRoom = async (req, res) => {
 
 // Update room
 exports.updateRoom = async (req, res) => {
-    console.log('\n🏨 === UPDATE ROOM CONTROLLER ===');
-    console.log('Room ID:', req.params.roomId);
-    console.log('Hotel ID:', req.params.hotelId);
-    console.log('Files received:', req.files ? req.files.length : 0);
-    console.log('Body fields:', req.body ? Object.keys(req.body).join(', ') : 'EMPTY');
 
     try {
         // Initialize req.body if undefined/null
@@ -191,15 +178,11 @@ exports.updateRoom = async (req, res) => {
             if (req.body[field] && typeof req.body[field] === 'string') {
                 try {
                     req.body[field] = JSON.parse(req.body[field]);
-                    console.log(`✅ Parsed ${field} from string to object/array`);
                 } catch (e) {
-                    console.log(`⚠️ Could not parse ${field}, keeping as string`);
                 }
             }
         });
 
-        console.log('📋 Existing images from frontend:', req.body.existing_images);
-        console.log('📤 New files to upload:', req.files ? req.files.length : 0);
 
         // Verify hotel ownership
         const hotel = await Hotel.findOne({
@@ -221,7 +204,6 @@ exports.updateRoom = async (req, res) => {
         });
 
         if (!existingRoom) {
-            console.log('❌ Room not found');
             return res.status(404).json({
                 success: false,
                 error: 'Room not found'
@@ -233,11 +215,9 @@ exports.updateRoom = async (req, res) => {
 
         // 1. Get existing images from frontend (images user wants to keep)
         const existingImages = req.body.existing_images || [];
-        console.log(`📸 Keeping ${existingImages.length} existing images`);
 
         // 2. Upload new images if provided
         if (req.files && req.files.length > 0) {
-            console.log(`📤 Uploading ${req.files.length} new images to Drive...`);
 
             const uploadedFiles = await googleDriveService.uploadFiles(
                 req.files,
@@ -245,7 +225,6 @@ exports.updateRoom = async (req, res) => {
             );
 
             const newImageUrls = uploadedFiles.map(f => f.direct_url);
-            console.log(`✅ Uploaded ${newImageUrls.length} images successfully`);
 
             // 3. Combine: existing images + new uploaded images
             finalImageUrls = [...existingImages, ...newImageUrls];
@@ -256,22 +235,17 @@ exports.updateRoom = async (req, res) => {
 
         // 4. Set final images array
         req.body.images = finalImageUrls;
-        console.log(`🖼️ Total images: ${finalImageUrls.length}`);
 
         // 5. Remove temporary field
         delete req.body.existing_images;
 
         // Update room in database
-        console.log('💾 Updating room in database...');
         const room = await Room.findOneAndUpdate(
             { _id: req.params.roomId, hotelId: req.params.hotelId },
             req.body,
             { new: true, runValidators: true }
         );
 
-        console.log('✅ Room updated successfully');
-        console.log(`📸 Final image count: ${room.images ? room.images.length : 0}`);
-        console.log('🏨 === UPDATE ROOM COMPLETE ===\n');
 
         res.status(200).json({
             success: true,

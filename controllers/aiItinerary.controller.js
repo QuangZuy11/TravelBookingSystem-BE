@@ -1,10 +1,6 @@
+const Itinerary = require('../models/itinerary.model');
 const AiItineraryRequest = require('../models/ai_itinerary_request.model');
 const AiGeneratedItinerary = require('../models/ai_generated_itineraries.model');
-const Itinerary = require('../models/itinerary.model');
-const ItineraryActivity = require('../models/itinerary-activity.model');
-const Destination = require('../models/destination.model');
-const PointOfInterest = require('../models/point-of-interest.model');
-const Tour = require('../models/tour.model');
 const aiService = require('../services/ai.service');
 
 /**
@@ -585,252 +581,455 @@ exports.updateItineraryDay = async (req, res) => {
     if (!itinerary) {
       return res.status(404).json({
         success: false,
-        message: 'Itinerary day not found'
+        message: 'Lỗi khi khởi tạo tùy chỉnh',
+        error: error.message
       });
     }
+  },
 
-    // Update fields
-    if (title !== undefined) itinerary.title = title;
-    if (description !== undefined) itinerary.description = description;
+  // Unified customize endpoint - handles both initialization, retrieval, and UPDATE
+  async customizeItinerary(req, res) {
+    try {
+      const { aiGeneratedId } = req.params;
+      const hasUpdateData = req.body && Object.keys(req.body).length > 0;
 
-    await itinerary.save();
+      console.log('🔧 customizeItinerary called:', { aiGeneratedId, hasUpdateData, bodyKeys: Object.keys(req.body || {}) });
 
-    res.status(200).json({
-      success: true,
-      message: 'Itinerary day updated',
-      data: itinerary
-    });
-  } catch (err) {
-    console.error('Error updating itinerary day', err);
-    res.status(500).json({ success: false, message: 'Server error', error: err.message });
-  }
-};
+      // First, check if the provided ID is already a customized AI record
+      const providedAiRecord = await AiGeneratedItinerary.findById(aiGeneratedId);
+      if (providedAiRecord && providedAiRecord.status === 'custom') {
+        // This is already a customized AI record, return it directly
+        const customizedDays = await Itinerary.find({
+          origin_id: aiGeneratedId,
+          type: 'customized'
+        }).sort({ day_number: 1 });
 
-// Update an activity
-exports.updateActivity = async (req, res) => {
-  try {
-    const { activityId } = req.params;
-    const updateData = req.body; // { activity_name, start_time, end_time, duration_hours, description, cost, optional }
-    console.log(`🛰️ Updating activity ${activityId}`, updateData);
+        const totalCost = customizedDays.reduce((sum, day) => sum + day.day_total, 0);
 
-    const activity = await ItineraryActivity.findById(activityId);
+        // Try to find original AI record by request_id
+        let originalAiGeneratedId = null;
+        if (providedAiRecord.request_id) {
+          const originalAiRecord = await AiGeneratedItinerary.findOne({
+            request_id: providedAiRecord.request_id,
+            status: 'done'
+          });
+          originalAiGeneratedId = originalAiRecord ? originalAiRecord._id : null;
+        }
 
-    if (!activity) {
-      return res.status(404).json({
-        success: false,
-        message: 'Activity not found'
-      });
-    }
+        // Handle UPDATE for customized AI record if payload provided
+        if (hasUpdateData && req.body.itinerary_data) {
+          console.log('🔄 Updating existing customized itinerary...');
 
-    // Update allowed fields
-    const allowedFields = ['activity_name', 'start_time', 'end_time', 'duration_hours', 'description', 'cost', 'optional'];
-    let fieldsUpdated = [];
+          const updatedDays = req.body.itinerary_data;
 
-    allowedFields.forEach(field => {
-      if (updateData[field] !== undefined) {
-        activity[field] = updateData[field];
-        fieldsUpdated.push(field);
+          // Update each day's data
+          for (const dayUpdate of updatedDays) {
+            console.log('🔍 Processing dayUpdate:', {
+              dayId: dayUpdate.dayId,
+              theme: dayUpdate.theme,
+              activitiesCount: dayUpdate.activities?.length
+            });
+
+            const dayToUpdate = await Itinerary.findById(dayUpdate.dayId);
+            if (dayToUpdate && dayToUpdate.origin_id.toString() === aiGeneratedId) {
+              console.log('📝 Found day to update:', dayToUpdate._id);
+
+              // Update day fields
+              if (dayUpdate.theme) {
+                console.log(`🔄 Updating theme: "${dayToUpdate.title}" → "${dayUpdate.theme}"`);
+                dayToUpdate.title = dayUpdate.theme;
+              }
+              if (dayUpdate.description !== undefined) dayToUpdate.description = dayUpdate.description;
+
+              // Handle activities array update carefully
+              if (dayUpdate.activities && Array.isArray(dayUpdate.activities)) {
+                console.log('🔄 Updating activities for day', dayUpdate.dayNumber);
+                console.log('📊 Activities data:', dayUpdate.activities.map(a => ({
+                  activityId: a.activityId,
+                  activity: a.activity,
+                  duration: a.duration,
+                  cost: a.cost,
+                  type: a.type
+                })));
+
+                // ✅ UNIFIED VALIDATION: Use schema static method
+                const validation = Itinerary.validateActivities(dayUpdate.activities, 'ai_gen');
+                if (!validation.valid) {
+                  console.log('❌ Activities validation failed:', validation.error);
+                  throw new Error(`Activities validation failed: ${validation.error}`);
+                }
+
+                // ✅ UNIFIED NORMALIZATION: Use schema static method  
+                const normalizedActivities = Itinerary.normalizeActivities(dayUpdate.activities, 'ai_gen');
+
+                console.log('✅ Activities normalized:', normalizedActivities.map(a => ({
+                  activityId: a.activityId,
+                  activity: a.activity,
+                  activityType: a.activityType,
+                  duration: a.duration,
+                  cost: a.cost,
+                  userModified: a.userModified
+                })));
+
+                dayToUpdate.activities = normalizedActivities;
+
+                // ✅ AUTO-CALCULATE dayTotal from activities
+                const calculatedDayTotal = normalizedActivities.reduce((sum, activity) => {
+                  return sum + (activity.cost || 0);
+                }, 0);
+                dayToUpdate.day_total = calculatedDayTotal;
+
+                console.log(`💰 Auto-calculated dayTotal: ${calculatedDayTotal} (from ${normalizedActivities.length} activities)`);
+              }
+
+              // If dayTotal is explicitly provided, use it (override auto-calculation)
+              if (dayUpdate.dayTotal !== undefined && dayUpdate.dayTotal !== null) {
+                dayToUpdate.day_total = dayUpdate.dayTotal;
+                console.log(`💰 Using explicit dayTotal: ${dayUpdate.dayTotal}`);
+              }
+
+              // Mark as user modified
+              dayToUpdate.user_modified = true;
+              dayToUpdate.updated_at = new Date();
+
+              try {
+                await dayToUpdate.save();
+                console.log(`✅ Updated customized day ${dayUpdate.dayNumber}: ${dayUpdate.theme}`);
+                console.log(`💾 Saved with ${dayToUpdate.activities?.length || 0} activities`);
+              } catch (saveError) {
+                console.error(`❌ Error saving day ${dayUpdate.dayNumber}:`, saveError.message);
+                throw saveError;
+              }
+            } else {
+              console.log('❌ Day not found or wrong origin_id:', {
+                dayId: dayUpdate.dayId,
+                found: !!dayToUpdate,
+                expectedOrigin: aiGeneratedId,
+                actualOrigin: dayToUpdate?.origin_id
+              });
+            }
+          }
+
+          // Update AI record summary if provided
+          if (req.body.summary) {
+            providedAiRecord.summary = req.body.summary;
+            providedAiRecord.updated_at = new Date();
+            await providedAiRecord.save();
+            console.log('✅ Updated customized AI record summary');
+          }
+
+          // Get fresh updated data
+          const updatedCustomizedDays = await Itinerary.find({
+            origin_id: aiGeneratedId,
+            type: 'customized'
+          }).sort({ day_number: 1 });
+
+          const updatedTotalCost = updatedCustomizedDays.reduce((sum, day) => sum + day.day_total, 0);
+
+          // Set cache control headers to prevent caching
+          res.set({
+            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+            'Surrogate-Control': 'no-store'
+          });
+
+          return res.json({
+            success: true,
+            message: 'Cập nhật lịch trình tùy chỉnh thành công',
+            data: {
+              aiGeneratedId: aiGeneratedId,
+              originalAiGeneratedId: originalAiGeneratedId,
+              isOriginal: false,
+              isCustomizable: true,
+              totalCost: updatedTotalCost,
+              destination: providedAiRecord.destination,
+              duration_days: providedAiRecord.duration_days,
+              days: updatedCustomizedDays.map(day => ({
+                dayNumber: day.day_number,
+                dayId: day._id,
+                theme: day.title,
+                description: day.description,
+                activities: day.activities,
+                dayTotal: day.day_total,
+                type: day.type,
+                originId: day.origin_id,
+                userModified: day.user_modified
+              }))
+            }
+          });
+        }
+
+        // Set cache control headers to prevent caching
+        res.set({
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'Surrogate-Control': 'no-store'
+        });
+
+        return res.json({
+          success: true,
+          message: 'Lấy phiên bản tùy chỉnh thành công',
+          data: {
+            aiGeneratedId: aiGeneratedId,
+            originalAiGeneratedId: originalAiGeneratedId, // Track the original AI record
+            isOriginal: false,
+            isCustomizable: true,
+            totalCost: totalCost,
+            destination: providedAiRecord.destination,
+            duration_days: providedAiRecord.duration_days,
+            days: customizedDays.map(day => ({
+              dayNumber: day.day_number,
+              dayId: day._id,
+              theme: day.title,
+              description: day.description,
+              activities: day.activities,
+              dayTotal: day.day_total,
+              type: day.type,
+              originId: day.origin_id,
+              userModified: day.user_modified
+            }))
+          }
+        });
       }
-    });
 
-    console.log(`📝 Fields updated: ${fieldsUpdated.join(', ')}`);
-
-    // Save changes
-    const savedActivity = await activity.save();
-    console.log(`✅ Activity saved to DB`);
-
-    // Populate POI data if exists
-    await savedActivity.populate('poi_id');
-
-    res.status(200).json({
-      success: true,
-      message: 'Activity updated successfully',
-      data: savedActivity
-    });
-  } catch (err) {
-    console.error('❌ Error updating activity', err);
-    res.status(500).json({ success: false, message: 'Server error', error: err.message });
-  }
-};
-
-// Add new activity to a day
-exports.addActivity = async (req, res) => {
-  try {
-    const { itineraryDayId } = req.params;
-    const activityData = req.body; // { poi_id, activity_name, start_time, end_time, duration_hours, description, cost, optional }
-    console.log(`🛰️ Adding activity to day ${itineraryDayId}`);
-
-    const itinerary = await Itinerary.findById(itineraryDayId);
-
-    if (!itinerary) {
-      return res.status(404).json({
-        success: false,
-        message: 'Itinerary day not found'
-      });
-    }
-
-    // Create new activity
-    const newActivity = new ItineraryActivity({
-      itinerary_id: itinerary._id,
-      poi_id: activityData.poi_id || null,
-      activity_name: activityData.activity_name,
-      start_time: activityData.start_time || '09:00',
-      end_time: activityData.end_time || '11:00',
-      duration_hours: activityData.duration_hours || 2,
-      description: activityData.description || '',
-      cost: activityData.cost || 0,
-      optional: activityData.optional || false
-    });
-
-    await newActivity.save();
-
-    // Add to itinerary's activities array
-    itinerary.activities.push(newActivity._id);
-    await itinerary.save();
-
-    res.status(201).json({
-      success: true,
-      message: 'Activity added',
-      data: newActivity
-    });
-  } catch (err) {
-    console.error('Error adding activity', err);
-    res.status(500).json({ success: false, message: 'Server error', error: err.message });
-  }
-};
-
-// Delete an activity
-exports.deleteActivity = async (req, res) => {
-  try {
-    const { activityId } = req.params;
-    console.log(`🛰️ Deleting activity ${activityId}`);
-
-    const activity = await ItineraryActivity.findById(activityId);
-
-    if (!activity) {
-      return res.status(404).json({
-        success: false,
-        message: 'Activity not found'
-      });
-    }
-
-    const itineraryId = activity.itinerary_id;
-
-    // Remove from itinerary's activities array
-    await Itinerary.findByIdAndUpdate(
-      itineraryId,
-      { $pull: { activities: activityId } }
-    );
-
-    // Delete the activity
-    await ItineraryActivity.findByIdAndDelete(activityId);
-
-    res.status(200).json({
-      success: true,
-      message: 'Activity deleted successfully'
-    });
-  } catch (err) {
-    console.error('Error deleting activity', err);
-    res.status(500).json({ success: false, message: 'Server error', error: err.message });
-  }
-};
-
-// Reorder activities in a day and recalculate times
-exports.reorderActivities = async (req, res) => {
-  try {
-    const { itineraryDayId } = req.params;
-    const { activityIds } = req.body; // Array of activity IDs in new order
-    console.log(`🛰️ Reordering activities for day ${itineraryDayId}`, activityIds);
-
-    const itinerary = await Itinerary.findById(itineraryDayId);
-
-    if (!itinerary) {
-      return res.status(404).json({
-        success: false,
-        message: 'Itinerary day not found'
-      });
-    }
-
-    // Validate all activity IDs belong to this itinerary
-    const validIds = activityIds.filter(id =>
-      itinerary.activities.some(actId => String(actId) === String(id))
-    );
-
-    if (validIds.length !== activityIds.length) {
-      return res.status(400).json({
-        success: false,
-        message: 'Some activity IDs do not belong to this itinerary day'
-      });
-    }
-
-    // Update order
-    itinerary.activities = activityIds;
-    await itinerary.save();
-
-    // Recalculate times for all activities based on new order
-    console.log(`📅 Recalculating times for ${activityIds.length} activities`);
-
-    const DAY_START_HOUR = 8;
-    const TRAVEL_TIME_MINUTES = 30;
-    let currentTime = `${DAY_START_HOUR.toString().padStart(2, '0')}:00`;
-
-    for (let i = 0; i < activityIds.length; i++) {
-      const activityId = activityIds[i];
-      const activity = await ItineraryActivity.findById(activityId).populate('poi_id');
-
-      if (!activity) {
-        console.log(`⚠️  Activity ${activityId} not found, skipping`);
-        continue;
+      // Check if customized AI record already exists (based on request_id)
+      const originalAiRecord = await AiGeneratedItinerary.findById(aiGeneratedId);
+      if (!originalAiRecord) {
+        return res.status(404).json({
+          success: false,
+          message: 'Không tìm thấy bản ghi AI gốc'
+        });
       }
 
-      // Get duration from POI or use activity's duration
-      let durationMinutes = 0;
-      if (activity.poi_id && activity.poi_id.recommendedDuration) {
-        const { hours = 0, minutes = 0 } = activity.poi_id.recommendedDuration;
-        durationMinutes = hours * 60 + minutes;
+      // Find existing customized AI record with same request_id but status 'custom'
+      let customizedAiRecord = await AiGeneratedItinerary.findOne({
+        request_id: originalAiRecord.request_id,
+        status: 'custom'
+      });
+
+      let customizedDays = [];
+
+      // If no customized version exists, initialize it
+      if (!customizedAiRecord) {
+        console.log(`🔄 No customized version found for ${aiGeneratedId}, initializing...`);
+
+        // Get original AI days (type='ai_gen')
+        const originalDays = await Itinerary.find({
+          origin_id: aiGeneratedId,
+          type: 'ai_gen'
+        }).sort({ day_number: 1 });
+
+        if (!originalDays.length) {
+          return res.status(404).json({
+            success: false,
+            message: 'Không tìm thấy lịch trình AI gốc'
+          });
+        }
+
+        // 1. Clone AI_GENERATED_ITINERARIES record (create new record with custom status)
+        const customizedAiData = {
+          ...originalAiRecord.toObject(),
+          _id: undefined, // Remove _id to create new record
+          status: 'custom', // Change status to indicate customized version
+          created_at: new Date(),
+          updated_at: new Date()
+        };
+        customizedAiRecord = new AiGeneratedItinerary(customizedAiData);
+        await customizedAiRecord.save();
+
+        console.log(`✅ Created customized AI record: ${customizedAiRecord._id}`);
+
+        // 2. Clone ITINERARIES records (keep original, create new customized versions)
+        customizedDays = []; // Initialize array for customized days
+        for (const originalDay of originalDays) {
+          const customizedDay = Itinerary.createCustomizedCopy(originalDay);
+          customizedDay.origin_id = customizedAiRecord._id; // Point to new customized AI record
+          customizedDay.type = 'customized';
+          await customizedDay.save();
+          customizedDays.push(customizedDay);
+        }
+
+        console.log(`✅ Cloned ${customizedDays.length} ITINERARIES records to customized AI record: ${customizedAiRecord._id}`);
       } else {
-        // Fallback to activity's duration_hours
-        durationMinutes = (activity.duration_hours || 2) * 60;
+        // Get existing customized days
+        customizedDays = await Itinerary.find({
+          origin_id: customizedAiRecord._id,
+          type: 'customized'
+        }).sort({ day_number: 1 });
+
+        console.log(`✅ Found existing customized version: ${customizedAiRecord._id} with ${customizedDays.length} days`);
       }
 
-      // Set start time
-      activity.start_time = currentTime;
+      // Handle UPDATE request if payload provided
+      if (hasUpdateData && req.body.itinerary_data) {
+        console.log('🔄 Updating customized itinerary with new data...');
 
-      // Calculate end time
-      const endTime = addMinutesToTime(currentTime, durationMinutes);
-      activity.end_time = endTime;
-      activity.duration_hours = durationMinutes / 60;
+        const updatedDays = req.body.itinerary_data;
 
-      await activity.save();
-      console.log(`✅ Updated activity ${i + 1}: ${activity.activity_name} (${currentTime} - ${endTime})`);
+        // Update each day's data
+        for (const dayUpdate of updatedDays) {
+          const dayToUpdate = await Itinerary.findById(dayUpdate.dayId);
+          if (dayToUpdate && dayToUpdate.origin_id.toString() === (customizedAiRecord ? customizedAiRecord._id.toString() : aiGeneratedId)) {
+            // Update day fields
+            if (dayUpdate.theme) dayToUpdate.title = dayUpdate.theme;
+            if (dayUpdate.description !== undefined) dayToUpdate.description = dayUpdate.description;
 
-      // Calculate next start time (add travel time if not last activity)
-      if (i < activityIds.length - 1) {
-        currentTime = addMinutesToTime(endTime, TRAVEL_TIME_MINUTES);
+            // ✅ UNIFIED ACTIVITIES HANDLING: Use schema static methods
+            if (dayUpdate.activities && Array.isArray(dayUpdate.activities)) {
+              // Validate activities using unified validation
+              const validation = Itinerary.validateActivities(dayUpdate.activities, dayToUpdate.type);
+              if (!validation.valid) {
+                return res.status(400).json({
+                  success: false,
+                  message: validation.error,
+                  error: validation.error
+                });
+              }
+
+              // Normalize activities using unified normalization
+              const normalizedActivities = Itinerary.normalizeActivities(dayUpdate.activities, dayToUpdate.type);
+              dayToUpdate.activities = normalizedActivities;
+            }
+
+            if (dayUpdate.dayTotal !== undefined) dayToUpdate.day_total = dayUpdate.dayTotal;
+
+            // Mark as user modified
+            dayToUpdate.user_modified = true;
+            dayToUpdate.updated_at = new Date();
+
+            await dayToUpdate.save();
+            console.log(`✅ Updated day ${dayUpdate.dayNumber}: ${dayUpdate.theme}`);
+          }
+        }
+
+        // Update AI record summary if provided
+        if (customizedAiRecord && req.body.summary) {
+          customizedAiRecord.summary = req.body.summary;
+          customizedAiRecord.updated_at = new Date();
+          await customizedAiRecord.save();
+          console.log('✅ Updated AI record summary');
+        }
+
+        // Get updated data
+        customizedDays = await Itinerary.find({
+          origin_id: customizedAiRecord ? customizedAiRecord._id : aiGeneratedId,
+          type: 'customized'
+        }).sort({ day_number: 1 });
       }
+
+      // Return the customized version (updated or existing)
+      const totalCost = customizedDays.reduce((sum, day) => sum + day.day_total, 0);
+
+      // Set cache control headers to prevent caching
+      res.set({
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'Surrogate-Control': 'no-store'
+      });
+
+      res.json({
+        success: true,
+        message: hasUpdateData ? 'Cập nhật lịch trình tùy chỉnh thành công' : 'Lấy phiên bản tùy chỉnh thành công',
+        data: {
+          aiGeneratedId: customizedAiRecord ? customizedAiRecord._id : aiGeneratedId, // Use customized AI record ID
+          originalAiGeneratedId: aiGeneratedId, // Keep reference to original
+          isOriginal: false,
+          isCustomizable: true,
+          totalCost: totalCost,
+          destination: customizedAiRecord ? customizedAiRecord.destination : null,
+          duration_days: customizedAiRecord ? customizedAiRecord.duration_days : null,
+          lastUpdated: new Date().toISOString(), // Add timestamp to force refresh
+          updated: hasUpdateData, // Flag to indicate if this was an update
+          days: customizedDays.map(day => {
+            const formattedDay = Itinerary.formatResponse(day);
+            return {
+              dayNumber: day.day_number,
+              dayId: day._id,
+              theme: day.title,
+              description: day.description,
+              activities: formattedDay.activities, // Use formatted activities
+              dayTotal: day.day_total,
+              type: day.type,
+              originId: day.origin_id,
+              userModified: day.user_modified
+            };
+          })
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Error in customizeItinerary:', error);
+
+      if (error.code === 11000) {
+        return res.status(409).json({
+          success: false,
+          message: 'Phiên bản tùy chỉnh đã tồn tại',
+          error: 'Duplicate customization'
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        message: 'Lỗi khi xử lý tùy chỉnh lịch trình',
+        error: error.message
+      });
     }
+  },
 
-    // Fetch updated activities to return
-    const updatedActivities = await ItineraryActivity.find({ _id: { $in: activityIds } })
-      .populate('poi_id');
+  // Delete AI itinerary (both AI record and associated day records)
+  async deleteItinerary(req, res) {
+    try {
+      const { aiGeneratedId } = req.params;
+      const userId = req.user.id;
 
-    // Sort by order
-    const activitiesMap = {};
-    updatedActivities.forEach(act => {
-      activitiesMap[act._id.toString()] = act;
-    });
-    const sortedActivities = activityIds.map(id => activitiesMap[id.toString()]).filter(Boolean);
-
-    res.status(200).json({
-      success: true,
-      message: 'Activities reordered and times recalculated',
-      data: {
-        itinerary: itinerary,
-        activities: sortedActivities
+      // Get AI record to verify ownership and check type
+      const aiRecord = await AiGeneratedItinerary.findById(aiGeneratedId);
+      if (!aiRecord) {
+        return res.status(404).json({
+          success: false,
+          message: 'Không tìm thấy lịch trình AI'
+        });
       }
-    });
-  } catch (err) {
-    console.error('❌ Error reordering activities', err);
-    res.status(500).json({ success: false, message: 'Server error', error: err.message });
+
+      // Verify ownership
+      if (aiRecord.user_id.toString() !== userId) {
+        return res.status(403).json({
+          success: false,
+          message: 'Bạn không có quyền xóa lịch trình này'
+        });
+      }
+
+      // Delete associated ITINERARIES records
+      const deleteResult = await Itinerary.deleteMany({
+        origin_id: aiGeneratedId
+      });
+
+      // Delete AI_GENERATED_ITINERARIES record
+      await AiGeneratedItinerary.findByIdAndDelete(aiGeneratedId);
+
+      console.log(`✅ Deleted AI itinerary ${aiGeneratedId} and ${deleteResult.deletedCount} associated day records`);
+
+      res.json({
+        success: true,
+        message: 'Xóa lịch trình thành công',
+        data: {
+          deletedAiRecord: aiGeneratedId,
+          deletedDayRecords: deleteResult.deletedCount
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Error deleting itinerary:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Lỗi khi xóa lịch trình',
+        error: error.message
+      });
+    }
   }
 };
+
+module.exports = aiItineraryController;

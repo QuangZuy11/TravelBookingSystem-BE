@@ -5,7 +5,7 @@ const Room = require('../models/room.model');
 
 /**
  * Service để tự động cleanup các booking hết hạn
- * Chạy mỗi 1 phút để kiểm tra và hủy các booking 'reserved' đã quá 5 phút
+ * Chạy mỗi 1 phút để kiểm tra và hủy các booking 'reserved' đã quá 2 phút
  */
 class BookingCleanupService {
     constructor() {
@@ -126,12 +126,11 @@ class BookingCleanupService {
                 { new: true }
             );
 
-            // 2. Trả room về trạng thái 'available' (atomic operation)
+            // 2. Xóa booking khỏi room's bookings array (không cần update status)
             if (booking.hotel_room_id) {
                 await Room.findByIdAndUpdate(
                     booking.hotel_room_id._id,
                     {
-                        status: 'available',
                         $pull: {
                             bookings: { bookingId: booking._id }
                         }
@@ -139,7 +138,7 @@ class BookingCleanupService {
                     { new: true }
                 );
 
-                console.log(`✓ Room ${booking.hotel_room_id.roomNumber} released back to available`);
+                console.log(`✓ Room ${booking.hotel_room_id.roomNumber} booking cancelled and removed`);
             }
 
         } catch (error) {

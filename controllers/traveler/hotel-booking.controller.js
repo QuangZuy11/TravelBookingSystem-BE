@@ -7,7 +7,7 @@ const User = require('../../models/user.model');
 /**
  * Tạo booking tạm thời (reserved) khi user click "Đặt phòng"
  * @route POST /api/traveler/bookings/reserve
- * @desc Tạo booking với status 'reserved', lock phòng trong 5 phút
+ * @desc Tạo booking với status 'reserved', lock phòng trong 2 phút
  * @access Private (User đã đăng nhập)
  */
 exports.createReservedBooking = async (req, res) => {
@@ -17,11 +17,6 @@ exports.createReservedBooking = async (req, res) => {
     try {
         const { hotel_room_id, check_in_date, check_out_date } = req.body;
 
-        console.log('=== Create Reserved Booking ===');
-        console.log('Room ID:', hotel_room_id);
-        console.log('User ID:', req.user?._id);
-        console.log('Check-in:', check_in_date);
-        console.log('Check-out:', check_out_date);
 
         // Kiểm tra xem user đã được authenticate chưa
         if (!req.user || !req.user._id) {
@@ -53,12 +48,12 @@ exports.createReservedBooking = async (req, res) => {
             });
         }
 
-        // Kiểm tra phòng có available không
-        if (room.status !== 'available') {
+        // Kiểm tra phòng có đang maintenance không
+        if (room.status === 'maintenance') {
             await session.abortTransaction();
             return res.status(400).json({
                 success: false,
-                message: `Phòng không khả dụng. Trạng thái hiện tại: ${room.status}`
+                message: 'Phòng đang trong trạng thái bảo trì'
             });
         }
 
@@ -80,6 +75,26 @@ exports.createReservedBooking = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: 'Ngày check-out phải sau ngày check-in'
+            });
+        }
+
+        // Kiểm tra phòng có available trong khoảng thời gian này không
+        const { isAvailable, conflictBookings } = await HotelBooking.checkRoomAvailability(
+            hotel_room_id,
+            checkIn,
+            checkOut
+        );
+
+        if (!isAvailable) {
+            await session.abortTransaction();
+            return res.status(400).json({
+                success: false,
+                message: 'Phòng đã được đặt trong khoảng thời gian này',
+                conflictDates: conflictBookings.map(b => ({
+                    checkIn: b.check_in_date,
+                    checkOut: b.check_out_date,
+                    status: b.booking_status
+                }))
             });
         }
 
@@ -122,7 +137,52 @@ exports.createReservedBooking = async (req, res) => {
             }
         ]);
 
-        const hotel = newBooking.hotel_room_id.hotelId;
+        console.log('📊 Populated booking data:');
+        console.log('- Room ID:', newBooking.hotel_room_id?._id);
+        console.log('- Hotel ID:', newBooking.hotel_room_id?.hotelId?._id);
+        console.log('- Hotel populated:', !!newBooking.hotel_room_id?.hotelId);
+
+        const populatedRoom = newBooking.hotel_room_id;
+        const hotel = populatedRoom?.hotelId;
+
+        // Validate populated data
+        if (!populatedRoom) {
+            console.error('❌ Room not populated');
+            return res.status(500).json({
+                success: false,
+                message: 'Lỗi: Không thể lấy thông tin phòng'
+            });
+        }
+
+        if (!hotel) {
+            console.error('❌ Hotel not populated for room:', populatedRoom._id);
+            console.warn('⚠️ Continuing without hotel info - Room may not have hotelId reference');
+
+            // Return booking without hotel info
+            return res.status(201).json({
+                success: true,
+                data: {
+                    bookingId: newBooking._id,
+                    room: {
+                        type: populatedRoom.type,
+                        roomNumber: populatedRoom.roomNumber,
+                        floor: populatedRoom.floor,
+                        pricePerNight: populatedRoom.pricePerNight
+                    },
+                    booking: {
+                        checkInDate: newBooking.check_in_date,
+                        checkOutDate: newBooking.check_out_date,
+                        nights: nights,
+                        totalAmount: parseFloat(newBooking.total_amount),
+                        bookingStatus: newBooking.booking_status,
+                        reserveExpireTime: newBooking.reserve_expire_time
+                    }
+                },
+                message: 'Tạo booking thành công. Vui lòng thanh toán trong 2 phút.',
+                warning: 'Thông tin khách sạn không khả dụng'
+            });
+        }
+
         const hotelAddress = hotel.address
             ? `${hotel.address.street || ''}, ${hotel.address.city || ''}, ${hotel.address.state || ''}, ${hotel.address.country || ''}`.replace(/^,\s*|,\s*$/g, '').replace(/,\s*,/g, ',')
             : 'Không có thông tin địa chỉ';
@@ -136,10 +196,10 @@ exports.createReservedBooking = async (req, res) => {
                     address: hotelAddress
                 },
                 room: {
-                    type: room.type,
-                    roomNumber: room.roomNumber,
-                    floor: room.floor,
-                    pricePerNight: room.pricePerNight
+                    type: populatedRoom.type,
+                    roomNumber: populatedRoom.roomNumber,
+                    floor: populatedRoom.floor,
+                    pricePerNight: populatedRoom.pricePerNight
                 },
                 booking: {
                     checkInDate: newBooking.check_in_date,
@@ -150,11 +210,14 @@ exports.createReservedBooking = async (req, res) => {
                     reserveExpireTime: newBooking.reserve_expire_time
                 }
             },
-            message: 'Tạo booking thành công. Vui lòng thanh toán trong 5 phút.'
+            message: 'Tạo booking thành công. Vui lòng thanh toán trong 2 phút.'
         });
 
     } catch (error) {
-        await session.abortTransaction();
+        // Only abort if transaction is still active
+        if (session.inTransaction()) {
+            await session.abortTransaction();
+        }
         console.error('Create Reserved Booking Error:', error);
         res.status(500).json({
             success: false,
@@ -179,9 +242,6 @@ exports.cancelReservedBooking = async (req, res) => {
     try {
         const { bookingId } = req.params;
 
-        console.log('=== Cancel Reserved Booking ===');
-        console.log('Booking ID:', bookingId);
-        console.log('User ID:', req.user?._id);
 
         // Kiểm tra xem user đã được authenticate chưa
         if (!req.user || !req.user._id) {
@@ -230,11 +290,10 @@ exports.cancelReservedBooking = async (req, res) => {
         booking.cancelled_at = new Date();
         await booking.save({ session });
 
-        // Trả phòng về trạng thái 'available'
+        // Xóa booking khỏi room's bookings array (không cần update status)
         await Room.findByIdAndUpdate(
             booking.hotel_room_id._id,
             {
-                status: 'available',
                 $pull: {
                     bookings: { bookingId: booking._id }
                 }
@@ -246,7 +305,7 @@ exports.cancelReservedBooking = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            message: 'Hủy booking thành công. Phòng đã được trả về trạng thái available.',
+            message: 'Hủy booking thành công.',
             data: {
                 bookingId: booking._id,
                 bookingStatus: booking.booking_status,
@@ -277,9 +336,6 @@ exports.getBookingPaymentInfo = async (req, res) => {
     try {
         const { bookingId } = req.params;
 
-        console.log('=== Get Booking Payment Info ===');
-        console.log('Booking ID:', bookingId);
-        console.log('User ID:', req.user?._id);
 
         // Kiểm tra xem user đã được authenticate chưa
         if (!req.user || !req.user._id) {

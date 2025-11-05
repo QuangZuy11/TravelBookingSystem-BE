@@ -69,10 +69,6 @@ class GoogleDriveService {
      */
     async uploadFile(file, folder = null) {
         console.log('☁️ Google Drive uploadFile called');
-        console.log('   File:', file.originalname);
-        console.log('   Size:', (file.size / 1024).toFixed(2), 'KB');
-        console.log('   Type:', file.mimetype);
-        console.log('   Target folder:', folder || 'Root');
 
         try {
             if (!this.drive) {
@@ -154,8 +150,6 @@ class GoogleDriveService {
      */
     async uploadFiles(files, folder = null) {
         console.log('☁️ Google Drive uploadFiles called');
-        console.log('   Files to upload:', files.length);
-        console.log('   Target folder:', folder || 'Root');
 
         try {
             const uploadPromises = files.map((file, index) => {

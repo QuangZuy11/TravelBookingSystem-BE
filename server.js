@@ -7,7 +7,7 @@ const app = express();
 const mongoose = require("mongoose");
 
 // Import booking cleanup service
-const bookingCleanupService = require('./services/booking-cleanup.service');
+const bookingCleanupService = require("./services/booking-cleanup.service");
 
 // Import routes
 const tourRoutes = require("./routes/tourRoutes");
@@ -17,13 +17,18 @@ const hotelRoutes = require("./routes/hotelRoutes");
 const serviceProviderRoutes = require("./routes/serviceProviderRoutes");
 const serviceProviderAuthRoutes = require("./routes/serviceProviderAuthRoutes");
 const adminServiceProviderRoutes = require("./routes/admin/adminServiceProviderRoutes");
+const adminTermsPolicyRoutes = require("./routes/admin/termsPolicy.routes");
 const travelerRoutes = require("./routes/traveler/hotel.routes");
 const travelerHotelRoomRoutes = require("./routes/traveler/hotel-room.routes");
 const travelerHotelBookingRoutes = require("./routes/traveler/hotel-booking.routes");
+const travelerHotelPaymentRoutes = require("./routes/traveler/hotel-payment.routes");
+const travelerTourBookingRoutes = require("./routes/traveler/tour-booking.routes");
+const travelerTourPaymentRoutes = require("./routes/traveler/tour-payment.routes");
 const adBookingRoutes = require("./routes/adBooking.routes");
 const travelerTourRoutes = require("./routes/traveler/TravelerTourRoutes");
 const travelerPromotionRoutes = require("./routes/traveler/promotion.routes");
 const providerPromotionRoutes = require("./routes/provider/promotion.routes");
+const providerHotelBookingManagementRoutes = require("./routes/provider/hotel-booking-management.routes");
 const aiItineraryRoutes = require("./routes/aiItinerary.routes");
 const poiRoutes = require("./routes/poi.routes");
 const destinationRoutes = require("./routes/destination.routes");
@@ -31,7 +36,8 @@ const fileUploadRoutes = require("./routes/fileUpload.routes");
 const imageProxyRoutes = require("./routes/imageProxy.routes");
 const travelerFeedbackRoutes = require("./routes/traveler/feedback.routes");
 const chatRoutes = require("./routes/chat.routes");
-const termsPolicyRoutes = require('./routes/termsPolicy.routes');
+const termsPolicyRoutes = require("./routes/termsPolicy.routes");
+const webhookRoutes = require("./routes/webhook.routes");
 
 // Middleware
 app.use(cors());
@@ -52,9 +58,12 @@ app.use("/api/traveler/hotels", travelerRoutes);
 app.use("/api/traveler/promotions", travelerPromotionRoutes);
 app.use("/api/traveler/hotels", travelerHotelRoomRoutes);
 app.use("/api/traveler/bookings", travelerHotelBookingRoutes);
+app.use("/api/traveler/hotel-payments", travelerHotelPaymentRoutes);
 app.use("/api/traveler/feedbacks", travelerFeedbackRoutes);
 // Tour traveler
 app.use("/api/traveler/tours", travelerTourRoutes);
+app.use("/api/traveler/tour-bookings", travelerTourBookingRoutes);
+app.use("/api/traveler/tour-payments", travelerTourPaymentRoutes);
 //AD_booking
 app.use("/api/ad-bookings", adBookingRoutes);
 // Provider routes
@@ -63,10 +72,13 @@ app.use("/api/itineraries", itineraryRoutes);
 app.use("/api/budget-breakdowns", budgetRoutes);
 app.use("/api/hotel", hotelRoutes);
 app.use("/api/provider/promotions", providerPromotionRoutes);
+app.use("/api/provider/hotel-bookings", providerHotelBookingManagementRoutes);
 // flight functionality removed
 app.use("/api/provider", serviceProviderRoutes);
-// AI itinerary endpoints
+// AI itinerary endpoints - UNIFIED ARCHITECTURE: origin_id + type classification (tour | ai_gen | customized)
 app.use("/api/ai-itineraries", aiItineraryRoutes);
+// Fast AI endpoints (optimized for speed)
+app.use("/api/fast-ai", require("./routes/fastAI.routes"));
 // POI endpoints
 app.use("/api/poi", poiRoutes);
 // Destination endpoints
@@ -74,18 +86,21 @@ app.use("/api/destinations", destinationRoutes);
 // File upload endpoints
 app.use("/api/upload", fileUploadRoutes);
 // Image proxy endpoint (for bypassing CORS on Google Drive images)
-app.use('/api', imageProxyRoutes);
+app.use("/api", imageProxyRoutes);
 // Terms & Policies endpoints
-app.use('/api/terms-policies', termsPolicyRoutes);
+app.use("/api/terms-policies", termsPolicyRoutes);
 // Auth routes
 app.use("/api/auth", require("./routes/auth.routes"));
 app.use("/api/auth/service-provider", serviceProviderAuthRoutes);
 app.use("/api/profiles", require("./routes/profile.routes"));
 // Admin routes
 app.use("/api/admin/service-providers", adminServiceProviderRoutes);
+app.use("/api/admin/terms-policies", adminTermsPolicyRoutes);
 app.use("/api/admin", require("./routes/admin/admin.routes"));
 // Chat routes
-app.use('/api/chat', chatRoutes);
+app.use("/api/chat", chatRoutes);
+// Webhook routes (PayOS callbacks - no authentication)
+app.use("/api/webhooks", webhookRoutes);
 // Trong server.js
 // ... các routes khác
 

@@ -5,7 +5,7 @@
 
 const BudgetBreakdown = require('../../../models/budget-breakdown.model');
 const Itinerary = require('../../../models/itinerary.model');
-const ItineraryActivity = require('../../../models/itinerary-activity.model');
+// const ItineraryActivity = require('../../../models/itinerary-activity.model'); // Removed - activities are now simple array
 
 /**
  * @route   POST /api/budget-breakdowns
@@ -39,7 +39,7 @@ exports.createBudgetBreakdown = async (req, res) => {
         }
 
         const Itinerary = require('../../../models/itinerary.model');
-        
+
         // Validate itinerary exists
         const itinerary = await Itinerary.findById(itinerary_id);
         if (!itinerary) {
@@ -69,7 +69,6 @@ exports.createBudgetBreakdown = async (req, res) => {
 
         await budgetBreakdown.save();
 
-        console.log(`✅ Budget breakdown created: ${budgetBreakdown._id} for itinerary ${itinerary_id}`);
 
         res.status(201).json({
             success: true,
@@ -200,7 +199,7 @@ exports.updateBudgetBreakdown = async (req, res) => {
         } = req.body;
 
         const budgetItem = await BudgetBreakdown.findById(id);
-        
+
         if (!budgetItem) {
             return res.status(404).json({
                 success: false,
@@ -228,7 +227,6 @@ exports.updateBudgetBreakdown = async (req, res) => {
 
         await budgetItem.save();
 
-        console.log(`✅ Budget breakdown updated: ${id}`);
 
         res.status(200).json({
             success: true,
@@ -256,7 +254,7 @@ exports.deleteBudgetBreakdown = async (req, res) => {
         const { id } = req.params;
 
         const budgetItem = await BudgetBreakdown.findById(id);
-        
+
         if (!budgetItem) {
             return res.status(404).json({
                 success: false,
@@ -267,7 +265,6 @@ exports.deleteBudgetBreakdown = async (req, res) => {
 
         await BudgetBreakdown.findByIdAndDelete(id);
 
-        console.log(`✅ Budget breakdown deleted: ${id}`);
 
         res.status(200).json({
             success: true,
@@ -295,7 +292,6 @@ exports.deleteTourBudgetBreakdown = async (req, res) => {
 
         const result = await BudgetBreakdown.deleteMany({ itinerary_id: itineraryId });
 
-        console.log(`✅ Deleted ${result.deletedCount} budget items for itinerary ${itineraryId}`);
 
         res.status(200).json({
             success: true,

@@ -14,9 +14,9 @@ const getAllToursForTraveler = async (req, res) => {
       query.title = { $regex: search, $options: "i" };
     }
 
-    // 🎯 Lọc theo điểm đến (destination_id)
+    // 🎯 Lọc theo điểm đến (destination string)
     if (destination && destination !== "all") {
-      query.destination_id = destination;
+      query.destination = destination;
     }
 
     // 💰 Lọc theo khoảng giá (vd: 1000000-5000000)
@@ -27,8 +27,8 @@ const getAllToursForTraveler = async (req, res) => {
       }
     }
 
-    // 🧾 Truy vấn từ Mongo với populate destination
-    let tours = await Tour.find(query).populate("destination_id", "name");
+    // 🧾 Truy vấn từ Mongo (destination is a string, no populate needed)
+    let tours = await Tour.find(query);
 
     // 🔽 Sắp xếp
     if (sortBy === "price-low") {
@@ -43,12 +43,13 @@ const getAllToursForTraveler = async (req, res) => {
       );
     }
 
-    // 🗺️ Lấy itineraries cho tất cả tours
+    // 🗺️ Lấy itineraries cho tất cả tours (UNIFIED ARCHITECTURE)
     const tourIds = tours.map((tour) => tour._id);
     const allItineraries = await Itinerary.find({
-      tour_id: { $in: tourIds },
+      origin_id: { $in: tourIds },
+      type: 'tour'
     })
-      .sort({ tour_id: 1, day: 1 })
+      .sort({ origin_id: 1, day_number: 1 })
       .lean();
 
     // 🗣️ Lấy feedbacks cho tất cả tours
@@ -61,7 +62,7 @@ const getAllToursForTraveler = async (req, res) => {
     const feedbacksByTourId = {};
 
     allItineraries.forEach((it) => {
-      const id = it.tour_id.toString();
+      const id = it.origin_id.toString();  // Use origin_id instead of tour_id
       if (!itinerariesByTourId[id]) itinerariesByTourId[id] = [];
       itinerariesByTourId[id].push(it);
     });
@@ -72,7 +73,7 @@ const getAllToursForTraveler = async (req, res) => {
       feedbacksByTourId[id].push(fb);
     });
 
-    // 🧩 Chuẩn hóa dữ liệu trả về
+    // 🧩 Chuẩn hóa dữ liệu trả về với MORE INFORMATION
     const formattedTours = tours.map((tour) => ({
       id: tour._id,
       name: tour.title,
@@ -83,13 +84,32 @@ const getAllToursForTraveler = async (req, res) => {
         }
         : null,
       duration: tour.duration || tour.duration_hours,
+
+      // ✅ Price & Rating Info
       price: tour.price,
       rating: parseFloat(tour.rating) || 0,
       total_rating: parseInt(tour.total_rating) || 0,
+
+      // ✅ Media & Description
       image: tour.image,
       highlights: tour.highlights,
       description: tour.description,
       included_services: tour.included_services,
+
+      // ✅ NEW Advanced Fields
+      difficulty: tour.difficulty || 'easy',
+      meeting_point: tour.meeting_point || {
+        address: null,
+        instructions: null
+      },
+      capacity: tour.capacity || {
+        max_participants: null,
+        min_participants: null
+      },
+      available_dates: tour.available_dates || [],
+      status: tour.status || 'draft',
+
+      // ✅ Meta Info  
       provider_id: tour.provider_id,
       created_at: tour.created_at,
 
@@ -128,10 +148,7 @@ const getAllToursForTraveler = async (req, res) => {
 // 🧭 Lấy chi tiết 1 tour theo ID
 const getTourById = async (req, res) => {
   try {
-    const tour = await Tour.findById(req.params.id).populate(
-      "destination_id",
-      "name"
-    );
+    const tour = await Tour.findById(req.params.id);
     if (!tour) {
       return res.status(404).json({
         success: false,
@@ -142,9 +159,12 @@ const getTourById = async (req, res) => {
     // 🔍 Chuyển đổi ID sang ObjectId cho itineraries
     const tourObjectId = new mongoose.Types.ObjectId(req.params.id);
 
-    // 🔍 Lấy itineraries riêng biệt
-    const itineraries = await Itinerary.find({ tour_id: tourObjectId })
-      .sort({ day: 1 })
+    // 🔍 Lấy itineraries với UNIFIED ARCHITECTURE (origin_id + type)
+    const itineraries = await Itinerary.find({
+      origin_id: tourObjectId,
+      type: 'tour'
+    })
+      .sort({ day_number: 1 })
       .lean();
 
     // 🔍 Lấy feedbacks riêng biệt - Query trực tiếp từ collection FEEDBACKS
@@ -160,36 +180,17 @@ const getTourById = async (req, res) => {
         .find({ tour_id: tourIdString })
         .toArray();
 
-      console.log(
-        `🔍 Query FEEDBACKS with string "${tourIdString}" - Found:`,
-        rawFeedbacks.length
-      );
-
       // Nếu không tìm thấy, thử với ObjectId
       if (rawFeedbacks.length === 0) {
         rawFeedbacks = await collection
           .find({ tour_id: tourObjectId })
           .toArray();
-        console.log(
-          `🔍 Query FEEDBACKS with ObjectId - Found:`,
-          rawFeedbacks.length
-        );
       }
 
       // Nếu vẫn không tìm thấy, thử query tất cả để xem cấu trúc
       if (rawFeedbacks.length === 0) {
         const allFeedbacks = await collection.find({}).limit(5).toArray();
-        console.log("🔍 Sample feedbacks in FEEDBACKS:", allFeedbacks.length);
         if (allFeedbacks.length > 0) {
-          console.log(
-            "🔍 Sample feedback structure:",
-            JSON.stringify(allFeedbacks[0], null, 2)
-          );
-          console.log("🔍 Sample tour_id:", allFeedbacks[0].tour_id);
-          console.log(
-            "🔍 Sample tour_id type:",
-            typeof allFeedbacks[0].tour_id
-          );
         }
       }
 
@@ -247,16 +248,46 @@ const getTourById = async (req, res) => {
         }
         : null,
       duration: tour.duration || tour.duration_hours,
+
+      // ✅ Price & Rating Info
       price: tour.price,
       rating: parseFloat(tour.rating) || 0,
       total_rating: parseInt(tour.total_rating) || 0,
+
+      // ✅ Media & Description
       image: tour.image,
       highlights: tour.highlights,
       description: tour.description,
       included_services: tour.included_services,
+
+      // ✅ NEW Advanced Fields from updated tour model
+      difficulty: tour.difficulty || 'easy',
+      meeting_point: tour.meeting_point || {
+        address: null,
+        instructions: null
+      },
+      capacity: tour.capacity || {
+        max_participants: null,
+        min_participants: null
+      },
+      available_dates: tour.available_dates || [],
+      status: tour.status || 'draft',
+
+      // ✅ Meta Info
       provider_id: tour.provider_id,
       created_at: tour.created_at,
-      itineraries: itineraries || [],
+
+      // ✅ Related Data (với unified format)
+      itineraries: itineraries?.map(itinerary => {
+        // Use unified response formatting for consistency
+        const formatted = Itinerary.formatResponse ? Itinerary.formatResponse(itinerary) : itinerary;
+        return {
+          ...formatted,
+          // Legacy compatibility
+          day: formatted.day_number || itinerary.day_number,
+          tour_id: itinerary.origin_id
+        };
+      }) || [],
       feedbacks: feedbacks.map((fb) => ({
         id: fb._id || fb.id,
         user_id: fb.user_id
@@ -268,26 +299,30 @@ const getTourById = async (req, res) => {
               ? fb.user_id_populated._id.toString()
               : fb.user_id_populated._id
             : null,
+            ? typeof fb.user_id_populated._id === "object"
+          ? fb.user_id_populated._id.toString()
+          : fb.user_id_populated._id
+        : null,
         user: fb.user_id_populated
-          ? fb.user_id_populated.name
-          : "Người dùng ẩn danh",
+        ? fb.user_id_populated.name
+        : "Người dùng ẩn danh",
         comment: fb.comment,
         rating: fb.rating,
         created_at: fb.created_at || fb.createdAt,
       })),
-    };
+  };
 
-    res.status(200).json({
-      success: true,
-      data: formattedTour,
-    });
-  } catch (error) {
-    console.error("❌ Lỗi khi lấy chi tiết tour:", error);
-    res.status(500).json({
-      success: false,
-      message: "Lỗi server khi lấy chi tiết tour",
-    });
-  }
+  res.status(200).json({
+    success: true,
+    data: formattedTour,
+  });
+} catch (error) {
+  console.error("❌ Lỗi khi lấy chi tiết tour:", error);
+  res.status(500).json({
+    success: false,
+    message: "Lỗi server khi lấy chi tiết tour",
+  });
+}
 };
 
 module.exports = {

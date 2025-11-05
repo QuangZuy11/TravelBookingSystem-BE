@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 
-module.exports = function requireAuth(req, res, next) {
+function requireAuth(req, res, next) {
   // 1) Lấy Authorization header (hỗ trợ cả chữ thường và hoa)
   const rawHeader = req.headers['authorization'] || req.headers['Authorization'];
 
@@ -44,4 +44,9 @@ module.exports = function requireAuth(req, res, next) {
   } catch (err) {
     return res.status(401).json({ success: false, message: 'Token không hợp lệ hoặc đã hết hạn' });
   }
-};
+}
+
+// Export with multiple names for compatibility
+module.exports = requireAuth;
+module.exports.requireAuth = requireAuth;
+module.exports.authenticateUser = requireAuth; // Alias for new code

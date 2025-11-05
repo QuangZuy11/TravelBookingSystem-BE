@@ -50,7 +50,7 @@ const paymentSchema = new mongoose.Schema({
         type: String,
         required: [true, 'Phương thức thanh toán là bắt buộc'],
         enum: {
-            values: ['credit_card', 'debit_card', 'bank_transfer', 'paypal', 'momo', 'vnpay', 'zalopay', 'cash', 'crypto'],
+            values: ['credit_card', 'debit_card', 'bank_transfer', 'paypal', 'momo', 'vnpay', 'zalopay', 'cash', 'crypto', 'qr_code'],
             message: '{VALUE} không phải phương thức thanh toán hợp lệ'
         }
     },
@@ -59,7 +59,7 @@ const paymentSchema = new mongoose.Schema({
     status: {
         type: String,
         enum: {
-            values: ['pending', 'processing', 'completed', 'failed', 'refunded', 'cancelled'],
+            values: ['pending', 'processing', 'completed', 'failed', 'refunded', 'cancelled', 'expired'],
             message: '{VALUE} không phải trạng thái thanh toán hợp lệ'
         },
         default: 'pending'
@@ -109,7 +109,42 @@ const paymentSchema = new mongoose.Schema({
     // Tên cổng thanh toán
     payment_gateway: {
         type: String,
-        enum: ['vnpay', 'momo', 'zalopay', 'paypal', 'stripe', 'manual', 'other']
+        enum: ['vnpay', 'momo', 'zalopay', 'paypal', 'stripe', 'payos', 'manual', 'other']
+    },
+
+    // PayOS specific fields
+    payos_order_code: {
+        type: Number,
+        unique: true,
+        sparse: true // Chỉ áp dụng unique khi có giá trị
+    },
+
+    payos_payment_link_id: {
+        type: String
+    },
+
+    checkout_url: {
+        type: String
+    },
+
+    qr_code: {
+        type: String
+    },
+
+    expired_at: {
+        type: Date
+    },
+
+    paid_at: {
+        type: Date
+    },
+
+    failed_at: {
+        type: Date
+    },
+
+    cancelled_at: {
+        type: Date
     },
 
     // Mô tả giao dịch
