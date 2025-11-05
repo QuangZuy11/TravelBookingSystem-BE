@@ -48,16 +48,6 @@ const hotelSchema = new mongoose.Schema({
         max: 5,
         default: 0
     },
-    totalRooms: {
-        type: Number,
-        required: true,
-        min: 0
-    },
-    availableRooms: {
-        type: Number,
-        required: true,
-        min: 0
-    },
     priceRange: {
         min: Number,
         max: Number
@@ -112,35 +102,55 @@ const hotelSchema = new mongoose.Schema({
     }
 });
 
-// Method: Cập nhật lại availableRooms từ Room collection
-hotelSchema.methods.updateAvailableRooms = async function () {
+// Virtual: Tính toán số phòng từ Room collection
+hotelSchema.virtual('totalRooms', {
+    ref: 'Room',
+    localField: '_id',
+    foreignField: 'hotelId',
+    count: true
+});
+
+// Virtual: Tính toán số phòng available từ Room collection  
+hotelSchema.virtual('availableRooms', {
+    ref: 'Room',
+    localField: '_id',
+    foreignField: 'hotelId',
+    count: true,
+    match: { status: 'available' }
+});
+
+// Method: Lấy thống kê phòng realtime
+hotelSchema.methods.getRoomStats = async function () {
     const Room = mongoose.model('Room');
-    const availableCount = await Room.countDocuments({
-        hotelId: this._id,
-        status: 'available'
+
+    const stats = await Room.aggregate([
+        { $match: { hotelId: this._id } },
+        {
+            $group: {
+                _id: '$status',
+                count: { $sum: 1 }
+            }
+        }
+    ]);
+
+    const result = {
+        total: 0,
+        available: 0,
+        occupied: 0,
+        maintenance: 0,
+        reserved: 0
+    };
+
+    stats.forEach(stat => {
+        result[stat._id] = stat.count;
+        result.total += stat.count;
     });
 
-    this.availableRooms = availableCount;
-    await this.save();
-
-    return availableCount;
+    return result;
 };
 
-// Static method: Cập nhật availableRooms cho nhiều hotels
-hotelSchema.statics.updateAllAvailableRooms = async function () {
-    const Room = mongoose.model('Room');
-    const hotels = await this.find();
-
-    for (const hotel of hotels) {
-        const availableCount = await Room.countDocuments({
-            hotelId: hotel._id,
-            status: 'available'
-        });
-
-        await this.findByIdAndUpdate(hotel._id, {
-            availableRooms: availableCount
-        });
-    }
-};
+// Enable virtuals in JSON
+hotelSchema.set('toJSON', { virtuals: true });
+hotelSchema.set('toObject', { virtuals: true });
 
 module.exports = mongoose.model('Hotel', hotelSchema, 'HOTELS');

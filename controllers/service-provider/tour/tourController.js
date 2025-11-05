@@ -118,7 +118,7 @@ exports.createTour = async (req, res) => {
             const fieldsToParseAsJSON = [
                 'description', 'services', 'languages_offered', 'highlights',
                 'what_to_bring', 'available_dates', 'capacity', 'booking_info',
-                'pricing', 'meeting_point', 'accessibility'
+                'pricing', 'meeting_point', 'accessibility', 'included_services'
             ];
 
             fieldsToParseAsJSON.forEach(field => {
@@ -130,6 +130,15 @@ exports.createTour = async (req, res) => {
                     }
                 }
             });
+
+            // Handle departure_date specifically - can be null, empty string, or valid date
+            if (tourData.departure_date !== undefined) {
+                if (tourData.departure_date === '' || tourData.departure_date === 'null') {
+                    tourData.departure_date = null;
+                } else if (tourData.departure_date) {
+                    tourData.departure_date = new Date(tourData.departure_date);
+                }
+            }
         }
 
         // 1. Create tour with image handling
@@ -198,7 +207,7 @@ exports.updateTour = async (req, res) => {
         const fieldsToParseAsJSON = [
             'description', 'services', 'languages_offered', 'highlights',
             'what_to_bring', 'available_dates', 'capacity', 'booking_info',
-            'pricing', 'meeting_point', 'accessibility'
+            'pricing', 'meeting_point', 'accessibility', 'included_services'
         ];
 
         fieldsToParseAsJSON.forEach(field => {
@@ -210,6 +219,15 @@ exports.updateTour = async (req, res) => {
                 }
             }
         });
+
+        // Handle departure_date specifically - can be null, empty string, or valid date
+        if (req.body.departure_date !== undefined) {
+            if (req.body.departure_date === '' || req.body.departure_date === 'null') {
+                req.body.departure_date = null;
+            } else if (req.body.departure_date) {
+                req.body.departure_date = new Date(req.body.departure_date);
+            }
+        }
 
         const tour = await Tour.findOneAndUpdate(
             { _id: req.params.tourId, provider_id: req.params.providerId },
@@ -292,11 +310,7 @@ exports.getTourById = async (req, res) => {
             });
         }
 
-        // Clean up pricing: only keep base_price
-        if (tourObj.pricing) {
-            const basePrice = tourObj.pricing.base_price;
-            tourObj.pricing = { base_price: basePrice };
-        }
+
 
         res.status(200).json({
             success: true,
@@ -432,19 +446,20 @@ exports.updateTourStatus = async (req, res) => {
                 });
             }
 
-            if (!tour.available_dates || tour.available_dates.length === 0) {
+            // Check if tour has departure date information (either departure_date or available_dates)
+            if (!tour.departure_date && (!tour.available_dates || tour.available_dates.length === 0)) {
                 return res.status(400).json({
                     success: false,
-                    message: 'Không thể kích hoạt tour chưa có ngày khởi hành',
-                    error: 'Tour must have at least one available date to be activated'
+                    message: 'Không thể kích hoạt tour chưa có thông tin ngày khởi hành',
+                    error: 'Tour must have either departure_date or available_dates to be activated'
                 });
             }
 
-            if (!tour.pricing || !tour.pricing.adult) {
+            if (!tour.price || tour.price <= 0) {
                 return res.status(400).json({
                     success: false,
                     message: 'Không thể kích hoạt tour chưa có giá',
-                    error: 'Tour must have pricing information to be activated'
+                    error: 'Tour must have valid price to be activated'
                 });
             }
         }

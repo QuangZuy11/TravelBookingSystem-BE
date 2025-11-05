@@ -69,7 +69,7 @@ exports.getHotelDashboardStats = async (req, res) => {
                                 $cond: [{ $eq: ["$status", "active"] }, 1, 0]
                             }
                         },
-                        totalRooms: { $sum: "$totalRooms" },
+                        totalRooms: { $sum: 1 }, // Count of hotels, not rooms
                         totalRevenue: { $sum: "$revenue" },
                         averageRating: { $avg: "$rating" }
                     }
@@ -129,7 +129,7 @@ exports.getHotelDashboardStats = async (req, res) => {
                 statistics: stats[0][0] || {
                     totalHotels: 0,
                     activeHotels: 0,
-                    totalRooms: 0,
+                    totalRooms: 0, // Will be calculated from rooms
                     totalRevenue: 0,
                     averageRating: 0
                 },
@@ -159,7 +159,6 @@ exports.getHotelStatistics = async (req, res) => {
                 $group: {
                     _id: null,
                     totalHotels: { $sum: 1 },
-                    totalRooms: { $sum: '$totalRooms' },
                     totalBookings: { $sum: '$bookingsCount' },
                     averageRating: { $avg: '$rating' },
                     totalRevenue: { $sum: '$revenue' }
@@ -186,6 +185,15 @@ exports.createHotel = async (req, res) => {
     let createdHotel = null;
 
     try {
+        // Check if provider already has a hotel
+        const existingHotel = await Hotel.findOne({ providerId: req.params.providerId });
+        if (existingHotel) {
+            return res.status(400).json({
+                success: false,
+                error: 'Provider chỉ được tạo 1 hotel duy nhất',
+                message: 'Bạn đã có hotel, không thể tạo thêm hotel mới'
+            });
+        }
         // Parse hotel data if sent as multipart/form-data
         let hotelData;
         if (req.body.hotelData) {

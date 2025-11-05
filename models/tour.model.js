@@ -53,6 +53,56 @@ const tourSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+
+    // Advanced tour fields
+    difficulty: {
+      type: String,
+      enum: ['easy', 'moderate', 'challenging', 'difficult'],
+      default: 'easy'
+    },
+
+    meeting_point: {
+      type: String,
+      default: ''
+    },
+
+    capacity: {
+      type: Number,
+      default: 20,
+      min: 1
+    },
+
+    // Departure date - nullable for flexible scheduling
+    departure_date: {
+      type: Date,
+      default: null
+    },
+
+    // Available dates for tours with multiple departure options
+    available_dates: [{
+      date: {
+        type: Date,
+        required: true
+      },
+      available_slots: {
+        type: Number,
+        required: true,
+        min: 0,
+        default: function () { return this.parent().capacity || 20; }
+      },
+      price: {
+        type: Number,
+        required: true,
+        min: 0
+      }
+    }],
+
+    status: {
+      type: String,
+      enum: ['active', 'inactive', 'draft', 'suspended'],
+      default: 'draft'
+    },
+
     promotions: [
       {
         type: mongoose.Schema.Types.ObjectId,

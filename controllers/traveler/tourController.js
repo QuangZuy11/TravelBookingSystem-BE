@@ -92,6 +92,14 @@ const getAllToursForTraveler = async (req, res) => {
       included_services: tour.included_services,
       provider_id: tour.provider_id,
       created_at: tour.created_at,
+      
+      // Advanced tour fields
+      difficulty: tour.difficulty,
+      meeting_point: tour.meeting_point,
+      capacity: tour.capacity,
+      departure_date: tour.departure_date,
+      available_dates: tour.available_dates,
+      status: tour.status,
       itineraries: itinerariesByTourId[tour._id.toString()] || [],
       feedbacks:
         (feedbacksByTourId[tour._id.toString()] || []).map((fb) => ({
@@ -100,7 +108,7 @@ const getAllToursForTraveler = async (req, res) => {
           comment: fb.comment,
           rating: fb.rating,
           created_at: fb.created_at,
-        })) || [],
+        }))
     }));
 
     res.status(200).json({
@@ -234,9 +242,9 @@ const getTourById = async (req, res) => {
       name: tour.title,
       destination: tour.destination_id
         ? {
-            id: tour.destination_id._id,
-            name: tour.destination_id.name,
-          }
+          id: tour.destination_id._id,
+          name: tour.destination_id.name,
+        }
         : null,
       duration: tour.duration || tour.duration_hours,
       price: tour.price,
@@ -256,10 +264,10 @@ const getTourById = async (req, res) => {
             ? fb.user_id.toString()
             : fb.user_id
           : fb.user_id_populated?._id
-          ? typeof fb.user_id_populated._id === "object"
-            ? fb.user_id_populated._id.toString()
-            : fb.user_id_populated._id
-          : null,
+            ? typeof fb.user_id_populated._id === "object"
+              ? fb.user_id_populated._id.toString()
+              : fb.user_id_populated._id
+            : null,
         user: fb.user_id_populated
           ? fb.user_id_populated.name
           : "Người dùng ẩn danh",

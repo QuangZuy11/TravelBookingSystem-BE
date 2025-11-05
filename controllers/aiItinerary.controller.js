@@ -49,10 +49,10 @@ exports.createRequest = async (req, res) => {
     const request = new AiItineraryRequest(payload);
     await request.save();
 
-    res.status(201).json({ success: true, message: 'AI itinerary request created', data: request });
+    res.status(201).json({ success: true, message: 'Đã tạo yêu cầu lịch trình AI thành công', data: request });
   } catch (err) {
     console.error('Error creating AI request', err);
-    res.status(500).json({ success: false, message: 'Server error', error: err.message });
+    res.status(500).json({ success: false, message: 'Lỗi server khi tạo yêu cầu AI', error: err.message });
   }
 };
 
@@ -60,7 +60,7 @@ exports.generateItineraryFromRequest = async (req, res) => {
   try {
     const { requestId } = req.params;
     const request = await AiItineraryRequest.findById(requestId);
-    if (!request) return res.status(404).json({ success: false, message: 'Request not found' });
+    if (!request) return res.status(404).json({ success: false, message: 'Không tìm thấy yêu cầu' });
 
     console.log(`🛰️ Generating itinerary for request ${requestId}`);
     console.log(`📋 Request details:`, {
@@ -88,7 +88,7 @@ exports.generateItineraryFromRequest = async (req, res) => {
         if (availableDestinations.length === 0) {
           return res.status(400).json({
             success: false,
-            message: 'No destinations available in database'
+            message: 'Không có điểm đến nào có sẵn trong cơ sở dữ liệu'
           });
         }
 
@@ -124,7 +124,7 @@ exports.generateItineraryFromRequest = async (req, res) => {
         } else {
           return res.status(400).json({
             success: false,
-            message: 'Cannot determine destination and AI service unavailable'
+            message: 'Không thể xác định điểm đến và dịch vụ AI không khả dụng'
           });
         }
       }
@@ -386,7 +386,7 @@ exports.generateItineraryFromRequest = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Itinerary generated',
+      message: 'Đã tạo lịch trình thành công',
       data: aiGen,
       destination: {
         name: destinationName,

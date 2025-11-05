@@ -32,7 +32,7 @@ const callOpenAI = async (messages, maxTokens = 1200) => {
  * generateDestinationSuggestion: Ask AI to suggest a destination based on user preferences
  */
 exports.generateDestinationSuggestion = async ({ request, availableDestinations }) => {
-  const system = `You are a travel advisor. Suggest the BEST destination from the provided list based on the user's preferences, budget, and travel style. Return ONLY JSON without any additional commentary.`;
+  const system = `Bạn là một chuyên gia tư vấn du lịch chuyên nghiệp. Hãy gợi ý điểm đến TỐT NHẤT từ danh sách có sẵn dựa trên sở thích, ngân sách và phong cách du lịch của khách hàng. Trả về CHỈ JSON bằng tiếng Việt, không có bình luận thêm.`;
 
   const destinationList = availableDestinations.map(d => ({
     id: d._id,
@@ -42,23 +42,23 @@ exports.generateDestinationSuggestion = async ({ request, availableDestinations 
     popular_activities: d.popular_activities || []
   }));
 
-  const user = `User preferences:
-- Duration: ${request.duration_days} days
-- Budget: ${request.budget_total ? `${request.budget_total.toLocaleString()} VND` : request.budget_level}
-- Participants: ${request.participant_number} people
-- Age range: ${request.age_range.join(', ')}
-- Interests: ${request.preferences.join(', ')}
+  const user = `Thông tin khách hàng:
+- Thời gian: ${request.duration_days} ngày
+- Ngân sách: ${request.budget_total ? `${request.budget_total.toLocaleString()} VND` : request.budget_level === 'high' ? 'cao cấp' : request.budget_level === 'low' ? 'tiết kiệm' : 'trung bình'}
+- Số người: ${request.participant_number} người
+- Độ tuổi: ${request.age_range.join(', ')}
+- Sở thích: ${request.preferences.join(', ')}
 
-Available destinations in Vietnam:
+Các điểm đến có sẵn tại Việt Nam:
 ${JSON.stringify(destinationList, null, 2)}
 
-Based on the user's preferences and budget, suggest ONE best destination.
+Dựa trên sở thích và ngân sách của khách hàng, hãy gợi ý MỘT điểm đến tốt nhất.
 
-Return ONLY this JSON format:
+Trả về CHỈ định dạng JSON này (bằng tiếng Việt):
 {
   "suggested_destination_id": "<destination id>",
-  "suggested_destination_name": "<destination name>",
-  "reason": "A brief explanation why this destination fits the user's needs (2-3 sentences)"
+  "suggested_destination_name": "<tên điểm đến>",
+  "reason": "Lý do ngắn gọn tại sao điểm đến này phù hợp với nhu cầu của khách hàng (2-3 câu bằng tiếng Việt)"
 }`;
 
   const messages = [
@@ -111,35 +111,37 @@ exports.generateItinerary = async ({ request, destination, pois, days }) => {
     ? request.preferences.join(', ')
     : 'tham quan chung';
 
-  const system = `You are a professional travel itinerary planner. Create a detailed day-by-day itinerary in JSON format based on the user's natural language request and available points of interest.`;
+  const system = `Bạn là một chuyên gia lập kế hoạch lịch trình du lịch chuyên nghiệp. Hãy tạo lịch trình chi tiết theo từng ngày ở định dạng JSON hoàn toàn bằng tiếng Việt, dựa trên yêu cầu của khách hàng và các điểm tham quan có sẵn.`;
 
   const user = `Hãy tạo lịch trình chi tiết ${days} ngày cho chuyến đi đến ${destinationName} dành cho ${request.participant_number} người ${ageRangeText}, ngân sách ${budgetText}, ưu tiên ${preferencesText}.
 
-Available Points of Interest:
+Các điểm tham quan có sẵn:
 ${JSON.stringify(poiSummaries, null, 2)}
 
-Create a ${days}-day itinerary that:
-1. Matches the user's interests: ${preferencesText}
-2. Fits the budget: ${budgetText}
-3. Suitable for ${request.participant_number} people aged ${ageRangeText}
-4. Includes meals, activities, and attractions
-5. Realistic timing (8 AM - 6 PM daily, 30 min travel between locations)
+Tạo lịch trình ${days} ngày với những yêu cầu sau:
+1. Phù hợp với sở thích: ${preferencesText}
+2. Phù hợp với ngân sách: ${budgetText}
+3. Thích hợp cho ${request.participant_number} người độ tuổi ${ageRangeText}
+4. Bao gồm ăn uống, hoạt động và điểm tham quan
+5. Thời gian hợp lý (8:00 - 18:00 mỗi ngày, 30 phút di chuyển giữa các địa điểm)
 
-Return ONLY valid JSON in this format:
+**QUAN TRỌNG**: Tất cả nội dung phải bằng tiếng Việt, bao gồm tên hoạt động, mô tả, địa điểm.
+
+Trả về CHỈ JSON hợp lệ theo định dạng này (toàn bộ bằng tiếng Việt):
 {
   "days": [
     {
       "day_number": 1,
-      "title": "Day 1 - [Theme/Area]",
-      "description": "Brief overview of the day",
+      "title": "Ngày 1 - [Chủ đề/Khu vực bằng tiếng Việt]",
+      "description": "Tóm tắt ngắn gọn về ngày này bằng tiếng Việt",
       "activities": [
         { 
-          "activity_name": "Activity name", 
-          "poi_id": "<poi id from list or null>", 
+          "activity_name": "Tên hoạt động bằng tiếng Việt", 
+          "poi_id": "<poi id từ danh sách hoặc null>", 
           "start_time": "HH:MM",
           "end_time": "HH:MM",
           "duration_hours": 2.5,
-          "description": "What to do here",
+          "description": "Mô tả chi tiết hoạt động bằng tiếng Việt",
           "cost": 100000,
           "optional": false
         }
@@ -148,7 +150,7 @@ Return ONLY valid JSON in this format:
   ]
 }
 
-Do not add any text outside the JSON object.`;
+Không thêm bất kỳ text nào bên ngoài JSON object. Toàn bộ nội dung phải bằng tiếng Việt.`;
 
   const messages = [
     { role: 'system', content: system },

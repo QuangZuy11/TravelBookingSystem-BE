@@ -39,8 +39,8 @@ const serviceProviderSchema = new mongoose.Schema({
         enum: ['hotel', 'tour'],
         required: true
     },
-    // Mảng chứa license và verification status cho từng loại dịch vụ
-    // NOTE: Chỉ hotel có thể có nhiều licenses, tour chỉ có 1 license duy nhất
+    // Mảng chứa license và verification status cho từng loại dịch vụ  
+    // NOTE: Mỗi provider chỉ có thể có 1 license duy nhất (hotel hoặc tour)
     licenses: [{
         service_type: {
             type: String,
@@ -116,47 +116,26 @@ serviceProviderSchema.index({ type: 1 });
 serviceProviderSchema.index({ 'licenses.verification_status': 1 });
 serviceProviderSchema.index({ 'licenses.license_number': 1 }, { unique: true, sparse: true }); // Unique constraint
 
-// Pre-save validation: Hotel có thể nhiều licenses, tour chỉ 1
+// Pre-save validation: Mỗi provider chỉ được có 1 license duy nhất
 serviceProviderSchema.pre('save', function (next) {
     if (!this.licenses || !Array.isArray(this.licenses)) {
         return next();
     }
 
-    const hotelLicenses = this.licenses.filter(l => l.service_type === 'hotel');
-    const tourLicenses = this.licenses.filter(l => l.service_type === 'tour');
-
-    // Tour chỉ được có 1 license
-    if (tourLicenses.length > 1) {
-        return next(new Error('Tour provider chỉ có thể có 1 license duy nhất'));
+    // Chỉ được có 1 license duy nhất
+    if (this.licenses.length > 1) {
+        return next(new Error('Mỗi provider chỉ có thể có 1 giấy đăng ký kinh doanh duy nhất'));
     }
 
-    // Check duplicate license_number trong cùng 1 provider
-    const licenseNumbers = this.licenses.map(l => l.license_number);
-    const uniqueLicenseNumbers = [...new Set(licenseNumbers)];
-    if (licenseNumbers.length !== uniqueLicenseNumbers.length) {
-        return next(new Error('License number không được trùng lặp'));
+    // License type phải khớp với provider type
+    if (this.licenses.length === 1 && this.licenses[0].service_type !== this.type) {
+        return next(new Error('Loại giấy phép phải khớp với loại dịch vụ của provider'));
     }
 
     next();
 });
 
-// Validation: Type phải match với licenses
-serviceProviderSchema.pre('save', function (next) {
-    if (!this.licenses || !Array.isArray(this.licenses) || this.licenses.length === 0) {
-        return next();
-    }
 
-    const typesInLicenses = [...new Set(this.licenses.map(l => l.service_type))];
-    const typesInType = this.type;
-
-    // Mọi type trong licenses phải có trong type array
-    const missingTypes = typesInLicenses.filter(t => !typesInType.includes(t));
-    if (missingTypes.length > 0) {
-        return next(new Error(`Service types trong licenses không khớp với type: ${missingTypes.join(', ')}`));
-    }
-
-    next();
-});
 
 // Virtual để check xem provider đã được verify chưa (TẤT CẢ licenses verified)
 serviceProviderSchema.virtual('is_verified').get(function () {
