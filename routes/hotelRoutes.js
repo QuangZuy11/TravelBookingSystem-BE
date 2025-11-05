@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const hotelController = require('../controllers/service-provider/hotel/hotelController');
+const travelerHotelController = require('../controllers/traveler/hotel.controller');
 const roomController = require('../controllers/service-provider/hotel/roomController');
 const authMiddleware = require('../middlewares/auth.middleware');
 const { checkServiceProviderVerification } = require('../middlewares/verificationMiddleware');
@@ -11,7 +12,7 @@ const uploadMiddleware = require('../middlewares/upload.middleware');
 
 // ===== PUBLIC ROUTES (No authentication required) =====
 // Get hotel details with nearby POIs - for travelers
-router.get('/:hotelId/details', hotelController.getHotelDetailsWithPOIs);
+router.get('/:hotelId/details', travelerHotelController.getHotelById);
 
 // ===== PROVIDER ROUTES (Authentication required) =====
 // Provider hotel routes

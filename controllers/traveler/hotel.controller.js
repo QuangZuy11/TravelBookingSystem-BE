@@ -90,7 +90,7 @@ exports.searchHotels = async (req, res) => {
         const hotels = await Promise.all(
             hotelsRaw.map(async (hotel) => {
                 const hotelObj = hotel.toObject();
-                
+
                 // Get room information with price filter
                 const roomQuery = {
                     hotelId: hotel._id,
@@ -115,7 +115,7 @@ exports.searchHotels = async (req, res) => {
                     .sort({ pricePerNight: 1 });
 
                 hotelObj.availableRooms = availableRooms.length;
-                
+
                 // Add real price range based on available rooms
                 if (availableRooms.length > 0) {
                     hotelObj.realPriceRange = {
@@ -221,8 +221,10 @@ exports.getHotelById = async (req, res) => {
             });
         }
 
+        // Get hotel details with destination information
         const hotel = await Hotel.findById(hotelId)
             .populate('providerId', 'name email phone')
+            .populate('destination_id', 'name description country city image')
             .select('-__v');
 
         if (!hotel) {
@@ -241,7 +243,7 @@ exports.getHotelById = async (req, res) => {
         }).select('pricePerNight type capacity');
 
         hotelObj.availableRooms = rooms.length;
-        
+
         if (rooms.length > 0) {
             rooms.sort((a, b) => a.pricePerNight - b.pricePerNight);
             hotelObj.realPriceRange = {
@@ -279,9 +281,42 @@ exports.getHotelById = async (req, res) => {
             }
         }
 
+        // Get POIs in the same destination (if hotel has destination_id) 
+        let nearbyPOIs = [];
+        if (hotelObj.destination_id) {
+            const POI = require('../../models/point-of-interest.model');
+
+            const pois = await POI.find({
+                destinationId: hotelObj.destination_id._id
+            })
+                .select('name description type images location ratings openingHours entryFee')
+                .limit(10) // Limit to 10 POIs
+                .sort({ 'ratings.average': -1 }); // Sort by rating
+
+            // Transform POI data to match frontend expectations
+            nearbyPOIs = pois.map(poi => ({
+                _id: poi._id,
+                name: poi.name,
+                description: poi.description,
+                category: poi.type, // Map 'type' to 'category' for frontend
+                images: poi.images || [],
+                location: poi.location, // Already has coordinates structure
+                rating: poi.ratings?.average || 0, // Map ratings.average to rating
+                opening_hours: formatOpeningHours(poi.openingHours), // Convert to simple string
+                entry_fee: poi.entryFee ? {
+                    adult: poi.entryFee.adult,
+                    child: poi.entryFee.child
+                } : null
+            }));
+        }
+
         res.status(200).json({
             success: true,
-            data: hotelObj,
+            data: {
+                hotel: hotelObj,
+                nearbyPOIs,
+                destination: hotelObj.destination_id || null
+            },
             message: 'Lấy thông tin khách sạn thành công'
         });
 
@@ -294,6 +329,19 @@ exports.getHotelById = async (req, res) => {
         });
     }
 };
+
+// Helper function to format opening hours
+function formatOpeningHours(openingHours) {
+    if (!openingHours) return null;
+
+    // Check if has today's hours (simplified - just return Monday as example)
+    const monday = openingHours.monday;
+    if (monday && monday.open && monday.close) {
+        return `${monday.open} - ${monday.close}`;
+    }
+
+    return 'Check schedule';
+}
 
 /**
  * Lấy danh sách tiện nghi khả dụng
@@ -410,15 +458,15 @@ exports.getFeaturedHotels = async (req, res) => {
         const featuredHotels = await Promise.all(
             featuredHotelsRaw.map(async (hotel) => {
                 const hotelObj = hotel.toObject();
-                
+
                 const rooms = await Room.find({
                     hotelId: hotel._id,
                     status: 'available'
                 }).select('pricePerNight type capacity')
-                  .sort({ pricePerNight: 1 });
+                    .sort({ pricePerNight: 1 });
 
                 hotelObj.availableRooms = rooms.length;
-                
+
                 if (rooms.length > 0) {
                     hotelObj.realPriceRange = {
                         min: rooms[0].pricePerNight,
