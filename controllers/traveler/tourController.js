@@ -78,9 +78,9 @@ const getAllToursForTraveler = async (req, res) => {
       name: tour.title,
       destination: tour.destination_id
         ? {
-            id: tour.destination_id._id,
-            name: tour.destination_id.name,
-          }
+          id: tour.destination_id._id,
+          name: tour.destination_id.name,
+        }
         : null,
       duration: tour.duration || tour.duration_hours,
       price: tour.price,
@@ -92,7 +92,7 @@ const getAllToursForTraveler = async (req, res) => {
       included_services: tour.included_services,
       provider_id: tour.provider_id,
       created_at: tour.created_at,
-      
+
       // Advanced tour fields
       difficulty: tour.difficulty,
       meeting_point: tour.meeting_point,
