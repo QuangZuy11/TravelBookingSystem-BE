@@ -95,18 +95,25 @@ Trả về CHỈ định dạng JSON này (bằng tiếng Việt):
  */
 exports.generateItinerary = async ({ request, destination, pois, days }) => {
   // Build compact POI list to send (sử dụng đúng field names từ POI model)
-  const poiSummaries = (pois || []).map(p => ({
-    id: p._id,
-    name: p.name, // Đổi từ poi_name sang name
-    description: p.description || '',
-    type: p.type || 'other',
-    rating: p.ratings?.average || 0, // Đổi từ rating sang ratings.average
-    entryFee: p.entryFee?.adult || 0, // Đổi từ price sang entryFee.adult
-    recommendedDuration: p.recommendedDuration || { hours: 2, minutes: 0 }
-  }));
+  // Reduce token usage: send only top N POIs with compact fields and truncated descriptions
+  const POI_SEND_LIMIT = 12;
+  const poiSummaries = (pois || [])
+    .slice(0, POI_SEND_LIMIT)
+    .map(p => ({
+      id: p._id,
+      name: p.name,
+      // keep description short and single-line to save tokens
+      description: (p.description || '').replace(/\s+/g, ' ').slice(0, 120),
+      type: p.type || 'other',
+      rating: p.ratings?.average || 0,
+      entryFee: p.entryFee?.adult || 0,
+      // normalized duration in hours (float)
+      recommendedDurationHours: ((p.recommendedDuration?.hours || 0) + (p.recommendedDuration?.minutes || 0) / 60) || 2
+    }));
 
   // Build natural language prompt
   const destinationName = destination?.name || request.destination || request.ai_suggested_destination;
+  const budget = request.budget_total || 0;
   const budgetText = request.budget_total
     ? `${(request.budget_total / 1000000).toFixed(1)} triệu VND`
     : request.budget_level === 'high' ? 'cao cấp' : request.budget_level === 'low' ? 'tiết kiệm' : 'trung bình';
@@ -121,54 +128,23 @@ exports.generateItinerary = async ({ request, destination, pois, days }) => {
 
   const system = `Bạn là một chuyên gia lập kế hoạch lịch trình du lịch chuyên nghiệp. Hãy tạo lịch trình chi tiết theo từng ngày ở định dạng JSON hoàn toàn bằng tiếng Việt, dựa trên yêu cầu của khách hàng và các điểm tham quan có sẵn.`;
 
-  const user = `Hãy tạo lịch trình chi tiết ${days} ngày cho chuyến đi đến ${destinationName} dành cho ${request.participant_number} người ${ageRangeText}, ngân sách ${budgetText}, ưu tiên ${preferencesText}.
+  // Compact prompt: reduce verbosity and include minified POI payload to save tokens
+  const user = `Tạo lịch trình ${days} ngày cho ${request.participant_number} người đến ${destinationName}. Ngân sách: ${budgetText}. Ưu tiên: ${preferencesText}.
 
-Các điểm tham quan có sẵn:
-${JSON.stringify(poiSummaries, null, 2)}
+POI_JSON:${JSON.stringify(poiSummaries)}
 
-Tạo lịch trình ${days} ngày với những yêu cầu sau:
-1. Phù hợp với sở thích: ${preferencesText}
-2. Phù hợp với ngân sách: ${budgetText}
-3. Thích hợp cho ${request.participant_number} người độ tuổi ${ageRangeText}
-4. Bao gồm ăn uống, hoạt động và điểm tham quan
-5. Thời gian hợp lý (8:00 - 18:00 mỗi ngày, 30 phút di chuyển giữa các địa điểm)
-
-**QUAN TRỌNG**: Tất cả nội dung phải bằng tiếng Việt, bao gồm tên hoạt động, mô tả, địa điểm.
-
-Trả về CHỈ JSON hợp lệ theo định dạng này (toàn bộ bằng tiếng Việt):
-{
-  "title": "Trip title",
-  "total_budget": ${budget},
-  "days": [
-    {
-      "day_number": 1,
-      "title": "Ngày 1 - [Chủ đề/Khu vực bằng tiếng Việt]",
-      "description": "Tóm tắt ngắn gọn về ngày này bằng tiếng Việt",
-      "activities": [
-        { 
-          "activity_name": "Tên hoạt động bằng tiếng Việt", 
-          "poi_id": "<poi id từ danh sách hoặc null>", 
-          "start_time": "HH:MM",
-          "end_time": "HH:MM",
-          "duration_hours": 2.5,
-          "description": "Mô tả chi tiết hoạt động bằng tiếng Việt",
-          "cost": 100000,
-          "optional": false
-        }
-      ]
-    }
-  ]
-}
-
-Không thêm bất kỳ text nào bên ngoài JSON object. Toàn bộ nội dung phải bằng tiếng Việt.`;
+Yêu cầu:
+- Nội dung hoàn toàn bằng tiếng Việt.
+- Trả CHỈ JSON hợp lệ theo schema: {title, total_budget, days:[{day_number,title,description,activities:[{activity_name,poi_id,start_time,duration_hours,description,cost,optional}]}]}.
+- Không thêm text ngoài JSON.`;
 
   const messages = [
     { role: 'system', content: system },
     { role: 'user', content: user }
   ];
 
-  // Use shorter max_tokens for faster response
-  const content = await callGroqAI(messages, 1200);
+  // Use shorter max_tokens for faster response and to reduce token cost
+  const content = await callGroqAI(messages, 900);
 
   // Enhanced JSON parsing with error recovery
   let parsed = null;
@@ -176,15 +152,10 @@ Không thêm bất kỳ text nào bên ngoài JSON object. Toàn bộ nội dung
     // Try direct parsing first
     parsed = JSON.parse(content);
   } catch (err) {
-    console.log('❌ Direct JSON parsing failed, trying recovery methods...');
-    console.log('Raw AI response length:', content.length);
-    console.log('Raw AI response preview:', content.substring(0, 500) + '...');
-
     try {
       // Method 1: Extract JSON block between curly braces
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        console.log('🔧 Attempting to parse extracted JSON...');
         parsed = JSON.parse(jsonMatch[0]);
       } else {
         // Method 2: Try to find JSON starting with {"title" or {"days"
@@ -192,22 +163,16 @@ Không thêm bất kỳ text nào bên ngoài JSON object. Toàn bộ nội dung
         const daysMatch = content.match(/\{"days"[\s\S]*\}/);
 
         if (titleMatch) {
-          console.log('🔧 Found title-based JSON, attempting parse...');
           parsed = JSON.parse(titleMatch[0]);
         } else if (daysMatch) {
-          console.log('🔧 Found days-based JSON, attempting parse...');
           parsed = JSON.parse(daysMatch[0]);
         } else {
           throw new Error('No valid JSON pattern found in AI response');
         }
       }
     } catch (parseErr) {
-      console.error('❌ All JSON parsing methods failed');
-      console.error('Parse error:', parseErr.message);
-
       try {
         // Method 3: Try to fix common JSON issues
-        console.log('🔧 Attempting JSON repair...');
         let repairedJson = content;
 
         // Fix incomplete JSON by adding missing closing braces
@@ -221,15 +186,10 @@ Không thêm bất kỳ text nào bên ngoài JSON object. Toàn bộ nội dung
 
         // Try parsing the repaired JSON
         parsed = JSON.parse(repairedJson);
-        console.log('✅ JSON repair successful!');
 
       } catch (repairErr) {
-        console.error('❌ JSON repair also failed');
-        console.error('Repair error:', repairErr.message);
-
-        // Fallback: Generate a simple itinerary structure
-        console.log('🔄 Generating fallback itinerary...');
-        parsed = generateFallbackItinerary(destination, duration, budget, requestData.preferences || requestData.interests || []);
+        // Fallback: Generate a simple itinerary structure (in Vietnamese)
+        parsed = generateFallbackItinerary(destinationName || (destination && destination.name) || request.destination || 'điểm đến', days || 1, budget, request.preferences || request.interests || []);
       }
     }
   }
@@ -244,112 +204,111 @@ Không thêm bất kỳ text nào bên ngoài JSON object. Toàn bộ nội dung
 
 // Enhanced fallback itinerary generator when AI parsing fails
 const generateFallbackItinerary = (destination, duration, budget, interests) => {
-  const dailyBudget = Math.floor(budget / duration);
+  const dailyBudget = Math.floor((budget || 0) / Math.max(1, duration));
 
   // Split destination into multiple locations if comma-separated
-  const locations = destination.split(',').map(loc => loc.trim());
-  const mainLocation = locations[0];
-
+  const locations = (destination || 'điểm đến').toString().split(',').map(loc => loc.trim());
   const fallback = {
-    title: `Discover ${locations.length > 1 ? locations.join(' & ') : destination}`,
-    total_budget: budget,
+    title: `Khám phá ${locations.length > 1 ? locations.join(' & ') : destination}`,
+    total_budget: budget || 0,
     days: []
   };
 
-  // Enhanced activity templates based on Vietnamese destinations
+  // Vietnamese activity templates
   const vietnameseActivities = {
-    'culture': ['Visit ancient temples', 'Explore old quarter', 'Traditional craft villages', 'Cultural museums'],
-    'history': ['Historical sites tour', 'War museums', 'Ancient citadel', 'Heritage walking tour'],
-    'food': ['Street food tour', 'Local cooking class', 'Traditional restaurant', 'Market food tasting'],
-    'nature': ['National park visit', 'Boat cruise', 'Cave exploration', 'Mountain hiking'],
-    'adventure': ['Motorbike tour', 'Rock climbing', 'Kayaking', 'Trekking'],
-    'entertainment': ['Water puppet show', 'Night market', 'Rooftop bars', 'Local festivals'],
-    'relaxation': ['Spa treatment', 'Hot springs', 'Beach time', 'Meditation centers'],
-    'shopping': ['Local markets', 'Souvenir shopping', 'Art galleries', 'Handicraft stores'],
-    'sightseeing': ['City landmarks', 'Scenic viewpoints', 'Architecture tour', 'Photo walks'],
-    'transport': ['Airport transfer', 'Train journey', 'Bus travel', 'Local transport']
+    'culture': ['Thăm đền chùa cổ', 'Khám phá khu phố cổ', 'Thăm làng nghề truyền thống', 'Thăm các bảo tàng văn hóa'],
+    'history': ['Tour di tích lịch sử', 'Thăm bảo tàng chiến tranh', 'Thăm thành cổ', 'Đi bộ tham quan di sản'],
+    'food': ['Tour ẩm thực đường phố', 'Lớp học nấu ăn truyền thống', 'Nhà hàng địa phương', 'Thưởng thức món chợ địa phương'],
+    'nature': ['Thăm vườn quốc gia', 'Du thuyền sông/biển', 'Khám phá hang động', 'Leo núi ngắm cảnh'],
+    'adventure': ['Tour xe máy khám phá', 'Leo núi mạo hiểm', 'Chèo thuyền kayak', 'Trekking ngắn'],
+    'entertainment': ['Xem múa rối nước', 'Chợ đêm', 'Quán bar trên mái nhà', 'Lễ hội địa phương'],
+    'relaxation': ['Trải nghiệm spa', 'Suối khoáng nóng', 'Thời gian tắm biển', 'Tham gia lớp thiền'],
+    'shopping': ['Chợ địa phương', 'Mua quà lưu niệm', 'Phòng trưng bày nghệ thuật', 'Cửa hàng thủ công'],
+    'sightseeing': ['Địa danh thành phố', 'Điểm ngắm cảnh', 'Tham quan kiến trúc', 'Đi dạo chụp ảnh'],
+    'transport': ['Đưa đón sân bay', 'Hành trình tàu/xe', 'Di chuyển bằng xe buýt địa phương', 'Thuê phương tiện địa phương']
   };
 
-  // Valid activity types that match the controller validation
-  const validTypes = ['food', 'transport', 'sightseeing', 'entertainment', 'accommodation',
-    'shopping', 'nature', 'culture', 'adventure', 'relaxation', 'history', 'other'];
+  const validTypes = ['food', 'transport', 'sightseeing', 'entertainment', 'accommodation', 'shopping', 'nature', 'culture', 'adventure', 'relaxation', 'history', 'other'];
 
-  // Map interests to valid types
   const mapInterestToValidType = (interest) => {
-    const normalizedInterest = interest.toLowerCase();
-    if (validTypes.includes(normalizedInterest)) {
-      return normalizedInterest;
-    }
-    // Default mappings for common interests
+    if (!interest) return 'sightseeing';
+    const normalizedInterest = interest.toString().toLowerCase();
+    if (validTypes.includes(normalizedInterest)) return normalizedInterest;
     const mappings = {
       'cultural': 'culture',
       'historical': 'history',
       'outdoor': 'nature',
       'nightlife': 'entertainment',
-      'dining': 'food'
+      'dining': 'food',
+      'ẩm thực': 'food',
+      'văn hóa': 'culture',
+      'thiên nhiên': 'nature'
     };
     return mappings[normalizedInterest] || 'sightseeing';
   };
 
-  const timeSlots = ['08:00', '10:30', '12:30', '15:00', '18:30'];
-  const mealTimes = ['breakfast', 'lunch', 'dinner'];
+  const timeSlots = ['08:00', '11:30', '14:30', '17:30'];
 
   for (let day = 1; day <= duration; day++) {
+    const currentLocation = locations[(day - 1) % locations.length] || locations[0];
     const dayActivities = [];
-    let dayTotal = 0;
-    const currentLocation = locations[(day - 1) % locations.length];
 
-    // Morning activity
-    const morningInterest = mapInterestToValidType(interests[0] || 'culture');
-    const morningActivities = vietnameseActivities[morningInterest] || vietnameseActivities['culture'];
+    // Morning
+    const morningType = mapInterestToValidType(interests[0] || 'culture');
+    const morningOptions = vietnameseActivities[morningType] || vietnameseActivities['culture'];
     dayActivities.push({
-      time: '08:00',
-      activity: `${morningActivities[Math.floor(Math.random() * morningActivities.length)]} in ${currentLocation}`,
-      location: currentLocation,
+      activity_name: `${morningOptions[Math.floor(Math.random() * morningOptions.length)]} tại ${currentLocation}`,
+      poi_id: null,
+      start_time: timeSlots[0],
+      duration_hours: 2.5,
+      description: `Hoạt động buổi sáng ở ${currentLocation} phù hợp với sở thích ${interests[0] || 'văn hóa'}`,
       cost: Math.floor(dailyBudget * 0.25),
-      duration: '2.5 hours',
-      type: morningInterest
+      optional: false
     });
 
     // Lunch
     dayActivities.push({
-      time: '12:00',
-      activity: `Traditional Vietnamese lunch at local restaurant`,
-      location: `${currentLocation} local restaurant`,
+      activity_name: `Ăn trưa món Việt tại nhà hàng địa phương ở ${currentLocation}`,
+      poi_id: null,
+      start_time: '12:00',
+      duration_hours: 1.5,
+      description: `Thưởng thức ẩm thực địa phương tại ${currentLocation}`,
       cost: Math.floor(dailyBudget * 0.15),
-      duration: '1.5 hours',
-      type: 'food'
+      optional: false
     });
 
-    // Afternoon activity
-    const afternoonInterest = mapInterestToValidType(interests[1] || interests[0] || 'nature');
-    const afternoonActivities = vietnameseActivities[afternoonInterest] || vietnameseActivities['nature'];
+    // Afternoon
+    const afternoonType = mapInterestToValidType(interests[1] || interests[0] || 'nature');
+    const afternoonOptions = vietnameseActivities[afternoonType] || vietnameseActivities['nature'];
     dayActivities.push({
-      time: '14:30',
-      activity: `${afternoonActivities[Math.floor(Math.random() * afternoonActivities.length)]} near ${currentLocation}`,
-      location: currentLocation,
+      activity_name: `${afternoonOptions[Math.floor(Math.random() * afternoonOptions.length)]} gần ${currentLocation}`,
+      poi_id: null,
+      start_time: timeSlots[2],
+      duration_hours: 3,
+      description: `Hoạt động buổi chiều tại ${currentLocation}`,
       cost: Math.floor(dailyBudget * 0.35),
-      duration: '3 hours',
-      type: afternoonInterest
+      optional: false
     });
 
-    // Evening activity/dinner
-    const eveningInterest = mapInterestToValidType(interests[2] || 'food');
-    const eveningActivities = vietnameseActivities[eveningInterest] || vietnameseActivities['food'];
+    // Evening
+    const eveningType = mapInterestToValidType(interests[2] || 'food');
+    const eveningOptions = vietnameseActivities[eveningType] || vietnameseActivities['food'];
     dayActivities.push({
-      time: '18:30',
-      activity: `${eveningActivities[Math.floor(Math.random() * eveningActivities.length)]} in ${currentLocation}`,
-      location: currentLocation,
+      activity_name: `${eveningOptions[Math.floor(Math.random() * eveningOptions.length)]} buổi tối tại ${currentLocation}`,
+      poi_id: null,
+      start_time: '18:30',
+      duration_hours: 2,
+      description: `Buổi tối thư giãn tại ${currentLocation}`,
       cost: Math.floor(dailyBudget * 0.25),
-      duration: '2 hours',
-      type: eveningInterest
+      optional: false
     });
 
-    dayTotal = dayActivities.reduce((sum, act) => sum + act.cost, 0);
+    const dayTotal = dayActivities.reduce((s, a) => s + (a.cost || 0), 0);
 
     fallback.days.push({
-      day: day,
-      theme: `Day ${day} - ${currentLocation} ${interests[0] || 'Culture'} & ${interests[1] || 'Nature'}`,
+      day_number: day,
+      title: `Ngày ${day} - ${currentLocation}`,
+      description: `Gợi ý hoạt động cho Ngày ${day} tại ${currentLocation}`,
       activities: dayActivities,
       day_total: dayTotal
     });

@@ -5,7 +5,6 @@ const aiService = require('../services/ai.service');
 const Destination = require('../models/destination.model');
 const PointOfInterest = require('../models/point-of-interest.model');
 const Tour = require('../models/tour.model');
-// const ItineraryActivity = require('../models/itinerary-activity.model'); // Model doesn't exist
 
 /**
  * Helper functions for time calculations
@@ -43,8 +42,6 @@ const getTimeSlot = (timeStr) => {
 exports.createRequest = async (req, res) => {
   try {
     const payload = req.body;
-    console.log('🛰️ AI Request payload:', JSON.stringify(payload).slice(0, 1000));
-    // Expect payload: { user_id, destination, destination_id (optional), start_date, end_date, duration_days, participant_number, age_range, budget_level, preferences }
 
     // If destination_id not provided, try to find it by destination name
     if (!payload.destination_id && payload.destination) {
@@ -71,14 +68,6 @@ exports.generateItineraryFromRequest = async (req, res) => {
     const request = await AiItineraryRequest.findById(requestId);
     if (!request) return res.status(404).json({ success: false, message: 'Không tìm thấy yêu cầu' });
 
-    console.log(`🛰️ Generating itinerary for request ${requestId}`);
-    console.log(`📋 Request details:`, {
-      destination: request.destination,
-      preferences: request.preferences,
-      budget_total: request.budget_total,
-      duration_days: request.duration_days
-    });
-
     // Mark processing
     request.status = 'processing';
     await request.save();
@@ -88,7 +77,6 @@ exports.generateItineraryFromRequest = async (req, res) => {
 
     // CASE 1: User doesn't know where to go - AI suggests destination
     if (!request.destination && !request.destination_id) {
-      console.log('🤔 User has no destination - asking AI for suggestion...');
 
       try {
         // Get all available destinations from DB
@@ -140,7 +128,6 @@ exports.generateItineraryFromRequest = async (req, res) => {
     }
     // CASE 2: User specified destination
     else {
-      console.log('� User specified destination:', request.destination || 'by ID');
 
       // Find destination (sử dụng field 'name' theo Destination model)
       if (request.destination_id) {
@@ -306,10 +293,6 @@ exports.generateItineraryFromRequest = async (req, res) => {
         dayPicks[bestDay].push(poi);
         dayMinutes[bestDay] += totalTimeNeeded;
       }
-
-      console.log('🛰️ Balanced distribution:', dayPicks.map((picks, i) =>
-        `Day ${i + 1}: ${picks.length} POIs (${(dayMinutes[i] / 60).toFixed(1)}h)`
-      ).join(', '));
 
       // Create itineraries for each day
       for (let d = 0; d < days; d++) {
@@ -655,33 +638,13 @@ exports.customizeItinerary = async (req, res) => {
 
             // Handle activities array update carefully
             if (dayUpdate.activities && Array.isArray(dayUpdate.activities)) {
-              console.log('🔄 Updating activities for day', dayUpdate.dayNumber);
-              console.log('📊 Activities data:', dayUpdate.activities.map(a => ({
-                activityId: a.activityId,
-                activity: a.activity,
-                duration: a.duration,
-                cost: a.cost,
-                type: a.type
-              })));
-
-              // ✅ UNIFIED VALIDATION: Use schema static method
               const validation = Itinerary.validateActivities(dayUpdate.activities, 'ai_gen');
               if (!validation.valid) {
-                console.log('❌ Activities validation failed:', validation.error);
                 throw new Error(`Activities validation failed: ${validation.error}`);
               }
 
               // ✅ UNIFIED NORMALIZATION: Use schema static method  
               const normalizedActivities = Itinerary.normalizeActivities(dayUpdate.activities, 'ai_gen');
-
-              console.log('✅ Activities normalized:', normalizedActivities.map(a => ({
-                activityId: a.activityId,
-                activity: a.activity,
-                activityType: a.activityType,
-                duration: a.duration,
-                cost: a.cost,
-                userModified: a.userModified
-              })));
 
               dayToUpdate.activities = normalizedActivities;
 
