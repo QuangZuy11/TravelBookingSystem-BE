@@ -5,6 +5,7 @@ const aiService = require('../services/ai.service');
 const Destination = require('../models/destination.model');
 const PointOfInterest = require('../models/point-of-interest.model');
 const Tour = require('../models/tour.model');
+const mongoose = require('mongoose');
 
 /**
  * Helper functions for time calculations
@@ -30,6 +31,61 @@ const getTimeSlot = (timeStr) => {
   if (hour < 17) return 'afternoon';
   if (hour < 21) return 'evening';
   return 'night';
+};
+
+// Parse day number which may come as a number or a localized string like "Ngày 1"
+const parseDayNumber = (val) => {
+  if (val === undefined || val === null) return 1;
+  if (typeof val === 'number') return val;
+  const s = String(val);
+  const m = s.match(/(\d+)/);
+  return m ? parseInt(m[1], 10) : 1;
+};
+
+// Normalize incoming activities but preserve client-provided subdocument _id and activityId when possible
+const preserveNormalizeActivities = (incomingActivities, itineraryType) => {
+  if (!incomingActivities || !Array.isArray(incomingActivities)) return [];
+
+  // First, let the model generate a normalized version (fills defaults, parses duration)
+  const normalized = Itinerary.normalizeActivities(incomingActivities, itineraryType);
+
+  // Try to preserve provided _id / id and activityId by matching activityId or provided _id
+  for (const n of normalized) {
+    const match = incomingActivities.find(a => {
+      if (!a) return false;
+      if (a.activityId && n.activityId && String(a.activityId) === String(n.activityId)) return true;
+      if (a._id && String(a._id) === String(n._id)) return true;
+      if (a.id && String(a.id) === String(n._id)) return true;
+      return false;
+    });
+
+    if (match) {
+      // Preserve client-provided embedded document id if it's a valid ObjectId
+      // If it's not a valid ObjectId (e.g. custom client id like 'activity_1_2'),
+      // do NOT assign it to the MongoDB _id field; instead preserve it as activityId.
+      try {
+        if (match._id && mongoose.Types.ObjectId.isValid(String(match._id))) {
+          n._id = match._id;
+        } else if (match.id && mongoose.Types.ObjectId.isValid(String(match.id))) {
+          n._id = match.id;
+        } else {
+          // If the client provided a non-ObjectId identifier, keep it as activityId
+          if (match._id && !mongoose.Types.ObjectId.isValid(String(match._id))) n.activityId = String(match._id);
+          if (match.id && !mongoose.Types.ObjectId.isValid(String(match.id))) n.activityId = String(match.id);
+        }
+      } catch (err) {
+        // Fallback: don't assign invalid _id
+        if (match.activityId) n.activityId = match.activityId;
+      }
+      // Preserve activityId if client provided a custom value
+      if (match.activityId) n.activityId = match.activityId;
+      // Preserve userModified flags
+      if (match.userModified !== undefined) n.userModified = match.userModified;
+      if (match.user_modified !== undefined) n.userModified = match.user_modified;
+    }
+  }
+
+  return normalized;
 };
 
 /**
@@ -195,11 +251,19 @@ exports.generateItineraryFromRequest = async (req, res) => {
       tour = await Tour.findById(request.tour_id);
     }
 
+    // Create a placeholder ObjectId to use as origin_id for itineraries.
+    // We avoid saving an incomplete AiGeneratedItinerary (which would fail validation)
+    // and instead create/save the AiGeneratedItinerary after the day documents are built.
+    const placeholderId = new mongoose.Types.ObjectId();
+    let aiGenRecord = null; // will be created after itineraries exist
+
     if (aiPlan && Array.isArray(aiPlan.days) && aiPlan.days.length > 0) {
       // Create from AI plan
       for (const day of aiPlan.days) {
-        const dayNumber = day.day_number || 1;
+        const dayNumber = parseDayNumber(day.day_number || day.dayNumber);
         const itObj = new Itinerary({
+          origin_id: placeholderId,
+          type: 'ai_gen',
           tour_id: tour ? tour._id : null,
           provider_id: tour ? tour.provider_id : null,
           day_number: dayNumber,
@@ -299,6 +363,8 @@ exports.generateItineraryFromRequest = async (req, res) => {
         const dayNumber = d + 1;
         const title = `Day ${dayNumber} - ${request.destination}`;
         const itObj = new Itinerary({
+          origin_id: placeholderId,
+          type: 'ai_gen',
           tour_id: tour ? tour._id : null,
           provider_id: tour ? tour.provider_id : null,
           day_number: dayNumber,
@@ -347,23 +413,32 @@ exports.generateItineraryFromRequest = async (req, res) => {
       }
     }
 
-    // Save AI Generated record
-    const aiGen = new AiGeneratedItinerary({
+    // Create and save the final AiGeneratedItinerary using the placeholderId
+    aiGenRecord = new AiGeneratedItinerary({
+      _id: placeholderId,
       request_id: request._id,
+      user_id: request.user_id || (req.user && req.user.id) || null,
+      destination: destinationName || request.destination || '',
       destination_id: destination ? destination._id : request.destination_id,
+      duration_days: days || request.duration_days || 0,
+      budget_total: request.budget_total || 0,
+      participant_number: request.participant_number || 1,
+      preferences: request.preferences || [],
       tour_id: tour ? tour._id : null,
       provider_id: tour ? tour.provider_id : null,
       itinerary_data: createdItineraries,
       summary: destination
         ? `Generated ${createdItineraries.length} itinerary days for ${destination.name}`
-        : `Generated ${createdItineraries.length} itinerary days for ${destinationName || 'destination'}`
+        : `Generated ${createdItineraries.length} itinerary days for ${destinationName || 'destination'}`,
+      status: 'done'
     });
-    await aiGen.save();
+
+    await aiGenRecord.save();
 
     // Update request
     request.status = 'completed';
     request.ai_response = {
-      generated_id: aiGen._id,
+      generated_id: aiGenRecord._id,
       destination_used: destinationName,
       ai_suggested: !!request.ai_suggested_destination
     };
@@ -372,7 +447,7 @@ exports.generateItineraryFromRequest = async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'Đã tạo lịch trình thành công',
-      data: aiGen,
+      data: aiGenRecord,
       destination: {
         name: destinationName,
         id: destination?._id,
@@ -434,10 +509,10 @@ exports.getUserItineraries = async (req, res) => {
 // Get a specific generated itinerary by ID
 exports.getItineraryById = async (req, res) => {
   try {
-    const { itineraryId } = req.params;
-    console.log(`🛰️ Fetching itinerary ${itineraryId}`);
+    const { aiGeneratedId } = req.params;
+    console.log(`🛰️ Fetching itinerary ${aiGeneratedId}`);
 
-    const itinerary = await AiGeneratedItinerary.findById(itineraryId);
+    const itinerary = await AiGeneratedItinerary.findById(aiGeneratedId);
 
     if (!itinerary) {
       return res.status(404).json({
@@ -446,37 +521,63 @@ exports.getItineraryById = async (req, res) => {
       });
     }
 
-    // Re-query activities from DB to get latest data (not cached embedded data)
-    const itineraryDataWithLatest = [];
+    // Re-query activities from DB to get latest data (not rely on possibly stale itinerary_data)
+    let itineraryDataWithLatest = [];
 
-    for (const dayData of itinerary.itinerary_data) {
-      const itineraryDay = await Itinerary.findById(dayData.itinerary._id);
+    if (itinerary.status === 'custom') {
+      // For customized records, ignore stored itinerary_data (may be stale) and fetch
+      // the actual customized Itinerary documents that reference this AI record via origin_id.
+      const customizedDays = await Itinerary.find({ origin_id: itinerary._id, type: 'customized' }).sort({ day_number: 1 });
 
-      if (!itineraryDay) continue;
-
-      // Activities are embedded in the itinerary document
-      const activities = itineraryDay.activities || [];
-
-      // Populate POI details
-      for (const activity of activities) {
-        if (activity.poi_id) {
-          const poi = await PointOfInterest.findById(activity.poi_id);
-          activity.poi_details = poi;
+      for (const itineraryDay of customizedDays) {
+        const activities = itineraryDay.activities || [];
+        for (const activity of activities) {
+          if (activity.poi_id) {
+            const poi = await PointOfInterest.findById(activity.poi_id);
+            activity.poi_details = poi;
+          }
         }
-      }
 
-      itineraryDataWithLatest.push({
-        itinerary: itineraryDay,
-        activities: activities
-      });
+        itineraryDataWithLatest.push({ itinerary: itineraryDay, activities });
+      }
+    } else {
+      // Original AI-generated record: use stored itinerary_data to locate days (supports both
+      // embedded itinerary object or simple id reference)
+      for (const dayData of itinerary.itinerary_data || []) {
+        const refId = dayData?.itinerary?._id || dayData?.itinerary || null;
+        if (!refId) continue;
+
+        const itineraryDay = await Itinerary.findById(refId);
+        if (!itineraryDay) continue;
+
+        const activities = itineraryDay.activities || [];
+        for (const activity of activities) {
+          if (activity.poi_id) {
+            const poi = await PointOfInterest.findById(activity.poi_id);
+            activity.poi_details = poi;
+          }
+        }
+
+        itineraryDataWithLatest.push({ itinerary: itineraryDay, activities });
+      }
     }
 
     const response = {
       _id: itinerary._id,
       request_id: itinerary.request_id,
+      user_id: itinerary.user_id,
+      destination: itinerary.destination,
       destination_id: itinerary.destination_id,
+      duration_days: itinerary.duration_days,
+      budget_total: itinerary.budget_total,
+      participant_number: itinerary.participant_number,
+      preferences: itinerary.preferences,
       tour_id: itinerary.tour_id,
       provider_id: itinerary.provider_id,
+      summary: itinerary.summary,
+      status: itinerary.status,
+      created_at: itinerary.created_at,
+      updated_at: itinerary.updated_at,
       itinerary_data: itineraryDataWithLatest
     };
 
@@ -515,10 +616,10 @@ exports.getUserRequests = async (req, res) => {
 // Delete an itinerary
 exports.deleteItinerary = async (req, res) => {
   try {
-    const { itineraryId } = req.params;
-    console.log(`🛰️ Deleting itinerary ${itineraryId}`);
+    const { aiGeneratedId } = req.params;
+    console.log(`🛰️ Deleting itinerary ${aiGeneratedId}`);
 
-    const itinerary = await AiGeneratedItinerary.findById(itineraryId);
+    const itinerary = await AiGeneratedItinerary.findById(aiGeneratedId);
 
     if (!itinerary) {
       return res.status(404).json({
@@ -532,7 +633,7 @@ exports.deleteItinerary = async (req, res) => {
     await Itinerary.deleteMany({ _id: { $in: itineraryIds } });
 
     // Delete the generated itinerary record
-    await AiGeneratedItinerary.findByIdAndDelete(itineraryId);
+    await AiGeneratedItinerary.findByIdAndDelete(aiGeneratedId);
 
     res.status(200).json({
       success: true,
@@ -587,6 +688,9 @@ exports.customizeItinerary = async (req, res) => {
   try {
     const { aiGeneratedId } = req.params;
     const hasUpdateData = req.body && Object.keys(req.body).length > 0;
+    // Track if we initialize a customized record in this request and map original->customized day IDs
+    let initializedIdMap = null;
+    let justInitialized = false;
 
     console.log('🔧 customizeItinerary called:', { aiGeneratedId, hasUpdateData, bodyKeys: Object.keys(req.body || {}) });
 
@@ -625,7 +729,23 @@ exports.customizeItinerary = async (req, res) => {
             activitiesCount: dayUpdate.activities?.length
           });
 
-          const dayToUpdate = await Itinerary.findById(dayUpdate.dayId);
+          let dayToUpdate = await Itinerary.findById(dayUpdate.dayId);
+
+          // If the client sent an original AI dayId (origin_id = original AI record)
+          // but the request is targeting the customized AI record (aiGeneratedId),
+          // try to map the original day to the corresponding customized day by day_number.
+          if (dayToUpdate && dayToUpdate.origin_id.toString() !== aiGeneratedId) {
+            try {
+              const mapped = await Itinerary.findOne({ origin_id: aiGeneratedId, day_number: dayToUpdate.day_number, type: 'customized' });
+              if (mapped) {
+                console.log('🔁 Mapped original day to customized day:', { from: dayToUpdate._id.toString(), to: mapped._id.toString() });
+                dayToUpdate = mapped;
+              }
+            } catch (mapErr) {
+              console.warn('⚠️ Error mapping original day to customized day', mapErr.message);
+            }
+          }
+
           if (dayToUpdate && dayToUpdate.origin_id.toString() === aiGeneratedId) {
             console.log('📝 Found day to update:', dayToUpdate._id);
 
@@ -643,8 +763,8 @@ exports.customizeItinerary = async (req, res) => {
                 throw new Error(`Activities validation failed: ${validation.error}`);
               }
 
-              // ✅ UNIFIED NORMALIZATION: Use schema static method  
-              const normalizedActivities = Itinerary.normalizeActivities(dayUpdate.activities, 'ai_gen');
+              // ✅ UNIFIED NORMALIZATION: Use schema static method but preserve client IDs
+              const normalizedActivities = preserveNormalizeActivities(dayUpdate.activities, 'ai_gen');
 
               dayToUpdate.activities = normalizedActivities;
 
@@ -818,12 +938,32 @@ exports.customizeItinerary = async (req, res) => {
 
       // 2. Clone ITINERARIES records (keep original, create new customized versions)
       customizedDays = []; // Initialize array for customized days
+      const idMap = {};
       for (const originalDay of originalDays) {
         const customizedDay = Itinerary.createCustomizedCopy(originalDay);
         customizedDay.origin_id = customizedAiRecord._id; // Point to new customized AI record
         customizedDay.type = 'customized';
         await customizedDay.save();
         customizedDays.push(customizedDay);
+
+        // Record mapping from original day id -> new customized day id
+        try {
+          idMap[originalDay._id.toString()] = customizedDay._id.toString();
+        } catch (mapErr) {
+          // fallback: use string conversion
+          idMap[String(originalDay._id)] = String(customizedDay._id);
+        }
+      }
+
+      initializedIdMap = idMap;
+      justInitialized = true;
+
+      // Update the customized AI record to reference the newly created customized day documents
+      try {
+        customizedAiRecord.itinerary_data = customizedDays.map(d => ({ itinerary: d, activities: d.activities }));
+        await customizedAiRecord.save();
+      } catch (saveMapErr) {
+        console.warn('⚠️ Could not attach cloned days to customized AI record:', saveMapErr.message);
       }
 
       console.log(`✅ Cloned ${customizedDays.length} ITINERARIES records to customized AI record: ${customizedAiRecord._id}`);
@@ -851,7 +991,7 @@ exports.customizeItinerary = async (req, res) => {
           if (dayUpdate.theme) dayToUpdate.title = dayUpdate.theme;
           if (dayUpdate.description !== undefined) dayToUpdate.description = dayUpdate.description;
 
-          // ✅ UNIFIED ACTIVITIES HANDLING: Use schema static methods
+          // ✅ UNIFIED ACTIVITIES HANDLING: Use schema static methods and preserve client IDs
           if (dayUpdate.activities && Array.isArray(dayUpdate.activities)) {
             // Validate activities using unified validation
             const validation = Itinerary.validateActivities(dayUpdate.activities, dayToUpdate.type);
@@ -864,7 +1004,7 @@ exports.customizeItinerary = async (req, res) => {
             }
 
             // Normalize activities using unified normalization
-            const normalizedActivities = Itinerary.normalizeActivities(dayUpdate.activities, dayToUpdate.type);
+            const normalizedActivities = preserveNormalizeActivities(dayUpdate.activities, dayToUpdate.type);
             dayToUpdate.activities = normalizedActivities;
           }
 
@@ -918,6 +1058,9 @@ exports.customizeItinerary = async (req, res) => {
         duration_days: customizedAiRecord ? customizedAiRecord.duration_days : null,
         lastUpdated: new Date().toISOString(), // Add timestamp to force refresh
         updated: hasUpdateData, // Flag to indicate if this was an update
+        // If we just initialized a customized version in this request, return a mapping
+        // so the frontend can replace original day IDs with the customized ones.
+        id_map: justInitialized ? initializedIdMap : undefined,
         days: customizedDays.map(day => {
           const formattedDay = Itinerary.formatResponse(day);
           return {

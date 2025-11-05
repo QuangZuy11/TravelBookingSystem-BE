@@ -2,11 +2,9 @@ const mongoose = require("mongoose");
 
 const itinerarySchema = new mongoose.Schema(
     {
-        // UNIFIED origin_id approach
         origin_id: {
             type: mongoose.Schema.Types.ObjectId,
             required: true,
-            // References Tour._id OR AiGeneratedItinerary._id depending on type
         },
 
         // Type determines what origin_id references  
