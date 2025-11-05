@@ -278,7 +278,7 @@ exports.updateHotel = async (req, res) => {
         }
 
         // Parse JSON strings in req.body for array/object fields
-        const fieldsToParseAsJSON = ['reviews', 'amenities', 'images', 'address', 'policies', 'contactInfo', 'priceRange', 'existing_images'];
+        const fieldsToParseAsJSON = ['reviews', 'amenities', 'images', 'address', 'policies', 'contactInfo', 'priceRange', 'existing_images', 'promotions'];
 
         fieldsToParseAsJSON.forEach(field => {
             if (req.body[field] && typeof req.body[field] === 'string') {
@@ -291,9 +291,13 @@ exports.updateHotel = async (req, res) => {
 
         let finalImageUrls = [];
 
+        // Fetch current hotel to preserve images when frontend doesn't send existing_images
+        const currentHotel = await Hotel.findOne({ _id: req.params.id, providerId: req.params.providerId }).select('images');
+
         // Get existing images from frontend (ONLY images user wants to keep)
-        // Frontend sends existing_images = array of URLs to keep (can be reordered, some deleted)
-        const existingImages = req.body.existing_images || [];
+        // If frontend does not send the field `existing_images` we will PRESERVE currentHotel.images
+        const hasExistingImagesField = Object.prototype.hasOwnProperty.call(req.body, 'existing_images');
+        const existingImages = hasExistingImagesField ? (Array.isArray(req.body.existing_images) ? req.body.existing_images : []) : null;
 
         if (req.files && req.files.length > 0) {
             req.files.forEach((file, i) => {
@@ -309,17 +313,57 @@ exports.updateHotel = async (req, res) => {
 
             const newImageUrls = uploadedFiles.map(f => f.direct_url);
 
-            // Combine: existing (kept by user) + new uploaded
-            finalImageUrls = [...existingImages, ...newImageUrls];
+            // Combine: existing (kept by user if provided) + new uploaded
+            const kept = existingImages !== null ? existingImages : (currentHotel?.images || []);
+            finalImageUrls = [...kept, ...newImageUrls];
         } else {
-            // No new files - use existing_images as-is
-            // This allows: delete images, reorder images
-            finalImageUrls = existingImages;
+            // No new files
+            if (existingImages !== null) {
+                // Frontend explicitly sent existing_images (may be empty to delete all)
+                finalImageUrls = existingImages;
+            } else {
+                // Frontend did not send existing_images — preserve current images
+                finalImageUrls = currentHotel?.images || [];
+            }
         }
 
         req.body.images = finalImageUrls;
 
         delete req.body.existing_images;
+
+        // Normalize promotions: ensure it's an array of valid ObjectId strings (or remove invalid entries)
+        if (req.body.promotions) {
+            try {
+                // If promotions came as JSON string it was already parsed above; ensure it's an array
+                if (!Array.isArray(req.body.promotions)) {
+                    // attempt to coerce strings like "[\"id1\",\"id2\"]"
+                    try {
+                        req.body.promotions = JSON.parse(req.body.promotions);
+                    } catch (e) {
+                        // leave as-is
+                    }
+                }
+
+                if (Array.isArray(req.body.promotions)) {
+                    // Map objects with _id to string id, filter out invalid ids and stray values like '[]'
+                    req.body.promotions = req.body.promotions
+                        .map(p => {
+                            if (!p) return null;
+                            if (typeof p === 'string') return p.trim();
+                            if (typeof p === 'object' && p._id) return String(p._id);
+                            return null;
+                        })
+                        .filter(Boolean)
+                        .filter(id => mongoose.Types.ObjectId.isValid(id));
+
+                    // If empty after cleaning, delete the field so mongoose won't try to cast invalid values
+                    if (req.body.promotions.length === 0) delete req.body.promotions;
+                }
+            } catch (e) {
+                // If anything goes wrong, remove promotions to avoid CastError
+                delete req.body.promotions;
+            }
+        }
 
         const hotel = await Hotel.findOneAndUpdate(
             { _id: req.params.id, providerId: req.params.providerId },
