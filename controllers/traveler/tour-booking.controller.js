@@ -412,7 +412,7 @@ exports.getUserTourBookings = async (req, res) => {
     const bookings = await TourBooking.find(query)
       .populate({
         path: "tour_id",
-        select: "title price image destination duration",
+        select: "title price image destination duration meeting_point",
       })
       .sort({ booking_date: -1 })
       .skip(skip)
