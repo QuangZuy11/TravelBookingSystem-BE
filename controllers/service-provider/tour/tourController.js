@@ -92,7 +92,7 @@ exports.createTour = async (req, res) => {
         } else {
             tourData = req.body;
 
-            // Parse JSON strings in tourData for array/object fields
+            // Parse JSON strings in tourData for array/object fields only if they are strings
             const fieldsToParseAsJSON = [
                 'description', 'services', 'languages_offered', 'highlights',
                 'what_to_bring', 'available_dates', 'capacity', 'booking_info',
@@ -102,9 +102,12 @@ exports.createTour = async (req, res) => {
             fieldsToParseAsJSON.forEach(field => {
                 if (tourData[field] && typeof tourData[field] === 'string') {
                     try {
-                        tourData[field] = JSON.parse(tourData[field]);
+                        // Chỉ parse nếu string bắt đầu bằng { hoặc [
+                        if (tourData[field].trim().startsWith('{') || tourData[field].trim().startsWith('[')) {
+                            tourData[field] = JSON.parse(tourData[field]);
+                        }
                     } catch (e) {
-                        // Keep as string if JSON parse fails
+                        console.warn(`Failed to parse ${field} as JSON:`, e.message);
                     }
                 }
             });
@@ -122,6 +125,14 @@ exports.createTour = async (req, res) => {
         // 1. Create tour with image handling
         // Priority: tourData.image (URL from frontend) > '' (will upload file later)
         const initialImage = tourData.image || (req.file ? '' : tourData.image);
+
+        // Thêm giá cho mỗi ngày trong available_dates nếu chưa có
+        if (tourData.available_dates && Array.isArray(tourData.available_dates)) {
+            tourData.available_dates = tourData.available_dates.map(date => ({
+                ...date,
+                price: date.price || tourData.price // Sử dụng giá chung nếu không có giá riêng
+            }));
+        }
 
         createdTour = await Tour.create({
             ...tourData,

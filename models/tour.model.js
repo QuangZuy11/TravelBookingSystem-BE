@@ -20,7 +20,6 @@ const tourSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    // destination stored as a free-form string (name/place) instead of ObjectId
     destination: {
       type: String,
       required: false,
@@ -33,7 +32,7 @@ const tourSchema = new mongoose.Schema(
     },
     duration_hours: {
       type: String,
-      required: false // Made optional, can use 'duration' instead
+      required: false
     },
     duration: {
       type: String,
@@ -41,13 +40,13 @@ const tourSchema = new mongoose.Schema(
     },
     difficulty: {
       type: String,
-      enum: ['easy', 'moderate', 'hard'],
+      enum: ['easy', 'moderate', 'challenging', 'difficult'],
       default: 'easy'
     },
     meeting_point: {
       address: {
         type: String,
-        required: false
+        required: true
       },
       instructions: {
         type: String,
@@ -74,7 +73,13 @@ const tourSchema = new mongoose.Schema(
       available_slots: {
         type: Number,
         required: true,
-        min: 0
+        min: 0,
+        default: function () { return this.parent().capacity.max_participants; }
+      },
+      price: {
+        type: Number,
+        required: true,
+        min: [1000, 'Price must be at least 1,000 VND']
       },
       status: {
         type: String,
@@ -103,56 +108,10 @@ const tourSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
-
-    // Advanced tour fields
-    difficulty: {
-      type: String,
-      enum: ['easy', 'moderate', 'challenging', 'difficult'],
-      default: 'easy'
-    },
-
-    meeting_point: {
-      type: String,
-      default: ''
-    },
-
-    capacity: {
-      type: Number,
-      default: 20,
-      min: 1
-    },
-
-    // Departure date - nullable for flexible scheduling
     departure_date: {
       type: Date,
       default: null
     },
-
-    // Available dates for tours with multiple departure options
-    available_dates: [{
-      date: {
-        type: Date,
-        required: true
-      },
-      available_slots: {
-        type: Number,
-        required: true,
-        min: 0,
-        default: function () { return this.parent().capacity || 20; }
-      },
-      price: {
-        type: Number,
-        required: true,
-        min: 0
-      }
-    }],
-
-    status: {
-      type: String,
-      enum: ['active', 'inactive', 'draft', 'suspended'],
-      default: 'draft'
-    },
-
     promotions: [
       {
         type: mongoose.Schema.Types.ObjectId,
