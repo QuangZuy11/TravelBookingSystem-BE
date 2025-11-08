@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { STANDARD_AMENITIES } = require('../constants/amenities.constants');
 
 const hotelSchema = new mongoose.Schema({
     providerId: {
@@ -36,7 +37,9 @@ const hotelSchema = new mongoose.Schema({
         required: true
     },
     amenities: [{
-        type: String
+        type: String,
+        enum: STANDARD_AMENITIES,
+        trim: true
     }],
     images: [{
         type: String,

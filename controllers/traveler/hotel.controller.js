@@ -345,17 +345,18 @@ function formatOpeningHours(openingHours) {
 
 /**
  * Lấy danh sách tiện nghi khả dụng
+ * Trả về danh sách tiện nghi chuẩn đồng bộ với Frontend
  */
 exports.getAvailableAmenities = async (_req, res) => {
     try {
-        const amenities = await Hotel.distinct('amenities', { status: 'active' });
-        const validAmenities = amenities.filter(
-            amenity => amenity && typeof amenity === 'string' && amenity.trim() !== ''
-        );
+        const { STANDARD_AMENITIES, AMENITIES_DETAILS } = require('../../constants/amenities.constants');
 
         res.status(200).json({
             success: true,
-            data: validAmenities,
+            data: {
+                amenities: STANDARD_AMENITIES,
+                details: AMENITIES_DETAILS
+            },
             message: 'Lấy danh sách tiện nghi thành công'
         });
     } catch (error) {

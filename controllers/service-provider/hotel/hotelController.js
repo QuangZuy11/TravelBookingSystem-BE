@@ -2,6 +2,38 @@ const mongoose = require('mongoose');
 const Hotel = require('../../../models/hotel.model');
 const Room = require('../../../models/room.model');
 const googleDriveService = require('../../../services/googleDrive.service');
+const { normalizeAmenity, STANDARD_AMENITIES } = require('../../../constants/amenities.constants');
+
+/**
+ * Helper function: Validate and normalize amenities
+ * @param {Array} amenities - Array of amenity names
+ * @returns {Object} { valid: boolean, normalized: Array, invalid: Array }
+ */
+const validateAndNormalizeAmenities = (amenities) => {
+    if (!amenities || !Array.isArray(amenities)) {
+        return { valid: true, normalized: [], invalid: [] };
+    }
+
+    const normalized = [];
+    const invalid = [];
+
+    amenities.forEach(amenity => {
+        const normalizedAmenity = normalizeAmenity(amenity);
+        if (normalizedAmenity) {
+            if (!normalized.includes(normalizedAmenity)) {
+                normalized.push(normalizedAmenity);
+            }
+        } else {
+            invalid.push(amenity);
+        }
+    });
+
+    return {
+        valid: invalid.length === 0,
+        normalized,
+        invalid
+    };
+};
 
 // Get all hotels for a provider
 exports.getProviderHotels = async (req, res) => {
@@ -214,6 +246,22 @@ exports.createHotel = async (req, res) => {
             });
         }
 
+        // Validate and normalize amenities
+        if (hotelData.amenities) {
+            const amenitiesValidation = validateAndNormalizeAmenities(hotelData.amenities);
+
+            if (!amenitiesValidation.valid) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Invalid amenities',
+                    message: `Các tiện nghi không hợp lệ: ${amenitiesValidation.invalid.join(', ')}`,
+                    validAmenities: STANDARD_AMENITIES
+                });
+            }
+
+            hotelData.amenities = amenitiesValidation.normalized;
+        }
+
         // 1. Create hotel WITHOUT images first
         createdHotel = await Hotel.create({
             ...hotelData,
@@ -288,6 +336,22 @@ exports.updateHotel = async (req, res) => {
                 }
             }
         });
+
+        // Validate and normalize amenities
+        if (req.body.amenities) {
+            const amenitiesValidation = validateAndNormalizeAmenities(req.body.amenities);
+
+            if (!amenitiesValidation.valid) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Invalid amenities',
+                    message: `Các tiện nghi không hợp lệ: ${amenitiesValidation.invalid.join(', ')}`,
+                    validAmenities: STANDARD_AMENITIES
+                });
+            }
+
+            req.body.amenities = amenitiesValidation.normalized;
+        }
 
         let finalImageUrls = [];
 
