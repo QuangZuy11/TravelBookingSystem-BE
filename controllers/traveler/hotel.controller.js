@@ -78,9 +78,18 @@ exports.searchHotels = async (req, res) => {
 
         const skip = (Number(page) - 1) * Number(limit);
 
-        // Get all hotels first
+        // Get all hotels first with promotions
         const hotelsRaw = await Hotel.find(searchQuery)
             .populate('providerId', 'name email phone')
+            .populate({
+                path: 'promotions',
+                match: { 
+                    status: 'active',
+                    startDate: { $lte: new Date() },
+                    endDate: { $gte: new Date() }
+                },
+                select: 'name code description discountType discountValue startDate endDate usageLimit'
+            })
             .sort(sortOptions)
             .skip(skip)
             .limit(Number(limit))
@@ -221,10 +230,19 @@ exports.getHotelById = async (req, res) => {
             });
         }
 
-        // Get hotel details with destination information
+        // Get hotel details with destination information and promotions
         const hotel = await Hotel.findById(hotelId)
             .populate('providerId', 'name email phone')
             .populate('destination_id', 'name description country city image')
+            .populate({
+                path: 'promotions',
+                match: { 
+                    status: 'active',
+                    startDate: { $lte: new Date() },
+                    endDate: { $gte: new Date() }
+                },
+                select: 'name code description discountType discountValue startDate endDate usageLimit'
+            })
             .select('-__v');
 
         if (!hotel) {
@@ -451,6 +469,15 @@ exports.getFeaturedHotels = async (req, res) => {
 
         const featuredHotelsRaw = await Hotel.find({ status: 'active' })
             .populate('providerId', 'name')
+            .populate({
+                path: 'promotions',
+                match: { 
+                    status: 'active',
+                    startDate: { $lte: new Date() },
+                    endDate: { $gte: new Date() }
+                },
+                select: 'name code description discountType discountValue startDate endDate usageLimit'
+            })
             .sort({ rating: -1, bookingsCount: -1 })
             .limit(Number(limit))
             .select('-reviews -__v');
