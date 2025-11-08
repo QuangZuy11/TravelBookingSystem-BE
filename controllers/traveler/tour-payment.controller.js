@@ -281,16 +281,147 @@ exports.getTourPaymentStatus = async (req, res) => {
 
       // Update status nếu có thay đổi
       if (paymentInfo.status === "PAID" && payment.status !== "completed") {
+        console.log("✅ Payment status is PAID, updating to completed...");
+        console.log("   Current payment status:", payment.status);
+        console.log("   PayOS status:", paymentInfo.status);
+
+        // Mark as modified to ensure save triggers hooks
         payment.status = "completed";
         payment.paid_at = new Date();
-        await payment.save();
+        payment.transaction_ref =
+          paymentInfo.transactionDateTime || new Date().toISOString();
+        payment.markModified("status");
+        payment.markModified("paid_at");
+        payment.markModified("transaction_ref");
 
-        // Update booking status
-        await TourBooking.findByIdAndUpdate(payment.booking_id, {
-          status: "paid",
-          "payment.status": "completed",
-          "payment.paid_at": new Date(),
-        });
+        console.log("💾 Saving payment with status:", payment.status);
+        const savedPayment = await payment.save();
+        console.log(
+          "✅ Payment saved successfully, status:",
+          savedPayment.status
+        );
+
+        // Update booking status (backup, post-save hook should handle this)
+        const updatedBooking = await TourBooking.findByIdAndUpdate(
+          payment.booking_id,
+          {
+            status: "paid",
+            "payment.status": "completed",
+            "payment.paid_at": new Date(),
+            "payment.transaction_id": payment.transaction_ref,
+          },
+          { new: true }
+        );
+
+        if (updatedBooking) {
+          console.log("✅ Booking status updated to 'paid'");
+          console.log("   Booking ID:", updatedBooking._id);
+          console.log("   Booking status:", updatedBooking.status);
+        } else {
+          console.error("❌ Failed to update booking status");
+        }
+
+        // Send confirmation email immediately (don't wait for hook)
+        try {
+          console.log("📧 Sending confirmation email from controller...");
+          const booking = await TourBooking.findById(payment.booking_id)
+            .populate({
+              path: "tour_id",
+              select: "title meeting_point",
+            })
+            .populate({
+              path: "customer_id",
+              select: "name email",
+            })
+            .lean();
+
+          if (booking && booking.tour_id && booking.customer_id) {
+            console.log("📧 Booking data loaded, fetching itineraries...");
+            const Itinerary = require("../../models/itinerary.model");
+            const itineraries = await Itinerary.find({
+              origin_id: booking.tour_id._id,
+              type: "tour",
+            })
+              .sort({ day_number: 1 })
+              .lean();
+
+            const {
+              sendTourBookingConfirmationEmail,
+            } = require("../../services/tour-booking-email.service");
+
+            const customerEmail =
+              booking.customer_id.email || booking.contact_info?.email;
+            const customerName =
+              booking.customer_id.name || booking.contact_info?.contact_name;
+
+            console.log("📧 Email details:", {
+              customerEmail,
+              customerName,
+              bookingNumber: booking.booking_number,
+              tourTitle: booking.tour_id.title,
+            });
+
+            if (!customerEmail) {
+              console.error("❌ No email address found for customer");
+              console.error(
+                "   Customer ID email:",
+                booking.customer_id?.email
+              );
+              console.error(
+                "   Contact info email:",
+                booking.contact_info?.email
+              );
+            } else {
+              const emailResult = await sendTourBookingConfirmationEmail({
+                customerEmail,
+                customerName,
+                bookingNumber: booking.booking_number,
+                tourTitle: booking.tour_id.title,
+                tourDate: booking.tour_date,
+                participants: booking.total_participants || 1,
+                totalAmount: booking.pricing?.total_amount || payment.amount,
+                meetingPoint: booking.tour_id.meeting_point,
+                itineraries: itineraries,
+                contactInfo: booking.contact_info,
+              });
+
+              if (emailResult.success) {
+                if (emailResult.dev) {
+                  console.log(
+                    "✅ [DEV MODE] Confirmation email logged to console"
+                  );
+                  console.log(
+                    "   ⚠️  SMTP not configured - email not actually sent!"
+                  );
+                  console.log(
+                    "   📝 To enable email sending, configure SMTP in .env:"
+                  );
+                  console.log("      SMTP_HOST=your-smtp-host");
+                  console.log("      SMTP_PORT=587");
+                  console.log("      SMTP_USER=your-email");
+                  console.log("      SMTP_PASS=your-password");
+                } else {
+                  console.log(
+                    "✅ Confirmation email sent successfully from controller"
+                  );
+                  console.log("   Message ID:", emailResult.messageId);
+                }
+              } else {
+                console.error("❌ Failed to send email:", emailResult.error);
+              }
+            }
+          } else {
+            console.error("❌ Missing booking data for email:", {
+              hasBooking: !!booking,
+              hasTour: !!booking?.tour_id,
+              hasCustomer: !!booking?.customer_id,
+            });
+          }
+        } catch (emailError) {
+          console.error("❌ Error sending confirmation email:", emailError);
+          console.error("   Error stack:", emailError.stack);
+          // Don't throw error, just log it
+        }
       }
 
       res.status(200).json({
