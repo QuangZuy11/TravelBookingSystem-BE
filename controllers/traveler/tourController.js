@@ -2,6 +2,62 @@ const mongoose = require("mongoose");
 const Tour = require("../../models/tour.model");
 const Itinerary = require("../../models/itinerary.model");
 const Feedback = require("../../models/feedback.model");
+const Promotion = require("../../models/promotion.model");
+
+// 🎁 Helper function: Tính giá sau discount và lấy active promotion
+const calculatePriceWithPromotion = (originalPrice, promotions) => {
+  if (!promotions || promotions.length === 0) {
+    return {
+      originalPrice,
+      finalPrice: originalPrice,
+      discount: 0,
+      promotion: null,
+    };
+  }
+
+  const now = new Date();
+
+  // Tìm promotion active (status = 'active' và trong khoảng thời gian)
+  const activePromotion = promotions.find((promo) => {
+    if (!promo) return false;
+    const startDate = new Date(promo.startDate);
+    const endDate = new Date(promo.endDate);
+    return promo.status === "active" && now >= startDate && now <= endDate;
+  });
+
+  if (!activePromotion) {
+    return {
+      originalPrice,
+      finalPrice: originalPrice,
+      discount: 0,
+      promotion: null,
+    };
+  }
+
+  let finalPrice = originalPrice;
+  let discount = 0;
+
+  if (activePromotion.discountType === "percent") {
+    discount = (originalPrice * activePromotion.discountValue) / 100;
+    finalPrice = Math.max(0, originalPrice - discount);
+  } else if (activePromotion.discountType === "amount") {
+    discount = activePromotion.discountValue;
+    finalPrice = Math.max(0, originalPrice - discount);
+  }
+
+  return {
+    originalPrice,
+    finalPrice: Math.round(finalPrice),
+    discount: Math.round(discount),
+    promotion: {
+      id: activePromotion._id,
+      name: activePromotion.name,
+      code: activePromotion.code,
+      discountType: activePromotion.discountType,
+      discountValue: activePromotion.discountValue,
+    },
+  };
+};
 
 // 🧭 Lấy toàn bộ tour cho traveler (có hỗ trợ search, filter, sort)
 const getAllToursForTraveler = async (req, res) => {
@@ -47,7 +103,7 @@ const getAllToursForTraveler = async (req, res) => {
     const tourIds = tours.map((tour) => tour._id);
     const allItineraries = await Itinerary.find({
       origin_id: { $in: tourIds },
-      type: 'tour'
+      type: "tour",
     })
       .sort({ origin_id: 1, day_number: 1 })
       .lean();
@@ -57,12 +113,19 @@ const getAllToursForTraveler = async (req, res) => {
       .populate("user_id", "name")
       .lean();
 
-    // 📊 Nhóm itineraries và feedbacks theo tour_id
+    // 🎁 Lấy promotions cho tất cả tours
+    const allPromotions = await Promotion.find({
+      targetType: "tour",
+      targetId: { $in: tourIds },
+    }).lean();
+
+    // 📊 Nhóm itineraries, feedbacks và promotions theo tour_id
     const itinerariesByTourId = {};
     const feedbacksByTourId = {};
+    const promotionsByTourId = {};
 
     allItineraries.forEach((it) => {
-      const id = it.origin_id.toString();  // Use origin_id instead of tour_id
+      const id = it.origin_id.toString(); // Use origin_id instead of tour_id
       if (!itinerariesByTourId[id]) itinerariesByTourId[id] = [];
       itinerariesByTourId[id].push(it);
     });
@@ -73,63 +136,77 @@ const getAllToursForTraveler = async (req, res) => {
       feedbacksByTourId[id].push(fb);
     });
 
+    allPromotions.forEach((promo) => {
+      const id = promo.targetId.toString();
+      if (!promotionsByTourId[id]) promotionsByTourId[id] = [];
+      promotionsByTourId[id].push(promo);
+    });
+
     // 🧩 Chuẩn hóa dữ liệu trả về với MORE INFORMATION
-    const formattedTours = tours.map((tour) => ({
-      id: tour._id,
-      name: tour.title,
-      destination: tour.destination_id
-        ? {
-          id: tour.destination_id._id,
-          name: tour.destination_id.name,
-        }
-        : null,
-      duration: tour.duration,
+    const formattedTours = tours.map((tour) => {
+      const tourIdStr = tour._id.toString();
+      const promotions = promotionsByTourId[tourIdStr] || [];
+      const priceInfo = calculatePriceWithPromotion(tour.price, promotions);
 
-      // ✅ Price & Rating Info
-      price: tour.price,
-      rating: parseFloat(tour.rating) || 0,
-      total_rating: parseInt(tour.total_rating) || 0,
+      return {
+        id: tour._id,
+        name: tour.title,
+        destination: tour.destination_id
+          ? {
+              id: tour.destination_id._id,
+              name: tour.destination_id.name,
+            }
+          : null,
+        duration: tour.duration,
 
-      // ✅ Media & Description
-      image: tour.image,
-      highlights: tour.highlights,
-      description: tour.description,
-      included_services: tour.included_services,
+        // ✅ Price & Rating Info
+        price: priceInfo.finalPrice,
+        originalPrice: priceInfo.originalPrice,
+        discount: priceInfo.discount,
+        promotion: priceInfo.promotion,
+        rating: parseFloat(tour.rating) || 0,
+        total_rating: parseInt(tour.total_rating) || 0,
 
-      // ✅ NEW Advanced Fields
-      difficulty: tour.difficulty || 'easy',
-      meeting_point: tour.meeting_point || {
-        address: null,
-        instructions: null
-      },
-      capacity: tour.capacity || {
-        max_participants: null,
-        min_participants: null
-      },
-      available_dates: tour.available_dates || [],
-      status: tour.status || 'draft',
+        // ✅ Media & Description
+        image: tour.image,
+        highlights: tour.highlights,
+        description: tour.description,
+        included_services: tour.included_services,
 
-      // ✅ Meta Info  
-      provider_id: tour.provider_id,
-      created_at: tour.created_at,
+        // ✅ NEW Advanced Fields
+        difficulty: tour.difficulty || "easy",
+        meeting_point: tour.meeting_point || {
+          address: null,
+          instructions: null,
+        },
+        capacity: tour.capacity || {
+          max_participants: null,
+          min_participants: null,
+        },
+        available_dates: tour.available_dates || [],
+        status: tour.status || "draft",
 
-      // Advanced tour fields
-      difficulty: tour.difficulty,
-      meeting_point: tour.meeting_point,
-      capacity: tour.capacity,
+        // ✅ Meta Info
+        provider_id: tour.provider_id,
+        created_at: tour.created_at,
 
-      available_dates: tour.available_dates,
-      status: tour.status,
-      itineraries: itinerariesByTourId[tour._id.toString()] || [],
-      feedbacks:
-        (feedbacksByTourId[tour._id.toString()] || []).map((fb) => ({
+        // Advanced tour fields
+        difficulty: tour.difficulty,
+        meeting_point: tour.meeting_point,
+        capacity: tour.capacity,
+
+        available_dates: tour.available_dates,
+        status: tour.status,
+        itineraries: itinerariesByTourId[tour._id.toString()] || [],
+        feedbacks: (feedbacksByTourId[tour._id.toString()] || []).map((fb) => ({
           id: fb._id,
           user: fb.user_id ? fb.user_id.name : "Người dùng ẩn danh",
           comment: fb.comment,
           rating: fb.rating,
           created_at: fb.created_at,
-        }))
-    }));
+        })),
+      };
+    });
 
     res.status(200).json({
       success: true,
@@ -162,10 +239,16 @@ const getTourById = async (req, res) => {
     // 🔍 Lấy itineraries với UNIFIED ARCHITECTURE (origin_id + type)
     const itineraries = await Itinerary.find({
       origin_id: tourObjectId,
-      type: 'tour'
+      type: "tour",
     })
       .sort({ day_number: 1 })
       .lean();
+
+    // 🎁 Lấy promotions cho tour này
+    const promotions = await Promotion.find({
+      targetType: "tour",
+      targetId: req.params.id,
+    }).lean();
 
     // 🔍 Lấy feedbacks riêng biệt - Query trực tiếp từ collection FEEDBACKS
     let feedbacks = [];
@@ -238,19 +321,25 @@ const getTourById = async (req, res) => {
       feedbacks = []; // Đảm bảo feedbacks là array rỗng nếu có lỗi
     }
 
+    // Tính giá với promotion
+    const priceInfo = calculatePriceWithPromotion(tour.price, promotions);
+
     const formattedTour = {
       id: tour._id,
       name: tour.title,
       destination: tour.destination_id
         ? {
-          id: tour.destination_id._id,
-          name: tour.destination_id.name,
-        }
+            id: tour.destination_id._id,
+            name: tour.destination_id.name,
+          }
         : null,
       duration: tour.duration,
 
       // ✅ Price & Rating Info
-      price: tour.price,
+      price: priceInfo.finalPrice,
+      originalPrice: priceInfo.originalPrice,
+      discount: priceInfo.discount,
+      promotion: priceInfo.promotion,
       rating: parseFloat(tour.rating) || 0,
       total_rating: parseInt(tour.total_rating) || 0,
 
@@ -261,33 +350,36 @@ const getTourById = async (req, res) => {
       included_services: tour.included_services,
 
       // ✅ NEW Advanced Fields from updated tour model
-      difficulty: tour.difficulty || 'easy',
+      difficulty: tour.difficulty || "easy",
       meeting_point: tour.meeting_point || {
         address: null,
-        instructions: null
+        instructions: null,
       },
       capacity: tour.capacity || {
         max_participants: null,
-        min_participants: null
+        min_participants: null,
       },
       available_dates: tour.available_dates || [],
-      status: tour.status || 'draft',
+      status: tour.status || "draft",
 
       // ✅ Meta Info
       provider_id: tour.provider_id,
       created_at: tour.created_at,
 
       // ✅ Related Data (với unified format)
-      itineraries: itineraries?.map(itinerary => {
-        // Use unified response formatting for consistency
-        const formatted = Itinerary.formatResponse ? Itinerary.formatResponse(itinerary) : itinerary;
-        return {
-          ...formatted,
-          // Legacy compatibility
-          day: formatted.day_number || itinerary.day_number,
-          tour_id: itinerary.origin_id
-        };
-      }) || [],
+      itineraries:
+        itineraries?.map((itinerary) => {
+          // Use unified response formatting for consistency
+          const formatted = Itinerary.formatResponse
+            ? Itinerary.formatResponse(itinerary)
+            : itinerary;
+          return {
+            ...formatted,
+            // Legacy compatibility
+            day: formatted.day_number || itinerary.day_number,
+            tour_id: itinerary.origin_id,
+          };
+        }) || [],
       feedbacks: feedbacks.map((fb) => ({
         id: fb._id || fb.id,
         user_id: fb.user_id
@@ -295,10 +387,10 @@ const getTourById = async (req, res) => {
             ? fb.user_id.toString()
             : fb.user_id
           : fb.user_id_populated?._id
-            ? typeof fb.user_id_populated._id === "object"
-              ? fb.user_id_populated._id.toString()
-              : fb.user_id_populated._id
-            : null,
+          ? typeof fb.user_id_populated._id === "object"
+            ? fb.user_id_populated._id.toString()
+            : fb.user_id_populated._id
+          : null,
         user: fb.user_id_populated
           ? fb.user_id_populated.name
           : "Người dùng ẩn danh",
