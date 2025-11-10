@@ -51,6 +51,8 @@ const itinerarySchema = new mongoose.Schema(
                     message: 'Time is required for tour activities'
                 }
             },
+
+
             action: {
                 type: String,
                 trim: true,
@@ -104,7 +106,40 @@ const itinerarySchema = new mongoose.Schema(
                 type: String,
                 enum: ['food', 'transport', 'sightseeing', 'entertainment', 'accommodation',
                     'shopping', 'nature', 'culture', 'adventure', 'relaxation', 'history', 'leisure', 'other'],
-                default: 'other'
+                default: 'other',
+                set: function (value) {
+                    if (!value) return 'other';
+
+                    const typeMapping = {
+                        'cultural': 'culture',
+                        'historical': 'history',
+                        'outdoor': 'nature',
+                        'nightlife': 'entertainment',
+                        'dining': 'food',
+                        'recreational': 'leisure',
+                        'ẩm thực': 'food',
+                        'văn hóa': 'culture',
+                        'thiên nhiên': 'nature',
+                        'giải trí': 'entertainment',
+                        'nghỉ ngơi': 'relaxation',
+                        'du lịch': 'sightseeing'
+                    };
+
+                    const type = value.toLowerCase();
+                    if (typeMapping[type]) {
+                        return typeMapping[type];
+                    }
+
+                    // If it's already a valid type, return as is
+                    if (['food', 'transport', 'sightseeing', 'entertainment', 'accommodation',
+                        'shopping', 'nature', 'culture', 'adventure', 'relaxation', 'history', 'leisure', 'other']
+                        .includes(type)) {
+                        return type;
+                    }
+
+                    // Default fallback
+                    return 'other';
+                }
             },
             timeSlot: {
                 type: String,
@@ -154,7 +189,7 @@ itinerarySchema.index({ origin_id: 1, day_number: 1, type: 1 }, { unique: true }
 itinerarySchema.index({ type: 1 });
 itinerarySchema.index({ origin_id: 1 });
 
-// Update timestamp on save
+// Update timestamp and process activities on save
 itinerarySchema.pre('save', function (next) {
     this.updated_at = Date.now();
 
@@ -163,6 +198,34 @@ itinerarySchema.pre('save', function (next) {
         this.day_total = this.activities.reduce((total, activity) => {
             return total + (activity.cost || 0);
         }, 0);
+
+        // Transform activity types
+        this.activities.forEach(activity => {
+            if (activity.activityType) {
+                const typeMapping = {
+                    'cultural': 'culture',
+                    'historical': 'history',
+                    'outdoor': 'nature',
+                    'nightlife': 'entertainment',
+                    'dining': 'food',
+                    'recreational': 'leisure',
+                    'ẩm thực': 'food',
+                    'văn hóa': 'culture',
+                    'thiên nhiên': 'nature',
+                    'giải trí': 'entertainment',
+                    'nghỉ ngơi': 'relaxation',
+                    'du lịch': 'sightseeing'
+                };
+
+                const type = activity.activityType.toLowerCase();
+                if (typeMapping[type]) {
+                    activity.activityType = typeMapping[type];
+                } else if (!['food', 'transport', 'sightseeing', 'entertainment', 'accommodation',
+                    'shopping', 'nature', 'culture', 'adventure', 'relaxation', 'history', 'leisure', 'other'].includes(type)) {
+                    activity.activityType = 'other';
+                }
+            }
+        });
     }
 
     next();
@@ -183,13 +246,14 @@ itinerarySchema.statics.normalizeActivities = function (activities, itineraryTyp
             };
         } else {
             // AI format: comprehensive structure with validation
-            return {
+            // Map activity type using the static helper method
+            const activityType = this.mapActivityType(activity.type || activity.activityType || 'other'); return {
                 activityId: activity.activityId || `activity_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                 activity: activity.activity || activity.name || activity.action || 'Unnamed Activity',
                 location: activity.location || '',
                 duration: this.parseDuration(activity.duration),
                 cost: parseInt(activity.cost) || 0,
-                activityType: activity.type || activity.activityType || 'other',
+                activityType: activityType,
                 timeSlot: activity.timeSlot || 'morning',
                 userModified: activity.userModified || activity.user_modified || false
             };
@@ -220,6 +284,35 @@ itinerarySchema.statics.parseDuration = function (duration) {
     return 60; // Default 1 hour
 };
 
+// Helper function to map activity type
+itinerarySchema.statics.mapActivityType = function (type) {
+    if (!type) return 'other';
+
+    const validActivityTypes = ['food', 'transport', 'sightseeing', 'entertainment',
+        'accommodation', 'shopping', 'nature', 'culture', 'adventure',
+        'relaxation', 'history', 'leisure', 'other'];
+
+    type = type.toLowerCase();
+    if (validActivityTypes.includes(type)) return type;
+
+    const typeMapping = {
+        'cultural': 'culture',
+        'historical': 'history',
+        'outdoor': 'nature',
+        'nightlife': 'entertainment',
+        'dining': 'food',
+        'recreational': 'leisure',
+        'ẩm thực': 'food',
+        'văn hóa': 'culture',
+        'thiên nhiên': 'nature',
+        'giải trí': 'entertainment',
+        'nghỉ ngơi': 'relaxation',
+        'du lịch': 'sightseeing'
+    };
+
+    return typeMapping[type] || 'other';
+};
+
 // Validate activities based on itinerary type
 itinerarySchema.statics.validateActivities = function (activities, itineraryType) {
     if (!activities || !Array.isArray(activities)) {
@@ -242,6 +335,11 @@ itinerarySchema.statics.validateActivities = function (activities, itineraryType
                     valid: false,
                     error: 'AI activities must have an activity name'
                 };
+            }
+
+            // Map activity type before validation
+            if (activity.type || activity.activityType) {
+                activity.activityType = this.mapActivityType(activity.type || activity.activityType);
             }
         }
     }
@@ -331,13 +429,6 @@ itinerarySchema.statics.createCustomizedCopy = function (originalItinerary) {
         updated_at: new Date()
     });
 };
-
-// Virtual populate for budget_breakdowns (reverse relationship)
-itinerarySchema.virtual('budget_breakdowns', {
-    ref: 'BudgetBreakdown',
-    localField: '_id',
-    foreignField: 'itinerary_id'
-});
 
 // Ensure virtuals are included
 itinerarySchema.set('toJSON', { virtuals: true });

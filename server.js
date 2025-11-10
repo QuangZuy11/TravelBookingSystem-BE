@@ -12,7 +12,6 @@ const bookingCleanupService = require("./services/booking-cleanup.service");
 // Import routes
 const tourRoutes = require("./routes/tourRoutes");
 const itineraryRoutes = require("./routes/itineraryRoutes");
-const budgetRoutes = require("./routes/budgetRoutes");
 const hotelRoutes = require("./routes/hotelRoutes");
 const serviceProviderRoutes = require("./routes/serviceProviderRoutes");
 const serviceProviderAuthRoutes = require("./routes/serviceProviderAuthRoutes");
@@ -69,7 +68,6 @@ app.use("/api/ad-bookings", adBookingRoutes);
 // Provider routes
 app.use("/api/tour", tourRoutes);
 app.use("/api/itineraries", itineraryRoutes);
-app.use("/api/budget-breakdowns", budgetRoutes);
 app.use("/api/hotel", hotelRoutes);
 app.use("/api/provider/promotions", providerPromotionRoutes);
 app.use("/api/provider/hotel-bookings", providerHotelBookingManagementRoutes);

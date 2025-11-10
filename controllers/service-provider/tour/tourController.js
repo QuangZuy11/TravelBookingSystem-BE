@@ -112,14 +112,7 @@ exports.createTour = async (req, res) => {
                 }
             });
 
-            // Handle departure_date specifically - can be null, empty string, or valid date
-            if (tourData.departure_date !== undefined) {
-                if (tourData.departure_date === '' || tourData.departure_date === 'null') {
-                    tourData.departure_date = null;
-                } else if (tourData.departure_date) {
-                    tourData.departure_date = new Date(tourData.departure_date);
-                }
-            }
+
         }
 
         // 1. Create tour with image handling
@@ -209,14 +202,7 @@ exports.updateTour = async (req, res) => {
             }
         });
 
-        // Handle departure_date specifically - can be null, empty string, or valid date
-        if (req.body.departure_date !== undefined) {
-            if (req.body.departure_date === '' || req.body.departure_date === 'null') {
-                req.body.departure_date = null;
-            } else if (req.body.departure_date) {
-                req.body.departure_date = new Date(req.body.departure_date);
-            }
-        }
+
 
         const tour = await Tour.findOneAndUpdate(
             { _id: req.params.tourId, provider_id: req.params.providerId },
@@ -432,11 +418,11 @@ exports.updateTourStatus = async (req, res) => {
             }
 
             // Check if tour has departure date information (either departure_date or available_dates)
-            if (!tour.departure_date && (!tour.available_dates || tour.available_dates.length === 0)) {
+            if (!tour.available_dates || tour.available_dates.length === 0) {
                 return res.status(400).json({
                     success: false,
                     message: 'Không thể kích hoạt tour chưa có thông tin ngày khởi hành',
-                    error: 'Tour must have either departure_date or available_dates to be activated'
+                    error: 'Tour must have available_dates to be activated'
                 });
             }
 
@@ -466,7 +452,7 @@ exports.updateTourStatus = async (req, res) => {
                 title: tour.title,
                 status: tour.status,
                 location: tour.location,
-                duration_hours: tour.duration_hours,
+                duration: tour.duration,
                 pricing: tour.pricing,
                 difficulty: tour.difficulty,
                 rating: tour.rating,

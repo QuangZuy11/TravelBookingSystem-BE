@@ -99,13 +99,10 @@ exports.createRequest = async (req, res) => {
   try {
     const payload = req.body;
 
-    // If destination_id not provided, try to find it by destination name
-    if (!payload.destination_id && payload.destination) {
-      const destination = await Destination.findOne({ name: new RegExp('^' + payload.destination + '$', 'i') });
-      if (destination) {
-        payload.destination_id = destination._id;
-        console.log(`📍 Auto-matched destination_id: ${destination._id}`);
-      }
+    // Try to match destination if provided
+    if (payload.destination) {
+      const destination = await Destination.findOne({ destination_name: new RegExp('^' + payload.destination + '$', 'i') });
+      console.log(`📍 Found matching destination: ${destination?.destination_name || 'none'}`);
     }
 
     const request = new AiItineraryRequest(payload);
@@ -132,7 +129,7 @@ exports.generateItineraryFromRequest = async (req, res) => {
     let destinationName = request.destination;
 
     // CASE 1: User doesn't know where to go - AI suggests destination
-    if (!request.destination && !request.destination_id) {
+    if (!request.destination) {
 
       try {
         // Get all available destinations from DB
@@ -155,7 +152,6 @@ exports.generateItineraryFromRequest = async (req, res) => {
 
         // Save AI suggestion
         request.ai_suggested_destination = suggestion.suggested_destination_name;
-        request.ai_suggested_destination_id = suggestion.suggested_destination_id;
         await request.save();
 
         // Use suggested destination
@@ -165,16 +161,74 @@ exports.generateItineraryFromRequest = async (req, res) => {
         console.log('✅ Using AI suggested destination:', destinationName);
       } catch (aiErr) {
         console.warn('⚠️ AI destination suggestion failed:', aiErr.message);
-        // Fallback: pick random popular destination
-        const fallbackDest = await Destination.findOne({}).sort({ 'ratings.average': -1 });
-        if (fallbackDest) {
-          destination = fallbackDest;
-          destinationName = fallbackDest.name;
-          request.ai_suggested_destination = fallbackDest.name;
-          request.ai_suggested_destination_id = fallbackDest._id;
-          await request.save();
-          console.log('🔄 Fallback to popular destination:', destinationName);
-        } else {
+
+        // Fallback: Smart destination suggestion based on preferences
+        try {
+          let fallbackDest = null;
+
+          // 1. Try to match based on preferences
+          if (request.preferences && request.preferences.length > 0) {
+            const preferenceMatch = await Destination.find({
+              $or: request.preferences.map(pref => ({
+                $or: [
+                  { popular_activities: new RegExp(pref, 'i') },
+                  { description: new RegExp(pref, 'i') }
+                ]
+              }))
+            }).sort({ 'ratings.average': -1 }).limit(1);
+
+            if (preferenceMatch && preferenceMatch.length > 0) {
+              fallbackDest = preferenceMatch[0];
+            }
+          }
+
+          // 2. If no preference match, try budget level
+          if (!fallbackDest && request.budget_level) {
+            const budgetQuery = {};
+            if (request.budget_level === 'high') {
+              budgetQuery['price_level'] = { $in: ['high', 'luxury'] };
+            } else if (request.budget_level === 'low') {
+              budgetQuery['price_level'] = { $in: ['low', 'budget'] };
+            }
+
+            const budgetMatch = await Destination.findOne(budgetQuery)
+              .sort({ 'ratings.average': -1 });
+
+            if (budgetMatch) {
+              fallbackDest = budgetMatch;
+            }
+          }
+
+          // 3. Last resort: most popular destination
+          if (!fallbackDest) {
+            fallbackDest = await Destination.findOne({})
+              .sort({ 'ratings.average': -1 });
+          }
+
+          if (fallbackDest) {
+            destination = fallbackDest;
+            destinationName = fallbackDest.destination_name;
+            request.ai_suggested_destination = fallbackDest.destination_name;
+
+            // Add suggestion reason based on match type
+            request.ai_response = {
+              suggestion_reason: request.preferences && request.preferences.length > 0
+                ? `Điểm đến được đề xuất dựa trên sở thích: ${request.preferences.join(', ')}`
+                : request.budget_level
+                  ? `Điểm đến phù hợp với ngân sách ${request.budget_level === 'high' ? 'cao cấp' : request.budget_level === 'low' ? 'tiết kiệm' : 'trung bình'}`
+                  : 'Điểm đến phổ biến được nhiều du khách đánh giá cao'
+            };
+
+            await request.save();
+            console.log('🔄 Smart fallback to destination:', destinationName);
+          } else {
+            return res.status(400).json({
+              success: false,
+              message: 'Không thể xác định điểm đến phù hợp trong cơ sở dữ liệu'
+            });
+          }
+        } catch (fallbackErr) {
+          console.error('Fallback suggestion failed:', fallbackErr);
           return res.status(400).json({
             success: false,
             message: 'Không thể xác định điểm đến và dịch vụ AI không khả dụng'
@@ -185,38 +239,60 @@ exports.generateItineraryFromRequest = async (req, res) => {
     // CASE 2: User specified destination
     else {
 
-      // Find destination (sử dụng field 'name' theo Destination model)
-      if (request.destination_id) {
-        destination = await Destination.findById(request.destination_id);
-      } else {
-        destination = await Destination.findOne({ name: new RegExp('^' + request.destination + '$', 'i') });
-      }
+      // Find destination by destination_name
+      destination = await Destination.findOne({ destination_name: new RegExp('^' + request.destination + '$', 'i') });
 
-      // Update request with destination_id if found
-      if (destination && !request.destination_id) {
-        request.destination_id = destination._id;
-        request.destination = destination.name;
+      // Update request destination name if needed
+      if (destination && request.destination !== destination.destination_name) {
+        request.destination = destination.destination_name;
         await request.save();
       }
 
-      destinationName = destination?.name || request.destination;
+      destinationName = destination?.destination_name || request.destination;
     }
 
     console.log('🛰️ Final destination:', destinationName, '| ID:', destination?._id);
 
-    // Fetch POIs for destination, order by rating (sử dụng 'destinationId' theo POI model)
+    // Fetch POIs for all destinations, order by rating (sử dụng 'destinationId' theo POI model)
     let pois = [];
-    if (destination) {
-      pois = await PointOfInterest.find({ destinationId: destination._id })
+    const destinationNames = (request.destination || destinationName).split(',').map(d => d.trim());
+
+    // Get destinations from database
+    const destinations = await Promise.all(
+      destinationNames.map(name =>
+        Destination.findOne({ destination_name: new RegExp('^' + name + '$', 'i') })
+      )
+    );
+
+    // Fetch POIs for each destination
+    for (const dest of destinations.filter(d => d)) {
+      const destPois = await PointOfInterest.find({ destinationId: dest._id })
         .sort({ 'ratings.average': -1 })
-        .limit(30);
-    } else {
-      // Fallback: search POIs by destination string in name
-      pois = await PointOfInterest.find({
-        name: new RegExp(destinationName, 'i')
-      })
-        .sort({ 'ratings.average': -1 })
-        .limit(30);
+        .limit(15); // Reduce per-destination limit to accommodate multiple destinations
+
+      // Add destination name to each POI
+      destPois.forEach(poi => {
+        poi.destinationName = dest.destination_name;
+      });
+
+      pois = pois.concat(destPois);
+    }
+
+    // If no POIs found through destination IDs, try fallback with name search
+    if (pois.length === 0) {
+      for (const name of destinationNames) {
+        const fallbackPois = await PointOfInterest.find({
+          name: new RegExp(name, 'i')
+        })
+          .sort({ 'ratings.average': -1 })
+          .limit(15);
+
+        fallbackPois.forEach(poi => {
+          poi.destinationName = name;
+        });
+
+        pois = pois.concat(fallbackPois);
+      }
     }
     console.log('🛰️ Found POIs:', pois.length);
 
@@ -289,7 +365,7 @@ exports.generateItineraryFromRequest = async (req, res) => {
             location: poi ? poi.location?.address || '' : '',
             duration: durationHours * 60, // Convert to minutes for embedded model
             cost: a.cost || (poi ? poi.entryFee?.adult : 0) || 0,
-            activityType: a.type || 'other',
+            activityType: Itinerary.mapActivityType(a.type || 'other'),
             timeSlot: getTimeSlot(a.start_time || '09:00')
           };
 
@@ -419,7 +495,7 @@ exports.generateItineraryFromRequest = async (req, res) => {
       request_id: request._id,
       user_id: request.user_id || (req.user && req.user.id) || null,
       destination: destinationName || request.destination || '',
-      destination_id: destination ? destination._id : request.destination_id,
+
       duration_days: days || request.duration_days || 0,
       budget_total: request.budget_total || 0,
       participant_number: request.participant_number || 1,
@@ -428,7 +504,7 @@ exports.generateItineraryFromRequest = async (req, res) => {
       provider_id: tour ? tour.provider_id : null,
       itinerary_data: createdItineraries,
       summary: destination
-        ? `Generated ${createdItineraries.length} itinerary days for ${destination.name}`
+        ? `Generated ${createdItineraries.length} itinerary days for ${destination.destination_name}`
         : `Generated ${createdItineraries.length} itinerary days for ${destinationName || 'destination'}`,
       status: 'done'
     });
@@ -567,7 +643,7 @@ exports.getItineraryById = async (req, res) => {
       request_id: itinerary.request_id,
       user_id: itinerary.user_id,
       destination: itinerary.destination,
-      destination_id: itinerary.destination_id,
+
       duration_days: itinerary.duration_days,
       budget_total: itinerary.budget_total,
       participant_number: itinerary.participant_number,
