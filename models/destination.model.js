@@ -1,50 +1,32 @@
 const mongoose = require('mongoose');
 
 const destinationSchema = new mongoose.Schema({
-    name: {
+    destination_name: {
         type: String,
         required: true
     },
-    description: String,
-    location: {
-        address: String,
-        city: String,
-        country: String,
-        coordinates: {
-            latitude: Number,
-            longitude: Number
-        }
-    },
-    type: {
+    country: {
         type: String,
-        enum: ['city', 'landmark', 'nature', 'cultural', 'entertainment', 'other'],
         required: true
     },
-    images: [{
-        type: String
-    }],
-    pointsOfInterest: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'PointOfInterest'
-    }],
-    bestTimeToVisit: {
-        start: Date,
-        end: Date
+    region: {
+        type: String,
+        required: true
     },
-    weatherInfo: {
-        climate: String,
-        seasonality: String
+    coordinates: {
+        latitude: Number,
+        longitude: Number
     },
-    localCurrency: String,
-    languages: [String],
-    timeZone: String,
-    visaRequirements: String,
-    travelTips: [String],
-    createdAt: {
-        type: Date,
-        default: Date.now
+    popular_seasons: [String],
+    weather_info: {
+        temperature_range: {
+            min: Number,
+            max: Number
+        },
+        rainfall: String,
+        humidity: String
     },
-    updatedAt: {
+    created_at: {
         type: Date,
         default: Date.now
     }

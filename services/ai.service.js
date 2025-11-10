@@ -44,7 +44,7 @@ exports.generateDestinationSuggestion = async ({ request, availableDestinations 
 
   const destinationList = availableDestinations.map(d => ({
     id: d._id,
-    name: d.name,
+    name: d.destination_name,
     country: d.country,
     description: d.description,
     popular_activities: d.popular_activities || []
@@ -107,12 +107,16 @@ exports.generateItinerary = async ({ request, destination, pois, days }) => {
       type: p.type || 'other',
       rating: p.ratings?.average || 0,
       entryFee: p.entryFee?.adult || 0,
+      destination: p.destinationId ? p.destinationName : destination?.destination_name || request.destination,
       // normalized duration in hours (float)
       recommendedDurationHours: ((p.recommendedDuration?.hours || 0) + (p.recommendedDuration?.minutes || 0) / 60) || 2
     }));
 
   // Build natural language prompt
-  const destinationName = destination?.name || request.destination || request.ai_suggested_destination;
+  const destinations = request.destination
+    ? request.destination.split(',').map(d => d.trim())
+    : [destination?.destination_name || request.ai_suggested_destination];
+  const destinationName = destinations.join(' & ');
   const budget = request.budget_total || 0;
   const budgetText = request.budget_total
     ? `${(request.budget_total / 1000000).toFixed(1)} triệu VND`
@@ -129,13 +133,14 @@ exports.generateItinerary = async ({ request, destination, pois, days }) => {
   const system = `Bạn là một chuyên gia lập kế hoạch lịch trình du lịch chuyên nghiệp. Hãy tạo lịch trình chi tiết theo từng ngày ở định dạng JSON hoàn toàn bằng tiếng Việt, dựa trên yêu cầu của khách hàng và các điểm tham quan có sẵn.`;
 
   // Compact prompt: reduce verbosity and include minified POI payload to save tokens
-  const user = `Tạo lịch trình ${days} ngày cho ${request.participant_number} người đến ${destinationName}. Ngân sách: ${budgetText}. Ưu tiên: ${preferencesText}.
+  const user = `Tạo lịch trình ${days} ngày cho ${request.participant_number} người ${destinations.length > 1 ? 'qua các điểm: ' + destinations.join(', ') : 'đến ' + destinationName}. Ngân sách: ${budgetText}. Ưu tiên: ${preferencesText}.
 
 POI_JSON:${JSON.stringify(poiSummaries)}
 
 Yêu cầu:
 - Nội dung hoàn toàn bằng tiếng Việt.
 - Trả CHỈ JSON hợp lệ theo schema: {title, total_budget, days:[{day_number,title,description,activities:[{activity_name,poi_id,start_time,duration_hours,description,cost,optional}]}]}.
+- Sắp xếp các điểm đến theo lộ trình hợp lý.
 - Không thêm text ngoài JSON.`;
 
   const messages = [
@@ -189,7 +194,7 @@ Yêu cầu:
 
       } catch (repairErr) {
         // Fallback: Generate a simple itinerary structure (in Vietnamese)
-        parsed = generateFallbackItinerary(destinationName || (destination && destination.name) || request.destination || 'điểm đến', days || 1, budget, request.preferences || request.interests || []);
+        parsed = generateFallbackItinerary(destinationName || (destination && destination.destination_name) || request.destination || 'điểm đến', days || 1, budget, request.preferences || request.interests || []);
       }
     }
   }
@@ -214,6 +219,13 @@ const generateFallbackItinerary = (destination, duration, budget, interests) => 
     days: []
   };
 
+  // Calculate days per location
+  const daysPerLocation = Math.floor(duration / locations.length);
+  const extraDays = duration % locations.length;
+  const locationDays = locations.map((_, index) =>
+    daysPerLocation + (index < extraDays ? 1 : 0)
+  );
+
   // Vietnamese activity templates
   const vietnameseActivities = {
     'culture': ['Thăm đền chùa cổ', 'Khám phá khu phố cổ', 'Thăm làng nghề truyền thống', 'Thăm các bảo tàng văn hóa'],
@@ -228,7 +240,7 @@ const generateFallbackItinerary = (destination, duration, budget, interests) => 
     'transport': ['Đưa đón sân bay', 'Hành trình tàu/xe', 'Di chuyển bằng xe buýt địa phương', 'Thuê phương tiện địa phương']
   };
 
-  const validTypes = ['food', 'transport', 'sightseeing', 'entertainment', 'accommodation', 'shopping', 'nature', 'culture', 'adventure', 'relaxation', 'history', 'other'];
+  const validTypes = ['food', 'transport', 'sightseeing', 'entertainment', 'accommodation', 'shopping', 'nature', 'culture', 'adventure', 'relaxation', 'history', 'leisure', 'other'];
 
   const mapInterestToValidType = (interest) => {
     if (!interest) return 'sightseeing';
@@ -240,14 +252,16 @@ const generateFallbackItinerary = (destination, duration, budget, interests) => 
       'outdoor': 'nature',
       'nightlife': 'entertainment',
       'dining': 'food',
+      'recreational': 'leisure',
       'ẩm thực': 'food',
       'văn hóa': 'culture',
-      'thiên nhiên': 'nature'
+      'thiên nhiên': 'nature',
+      'giải trí': 'entertainment',
+      'nghỉ ngơi': 'relaxation',
+      'du lịch': 'sightseeing'
     };
     return mappings[normalizedInterest] || 'sightseeing';
-  };
-
-  const timeSlots = ['08:00', '11:30', '14:30', '17:30'];
+  }; const timeSlots = ['08:00', '11:30', '14:30', '17:30'];
 
   for (let day = 1; day <= duration; day++) {
     const currentLocation = locations[(day - 1) % locations.length] || locations[0];

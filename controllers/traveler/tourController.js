@@ -83,7 +83,7 @@ const getAllToursForTraveler = async (req, res) => {
           name: tour.destination_id.name,
         }
         : null,
-      duration: tour.duration || tour.duration_hours,
+      duration: tour.duration,
 
       // ✅ Price & Rating Info
       price: tour.price,
@@ -117,7 +117,7 @@ const getAllToursForTraveler = async (req, res) => {
       difficulty: tour.difficulty,
       meeting_point: tour.meeting_point,
       capacity: tour.capacity,
-      departure_date: tour.departure_date,
+
       available_dates: tour.available_dates,
       status: tour.status,
       itineraries: itinerariesByTourId[tour._id.toString()] || [],
@@ -247,7 +247,7 @@ const getTourById = async (req, res) => {
           name: tour.destination_id.name,
         }
         : null,
-      duration: tour.duration || tour.duration_hours,
+      duration: tour.duration,
 
       // ✅ Price & Rating Info
       price: tour.price,

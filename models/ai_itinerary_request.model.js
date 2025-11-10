@@ -5,8 +5,6 @@ const aiItineraryRequestSchema = new mongoose.Schema({
 
   // Destination is now OPTIONAL (user may not know where to go)
   destination: { type: String, required: false },
-  destination_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Destination', required: false },
-
   // Trip details
   start_date: { type: Date },
   end_date: { type: Date },
@@ -21,7 +19,6 @@ const aiItineraryRequestSchema = new mongoose.Schema({
 
   // AI suggested destination (when user doesn't provide destination)
   ai_suggested_destination: { type: String },
-  ai_suggested_destination_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Destination' },
 
   status: { type: String, enum: ['pending', 'processing', 'completed', 'failed'], default: 'pending' },
   ai_response: { type: Object },

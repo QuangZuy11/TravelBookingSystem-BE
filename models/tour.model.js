@@ -30,10 +30,6 @@ const tourSchema = new mongoose.Schema(
       required: true,
       min: [1000, 'Price must be at least 1,000 VND']
     },
-    duration_hours: {
-      type: String,
-      required: false
-    },
     duration: {
       type: String,
       required: true,
@@ -107,10 +103,6 @@ const tourSchema = new mongoose.Schema(
     included_services: {
       type: [String],
       default: [],
-    },
-    departure_date: {
-      type: Date,
-      default: null
     },
     promotions: [
       {
