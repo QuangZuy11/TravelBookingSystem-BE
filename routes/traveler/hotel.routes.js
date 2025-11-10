@@ -52,21 +52,19 @@ router.get('/price-range', travelerHotel.getPriceRange);
 router.get('/:hotelId', travelerHotel.getHotelById);
 
 // =============================================================================
-// ROUTES BẢO MẬT (Cần authentication) - Commented out for now
+// ROUTES BẢO MẬT (Cần authentication)
 // =============================================================================
 
-// Uncomment các routes này khi đã có authentication middleware
-
-// const authMiddleware = require('../../middleware/auth.middleware');
+const authMiddleware = require('../../middlewares/auth.middleware');
 
 /**
  * POST /api/traveler/hotels/:hotelId/reviews
  * Thêm đánh giá cho khách sạn
  * Params: hotelId
- * Body: { rating, comment }
+ * Body: { rating, comment, bookingId (optional) }
  * Require: Authentication
  */
-// router.post('/:hotelId/reviews', authMiddleware, travelerHotel.addHotelReview);
+router.post('/:hotelId/reviews', authMiddleware, travelerHotel.addHotelReview);
 
 /**
  * GET /api/traveler/hotels/:hotelId/availability

@@ -3,6 +3,10 @@ const QRCode = require('qrcode');
 const HotelBooking = require('../../models/hotel-booking.model');
 const Payment = require('../../models/hotel-payment.model');
 const hotelPaymentPayOSService = require('../../services/hotel-payment-payos.service');
+const { sendHotelBookingConfirmationEmail } = require('../../services/hotel-booking-email.service');
+const User = require('../../models/user.model');
+const Room = require('../../models/room.model');
+const Hotel = require('../../models/hotel.model');
 
 /**
  * Hotel Payment Controller
@@ -105,7 +109,20 @@ exports.createHotelPayment = async (req, res) => {
         }
 
         // Chuẩn bị data để tạo payment link
-        const amount = parseFloat(booking.total_amount);
+        // Nếu frontend gửi finalAmount (đã tính discount), dùng nó. Nếu không, dùng booking.total_amount
+        const baseAmount = parseFloat(booking.total_amount);
+        const finalAmount = req.body.finalAmount ? parseFloat(req.body.finalAmount) : baseAmount;
+        
+        // Validate finalAmount không được lớn hơn baseAmount
+        if (finalAmount > baseAmount) {
+            await session.abortTransaction();
+            return res.status(400).json({
+                success: false,
+                message: 'Số tiền thanh toán không hợp lệ'
+            });
+        }
+        
+        const amount = finalAmount; // Sử dụng finalAmount (đã có discount) cho PayOS
         const room = booking.hotel_room_id;
 
         if (!room) {
@@ -152,13 +169,21 @@ exports.createHotelPayment = async (req, res) => {
 
         console.log('✅ PayOS response received:', paymentLinkData);
 
-        // Tạo Payment record
+        // Update booking.total_amount to finalAmount (discounted amount) if different
+        // This ensures booking and payment amounts are synchronized
+        if (finalAmount !== baseAmount) {
+            console.log(`💰 Updating booking.total_amount: ${baseAmount} -> ${finalAmount} (discount: ${baseAmount - finalAmount})`);
+            booking.total_amount = finalAmount;
+            await booking.save({ session });
+        }
+
+        // Tạo Payment record với amount đã giảm giá
         const newPayment = new Payment({
             booking_id: booking_id,
             user_id: userId,
             payos_order_code: paymentLinkData.orderCode,
             payos_payment_link_id: paymentLinkData.paymentLinkId,
-            amount: amount,
+            amount: amount, // Đã có discount
             currency: 'VND',
             method: 'qr_code', // Fixed: field name is 'method', not 'payment_method'
             description: description,
@@ -171,7 +196,9 @@ exports.createHotelPayment = async (req, res) => {
                 hotel_name: hotel.name,
                 check_in_date: booking.check_in_date,
                 check_out_date: booking.check_out_date,
-                nights: booking.calculateNights()
+                nights: booking.calculateNights(),
+                original_amount: baseAmount, // Lưu giá gốc để audit
+                discounted_amount: finalAmount // Lưu giá đã giảm
             }
         });
 
@@ -298,15 +325,112 @@ exports.getHotelPaymentStatus = async (req, res) => {
 
             // Update status nếu có thay đổi
             if (paymentInfo.status === 'PAID' && payment.status !== 'completed') {
-                payment.status = 'completed';
-                payment.paid_at = new Date();
-                await payment.save();
+                console.log('✅ Payment status is PAID, updating to completed...');
+                console.log('   Payment ID:', payment._id);
+                console.log('   Booking ID:', payment.booking_id);
+                
+                // Use transaction to ensure data consistency
+                const updateSession = await mongoose.startSession();
+                updateSession.startTransaction();
+                
+                let bookingForEmail = null;
+                
+                try {
+                    payment.status = 'completed';
+                    payment.paid_at = new Date();
+                    payment.transaction_ref = paymentInfo.transactions?.[0]?.transactionDateTime || new Date().toISOString();
+                    await payment.save({ session: updateSession });
 
-                // Update booking status
-                await HotelBooking.findByIdAndUpdate(payment.booking_id, {
-                    booking_status: 'confirmed',
-                    payment_status: 'paid'
-                });
+                    // Update booking status
+                    bookingForEmail = await HotelBooking.findById(payment.booking_id)
+                        .populate('user_id')
+                        .populate({
+                            path: 'hotel_room_id',
+                            populate: {
+                                path: 'hotelId',
+                                select: 'name address'
+                            }
+                        })
+                        .session(updateSession);
+                    
+                    if (bookingForEmail) {
+                        bookingForEmail.booking_status = 'confirmed';
+                        bookingForEmail.payment_status = 'paid';
+                        bookingForEmail.confirmed_at = new Date();
+                        // Update total_amount to match payment amount (discounted)
+                        bookingForEmail.total_amount = payment.amount;
+                        bookingForEmail.reserve_expire_time = null; // Clear reserve expiry
+                        await bookingForEmail.save({ session: updateSession });
+                        console.log(`✅ Booking updated to confirmed: ${bookingForEmail._id}`);
+                        console.log(`💰 Updated booking.total_amount to payment amount: ${payment.amount}`);
+                    } else {
+                        console.error('❌ Booking not found:', payment.booking_id);
+                    }
+                    
+                    await updateSession.commitTransaction();
+                    console.log('✅ Payment and booking status updated successfully');
+                    
+                    // Send confirmation email (after transaction commit)
+                    if (bookingForEmail && bookingForEmail.user_id && bookingForEmail.user_id.email) {
+                        try {
+                            const user = bookingForEmail.user_id;
+                            const room = bookingForEmail.hotel_room_id;
+                            const hotel = room?.hotelId;
+                            
+                            // Format hotel address
+                            const hotelAddress = hotel?.address
+                                ? [
+                                    hotel.address.street,
+                                    hotel.address.state,
+                                    hotel.address.city
+                                  ].filter(Boolean).join(', ')
+                                : null;
+                            
+                            // Calculate nights
+                            const checkIn = new Date(bookingForEmail.check_in_date);
+                            const checkOut = new Date(bookingForEmail.check_out_date);
+                            const diffTime = Math.abs(checkOut - checkIn);
+                            const nights = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                            
+                            const emailResult = await sendHotelBookingConfirmationEmail({
+                                customerEmail: user.email,
+                                customerName: user.name || 'Quý khách',
+                                bookingId: bookingForEmail._id.toString(),
+                                hotelName: hotel?.name || 'N/A',
+                                hotelAddress: hotelAddress,
+                                roomNumber: room?.roomNumber || null,
+                                roomType: room?.type || null,
+                                checkInDate: bookingForEmail.check_in_date,
+                                checkOutDate: bookingForEmail.check_out_date,
+                                nights: nights,
+                                totalAmount: parseFloat(bookingForEmail.total_amount),
+                                paymentMethod: 'PayOS',
+                                contactInfo: {
+                                    phone: user.phone || null,
+                                    email: user.email || null
+                                }
+                            });
+                            
+                            if (emailResult.success) {
+                                console.log('✅ [POLLING] Confirmation email sent to:', user.email);
+                            } else {
+                                console.error('❌ [POLLING] Failed to send email:', emailResult.error);
+                            }
+                        } catch (emailError) {
+                            console.error('❌ [POLLING] Error sending confirmation email:', emailError);
+                            console.error('   Error stack:', emailError.stack);
+                            // Don't fail the request if email fails
+                        }
+                    } else {
+                        console.warn('⚠️ [POLLING] User email not found, cannot send confirmation email');
+                    }
+                } catch (updateError) {
+                    await updateSession.abortTransaction();
+                    console.error('❌ Error updating payment/booking status:', updateError);
+                    throw updateError;
+                } finally {
+                    updateSession.endSession();
+                }
             }
 
             res.status(200).json({

@@ -279,6 +279,98 @@ paymentSchema.post('save', async function (doc) {
             payment_status: 'paid',
             booking_status: 'confirmed'
         });
+
+        // Send confirmation email (async, don't block)
+        try {
+            console.log('📧 [POST-SAVE HOOK] Preparing to send hotel booking confirmation email...');
+            const booking = await HotelBooking.findById(doc.booking_id)
+                .populate({
+                    path: 'user_id',
+                    select: 'name email phone'
+                })
+                .populate({
+                    path: 'hotel_room_id',
+                    populate: {
+                        path: 'hotelId',
+                        select: 'name address'
+                    }
+                })
+                .lean();
+
+            if (booking && booking.user_id && booking.hotel_room_id) {
+                const { sendHotelBookingConfirmationEmail } = require('../services/hotel-booking-email.service');
+
+                const user = booking.user_id;
+                const room = booking.hotel_room_id;
+                const hotel = room?.hotelId;
+
+                if (!user.email) {
+                    console.error('❌ [POST-SAVE HOOK] No email address found for user');
+                    return;
+                }
+
+                // Format hotel address
+                const hotelAddress = hotel?.address
+                    ? [
+                        hotel.address.street,
+                        hotel.address.state,
+                        hotel.address.city
+                      ].filter(Boolean).join(', ')
+                    : null;
+
+                console.log('📧 [POST-SAVE HOOK] Email details:', {
+                    customerEmail: user.email,
+                    customerName: user.name,
+                    bookingId: booking._id.toString(),
+                    hotelName: hotel?.name
+                });
+
+                // Calculate nights (booking is lean object, so no method available)
+                const checkIn = new Date(booking.check_in_date);
+                const checkOut = new Date(booking.check_out_date);
+                const diffTime = Math.abs(checkOut - checkIn);
+                const nights = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                const emailResult = await sendHotelBookingConfirmationEmail({
+                    customerEmail: user.email,
+                    customerName: user.name || 'Quý khách',
+                    bookingId: booking._id.toString(),
+                    hotelName: hotel?.name || 'N/A',
+                    hotelAddress: hotelAddress,
+                    roomNumber: room?.roomNumber || null,
+                    roomType: room?.type || null,
+                    checkInDate: booking.check_in_date,
+                    checkOutDate: booking.check_out_date,
+                    nights: nights,
+                    totalAmount: parseFloat(booking.total_amount),
+                    paymentMethod: 'PayOS',
+                    contactInfo: {
+                        phone: user.phone || null,
+                        email: user.email || null
+                    }
+                });
+
+                if (emailResult.success) {
+                    if (emailResult.dev) {
+                        console.log('✅ [POST-SAVE HOOK/DEV MODE] Confirmation email logged to console');
+                    } else {
+                        console.log('✅ [POST-SAVE HOOK] Confirmation email sent successfully');
+                    }
+                } else {
+                    console.error('❌ [POST-SAVE HOOK] Failed to send email:', emailResult.error);
+                }
+            } else {
+                console.error('❌ [POST-SAVE HOOK] Missing booking data:', {
+                    hasBooking: !!booking,
+                    hasUser: !!booking?.user_id,
+                    hasRoom: !!booking?.hotel_room_id
+                });
+            }
+        } catch (emailError) {
+            console.error('❌ [POST-SAVE HOOK] Error sending confirmation email:', emailError);
+            console.error('   Error stack:', emailError.stack);
+            // Don't throw error, just log it
+        }
     }
 });
 

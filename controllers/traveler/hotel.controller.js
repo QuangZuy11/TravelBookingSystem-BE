@@ -119,6 +119,30 @@ exports.searchHotels = async (req, res) => {
                     };
                 }
 
+                // If checkIn and checkOut are provided, filter rooms by availability
+                if (checkIn && checkOut) {
+                    const checkInDate = new Date(checkIn);
+                    const checkOutDate = new Date(checkOut);
+                    
+                    // Only filter by date if dates are valid
+                    if (!isNaN(checkInDate.getTime()) && !isNaN(checkOutDate.getTime()) && checkInDate < checkOutDate) {
+                        // Find rooms that don't have conflicting bookings
+                        roomQuery.$or = [
+                            { bookings: { $size: 0 } }, // No bookings
+                            {
+                                bookings: {
+                                    $not: {
+                                        $elemMatch: {
+                                            checkIn: { $lt: checkOutDate },
+                                            checkOut: { $gt: checkInDate }
+                                        }
+                                    }
+                                }
+                            }
+                        ];
+                    }
+                }
+
                 const availableRooms = await Room.find(roomQuery)
                     .select('pricePerNight type capacity')
                     .sort({ pricePerNight: 1 });
@@ -152,7 +176,8 @@ exports.searchHotels = async (req, res) => {
                                 min: Math.round(hotelObj.realPriceRange.min * (1 - discount)),
                                 max: Math.round(hotelObj.realPriceRange.max * (1 - discount))
                             };
-                        } else if (promotion.discountType === 'fixed') {
+                        } else if (promotion.discountType === 'amount' || promotion.discountType === 'fixed') {
+                            // Support both 'amount' and 'fixed' for backward compatibility
                             hotelObj.discountedPriceRange = {
                                 min: Math.max(0, hotelObj.realPriceRange.min - promotion.discountValue),
                                 max: Math.max(0, hotelObj.realPriceRange.max - promotion.discountValue)
@@ -242,6 +267,10 @@ exports.getHotelById = async (req, res) => {
                     endDate: { $gte: new Date() }
                 },
                 select: 'name code description discountType discountValue startDate endDate usageLimit'
+            })
+            .populate({
+                path: 'reviews.userId',
+                select: 'name email'
             })
             .select('-__v');
 
@@ -519,7 +548,8 @@ exports.getFeaturedHotels = async (req, res) => {
                                 min: Math.round(hotelObj.realPriceRange.min * (1 - discount)),
                                 max: Math.round(hotelObj.realPriceRange.max * (1 - discount))
                             };
-                        } else if (promotion.discountType === 'fixed') {
+                        } else if (promotion.discountType === 'amount' || promotion.discountType === 'fixed') {
+                            // Support both 'amount' and 'fixed' for backward compatibility
                             hotelObj.discountedPriceRange = {
                                 min: Math.max(0, hotelObj.realPriceRange.min - promotion.discountValue),
                                 max: Math.max(0, hotelObj.realPriceRange.max - promotion.discountValue)
@@ -550,11 +580,92 @@ exports.getFeaturedHotels = async (req, res) => {
     }
 };
 
+/**
+ * Thêm đánh giá cho khách sạn
+ * @route POST /api/traveler/hotels/:hotelId/reviews
+ * @desc Thêm review vào hotel.reviews array
+ * @access Private
+ */
+exports.addHotelReview = async (req, res) => {
+    try {
+        const { hotelId } = req.params;
+        const { rating, comment, bookingId } = req.body;
+        const userId = req.user._id;
+
+        if (!mongoose.Types.ObjectId.isValid(hotelId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'ID khách sạn không hợp lệ'
+            });
+        }
+
+        if (!rating || rating < 1 || rating > 5) {
+            return res.status(400).json({
+                success: false,
+                message: 'Đánh giá phải từ 1 đến 5 sao'
+            });
+        }
+
+        if (!comment || comment.trim().length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng nhập nhận xét'
+            });
+        }
+
+        // Find hotel
+        const hotel = await Hotel.findById(hotelId);
+        if (!hotel) {
+            return res.status(404).json({
+                success: false,
+                message: 'Không tìm thấy khách sạn'
+            });
+        }
+
+        // Check if user already reviewed this hotel (optional - can allow multiple reviews)
+        // For now, we'll allow multiple reviews
+
+        // Add review to hotel.reviews array
+        hotel.reviews.push({
+            userId: userId,
+            rating: Number(rating),
+            comment: comment.trim(),
+            date: new Date()
+        });
+
+        // Recalculate hotel rating
+        if (hotel.reviews.length > 0) {
+            const totalRating = hotel.reviews.reduce((sum, r) => sum + (r.rating || 0), 0);
+            hotel.rating = totalRating / hotel.reviews.length;
+        }
+
+        await hotel.save();
+
+        res.status(201).json({
+            success: true,
+            message: 'Đánh giá đã được thêm thành công',
+            data: {
+                review: hotel.reviews[hotel.reviews.length - 1],
+                hotelRating: hotel.rating
+            }
+        });
+
+    } catch (error) {
+        console.error('Lỗi thêm đánh giá:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi máy chủ nội bộ',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
 module.exports = {
     searchHotels: exports.searchHotels,
     getHotelById: exports.getHotelById,
     getAvailableAmenities: exports.getAvailableAmenities,
     getAvailableLocations: exports.getAvailableLocations,
     getPriceRange: exports.getPriceRange,
-    getFeaturedHotels: exports.getFeaturedHotels
+    getFeaturedHotels: exports.getFeaturedHotels,
+    addHotelReview: exports.addHotelReview
 };

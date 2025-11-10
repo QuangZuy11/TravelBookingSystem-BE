@@ -3,6 +3,8 @@ const Payment = require('../../models/hotel-payment.model');
 const HotelBooking = require('../../models/hotel-booking.model');
 const Room = require('../../models/room.model');
 const hotelPaymentPayOSService = require('../../services/hotel-payment-payos.service');
+const { sendHotelBookingConfirmationEmail } = require('../../services/hotel-booking-email.service');
+const User = require('../../models/user.model');
 
 /**
  * Hotel PayOS Webhook Handler
@@ -91,13 +93,16 @@ exports.handleHotelPayOSWebhook = async (req, res) => {
             };
             await payment.save({ session });
 
-            // Update booking status
+            // Update booking status and total_amount to match payment amount (already discounted)
             booking.booking_status = 'confirmed';
             booking.payment_status = 'paid';
             booking.confirmed_at = new Date();
+            // Update total_amount to match payment amount (discounted)
+            booking.total_amount = payment.amount;
             // Clear reserve_expire_time vì đã thanh toán thành công
             booking.reserve_expire_time = null;
             await booking.save({ session });
+            console.log(`💰 Updated booking.total_amount to payment amount: ${payment.amount}`);
 
             // Update room availability - giảm số phòng available
             const room = booking.hotel_room_id;
@@ -112,8 +117,75 @@ exports.handleHotelPayOSWebhook = async (req, res) => {
 
             await session.commitTransaction();
 
-            // TODO: Send email confirmation to user
-            // TODO: Send notification to service provider
+            // Send email confirmation to user (after transaction commit)
+            try {
+                // Populate user and hotel info for email
+                await booking.populate([
+                    {
+                        path: 'user_id',
+                        select: 'name email phone'
+                    },
+                    {
+                        path: 'hotel_room_id',
+                        populate: {
+                            path: 'hotelId',
+                            select: 'name address'
+                        }
+                    }
+                ]);
+
+                const user = booking.user_id;
+                const room = booking.hotel_room_id;
+                const hotel = room?.hotelId;
+                
+                if (user && user.email) {
+                    // Format hotel address
+                    const hotelAddress = hotel?.address
+                        ? [
+                            hotel.address.street,
+                            hotel.address.state,
+                            hotel.address.city
+                          ].filter(Boolean).join(', ')
+                        : null;
+                    
+                    // Calculate nights
+                    const checkIn = new Date(booking.check_in_date);
+                    const checkOut = new Date(booking.check_out_date);
+                    const diffTime = Math.abs(checkOut - checkIn);
+                    const nights = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    
+                    const emailResult = await sendHotelBookingConfirmationEmail({
+                        customerEmail: user.email,
+                        customerName: user.name || 'Quý khách',
+                        bookingId: booking._id.toString(),
+                        hotelName: hotel?.name || 'N/A',
+                        hotelAddress: hotelAddress,
+                        roomNumber: room?.roomNumber || null,
+                        roomType: room?.type || null,
+                        checkInDate: booking.check_in_date,
+                        checkOutDate: booking.check_out_date,
+                        nights: nights,
+                        totalAmount: parseFloat(booking.total_amount),
+                        paymentMethod: 'PayOS',
+                        contactInfo: {
+                            phone: user.phone || null,
+                            email: user.email || null
+                        }
+                    });
+                    
+                    if (emailResult.success) {
+                        console.log('✅ [WEBHOOK] Confirmation email sent to:', user.email);
+                    } else {
+                        console.error('❌ [WEBHOOK] Failed to send email:', emailResult.error);
+                    }
+                } else {
+                    console.warn('⚠️ [WEBHOOK] User email not found, cannot send confirmation email');
+                }
+            } catch (emailError) {
+                console.error('❌ [WEBHOOK] Error sending confirmation email:', emailError);
+                console.error('   Error stack:', emailError.stack);
+                // Don't fail the webhook if email fails
+            }
 
             return res.status(200).json({
                 success: true,

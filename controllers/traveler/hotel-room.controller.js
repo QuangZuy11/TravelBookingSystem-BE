@@ -136,19 +136,45 @@ exports.getRoomsByHotelId = async (req, res) => {
 
             // Đếm số lượng theo status
             acc[roomType].count++;
-            switch (room.status) {
-                case 'available':
+            
+            // Nếu có checkIn/checkOut, chỉ đếm phòng không có conflict
+            if (checkIn && checkOut) {
+                const checkInDate = new Date(checkIn);
+                const checkOutDate = new Date(checkOut);
+                
+                // Check if room has conflicting bookings
+                const hasConflict = room.bookings && room.bookings.some(booking => {
+                    const bookingCheckIn = new Date(booking.checkIn);
+                    const bookingCheckOut = new Date(booking.checkOut);
+                    return bookingCheckIn < checkOutDate && bookingCheckOut > checkInDate;
+                });
+                
+                // Only count as available if no conflict and status is available
+                if (room.status === 'available' && !hasConflict) {
                     acc[roomType].availableCount++;
-                    break;
-                case 'occupied':
+                } else if (room.status === 'occupied') {
                     acc[roomType].occupiedCount++;
-                    break;
-                case 'maintenance':
+                } else if (room.status === 'maintenance') {
                     acc[roomType].maintenanceCount++;
-                    break;
-                case 'reserved':
+                } else if (room.status === 'reserved' || hasConflict) {
                     acc[roomType].reservedCount++;
-                    break;
+                }
+            } else {
+                // Nếu không có checkIn/checkOut, đếm theo status như cũ
+                switch (room.status) {
+                    case 'available':
+                        acc[roomType].availableCount++;
+                        break;
+                    case 'occupied':
+                        acc[roomType].occupiedCount++;
+                        break;
+                    case 'maintenance':
+                        acc[roomType].maintenanceCount++;
+                        break;
+                    case 'reserved':
+                        acc[roomType].reservedCount++;
+                        break;
+                }
             }
 
             // Cập nhật giá min/max

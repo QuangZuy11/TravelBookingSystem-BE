@@ -479,7 +479,12 @@ exports.getUserBookings = async (req, res) => {
 
         // Filter theo status nếu có
         if (status) {
-            query.booking_status = status;
+            // Support multiple status values (comma-separated) or single value
+            if (status.includes(',')) {
+                query.booking_status = { $in: status.split(',').map(s => s.trim()) };
+            } else {
+                query.booking_status = status;
+            }
         }
 
         const skip = (page - 1) * limit;
@@ -487,25 +492,44 @@ exports.getUserBookings = async (req, res) => {
         const bookings = await HotelBooking.find(query)
             .populate({
                 path: 'hotel_room_id',
+                select: 'roomNumber type pricePerNight hotelId images', // Add images to room selection
                 populate: {
                     path: 'hotelId',
                     select: 'name address images'
                 }
             })
-            .sort({ booking_date: -1 })
+            .populate({
+                path: 'user_id',
+                select: 'name email phone'
+            })
+            .sort({ booking_date: -1, created_at: -1 })
             .skip(skip)
-            .limit(parseInt(limit));
+            .limit(parseInt(limit))
+            .lean(); // Use lean() for better performance
 
         const total = await HotelBooking.countDocuments(query);
+
+        // Convert Decimal128 to number for lean() results
+        const processedBookings = bookings.map(booking => {
+            if (booking.total_amount) {
+                // Handle Decimal128 conversion
+                if (typeof booking.total_amount === 'object' && booking.total_amount.$numberDecimal) {
+                    booking.total_amount = parseFloat(booking.total_amount.$numberDecimal);
+                } else if (typeof booking.total_amount === 'object') {
+                    booking.total_amount = parseFloat(booking.total_amount.toString());
+                }
+            }
+            return booking;
+        });
 
         res.status(200).json({
             success: true,
             data: {
-                bookings,
+                bookings: processedBookings,
                 pagination: {
                     current: parseInt(page),
                     total: Math.ceil(total / limit),
-                    count: bookings.length,
+                    count: processedBookings.length,
                     totalRecords: total
                 }
             },
