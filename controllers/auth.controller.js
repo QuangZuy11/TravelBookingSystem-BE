@@ -28,6 +28,14 @@ exports.register = async (req, res) => {
     const { name, email, password, role_name } = req.body;
 
     try {
+        // Validate password length
+        if (!password || String(password).length < 6) {
+            return res.status(400).json({
+                success: false,
+                message: 'Mật khẩu tối thiểu 6 ký tự'
+            });
+        }
+
         let user = await User.findOne({ email });
         if (user) {
             return res.status(400).json({
