@@ -3,6 +3,7 @@ const HotelBooking = require('../../models/hotel-booking.model');
 const Room = require('../../models/room.model');
 const Hotel = require('../../models/hotel.model');
 const User = require('../../models/user.model');
+const { createBookingCancellationNotification } = require('../../services/notification.service');
 
 /**
  * Tạo booking tạm thời (reserved) khi user click "Đặt phòng"
@@ -251,7 +252,14 @@ exports.cancelReservedBooking = async (req, res) => {
 
         // Tìm booking
         const booking = await HotelBooking.findById(bookingId)
-            .populate('hotel_room_id');
+            .populate('hotel_room_id')
+            .populate({
+                path: 'hotel_room_id',
+                populate: {
+                    path: 'hotelId',
+                    select: 'name'
+                }
+            });
 
         if (!booking) {
             return res.status(404).json({
@@ -296,6 +304,27 @@ exports.cancelReservedBooking = async (req, res) => {
                     }
                 }
             );
+        }
+
+        // Create notification for booking cancellation
+        try {
+            const hotelName = booking.hotel_room_id?.hotelId?.name || 'N/A';
+            const bookingNumber = `HB-${booking._id.toString().slice(-6).toUpperCase()}`;
+            
+            await createBookingCancellationNotification({
+                userId: booking.user_id,
+                type: 'hotel',
+                bookingId: booking._id,
+                bookingNumber: bookingNumber,
+                hotelName: hotelName,
+                reason: booking.payment_status === 'paid' 
+                    ? 'Theo chính sách, tiền đã thanh toán sẽ không được hoàn lại'
+                    : null
+            });
+            console.log('✅ Notification created for booking cancellation');
+        } catch (notificationError) {
+            console.error('❌ Error creating cancellation notification:', notificationError);
+            // Don't fail the request if notification fails
         }
 
         res.status(200).json({

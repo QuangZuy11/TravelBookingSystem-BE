@@ -4,6 +4,7 @@ const HotelBooking = require('../../models/hotel-booking.model');
 const Payment = require('../../models/hotel-payment.model');
 const hotelPaymentPayOSService = require('../../services/hotel-payment-payos.service');
 const { sendHotelBookingConfirmationEmail } = require('../../services/hotel-booking-email.service');
+const { createBookingSuccessNotification } = require('../../services/notification.service');
 const User = require('../../models/user.model');
 const Room = require('../../models/room.model');
 const Hotel = require('../../models/hotel.model');
@@ -433,6 +434,51 @@ exports.getHotelPaymentStatus = async (req, res) => {
                             console.error('❌ [POLLING] Error sending confirmation email:', emailError);
                             console.error('   Error stack:', emailError.stack);
                             // Don't fail the request if email fails
+                        }
+
+                        // Create notification for successful booking (after email sent)
+                        try {
+                            // Get userId from populated user object or booking
+                            const userId = user?._id || user?.id || bookingForEmail.user_id?._id || bookingForEmail.user_id;
+                            const hotelName = hotel?.name || 'N/A';
+                            const bookingNumber = `HB-${bookingForEmail._id.toString().slice(-6).toUpperCase()}`;
+                            const amount = bookingForEmail.total_amount 
+                                ? (typeof bookingForEmail.total_amount === 'object' 
+                                    ? parseFloat(bookingForEmail.total_amount.toString())
+                                    : parseFloat(bookingForEmail.total_amount))
+                                : parseFloat(payment.amount);
+                            
+                            console.log('📧 [POLLING] Creating notification with data:', {
+                                userId,
+                                userObject: user ? { _id: user._id, id: user.id } : null,
+                                bookingUserId: bookingForEmail.user_id ? { _id: bookingForEmail.user_id._id, id: bookingForEmail.user_id.id } : null,
+                                type: 'hotel',
+                                bookingId: bookingForEmail._id,
+                                bookingNumber,
+                                hotelName,
+                                amount
+                            });
+                            
+                            if (!userId) {
+                                console.error('❌ [POLLING] Cannot create notification - missing userId');
+                                console.error('   User object:', user);
+                                console.error('   Booking user_id:', bookingForEmail.user_id);
+                            } else {
+                                await createBookingSuccessNotification({
+                                    userId: userId,
+                                    type: 'hotel',
+                                    bookingId: bookingForEmail._id,
+                                    bookingNumber: bookingNumber,
+                                    hotelName: hotelName,
+                                    amount: amount
+                                });
+                                console.log('✅ [POLLING] Notification created for booking success');
+                            }
+                        } catch (notificationError) {
+                            console.error('❌ [POLLING] Error creating notification:', notificationError);
+                            console.error('   Error message:', notificationError.message);
+                            console.error('   Error stack:', notificationError.stack);
+                            // Don't fail the request if notification fails
                         }
                     } else {
                         console.warn('⚠️ [POLLING] User email not found, cannot send confirmation email');

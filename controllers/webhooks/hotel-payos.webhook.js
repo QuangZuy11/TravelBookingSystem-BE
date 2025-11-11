@@ -4,6 +4,7 @@ const HotelBooking = require('../../models/hotel-booking.model');
 const Room = require('../../models/room.model');
 const hotelPaymentPayOSService = require('../../services/hotel-payment-payos.service');
 const { sendHotelBookingConfirmationEmail } = require('../../services/hotel-booking-email.service');
+const { createBookingSuccessNotification } = require('../../services/notification.service');
 const User = require('../../models/user.model');
 
 /**
@@ -201,6 +202,69 @@ exports.handleHotelPayOSWebhook = async (req, res) => {
                 console.error('❌ [WEBHOOK] Error sending confirmation email:', emailError);
                 console.error('   Error stack:', emailError.stack);
                 // Don't fail the webhook if email fails
+            }
+
+            // Create notification for successful booking (after transaction commit)
+            try {
+                console.log('📧 [WEBHOOK] Preparing to create notification for booking:', booking._id);
+                
+                const bookingForNotification = await HotelBooking.findById(booking._id)
+                    .populate('user_id', '_id name email')
+                    .populate({
+                        path: 'hotel_room_id',
+                        populate: {
+                            path: 'hotelId',
+                            select: 'name'
+                        }
+                    })
+                    .lean();
+                
+                console.log('📧 [WEBHOOK] Booking for notification:', {
+                    bookingId: bookingForNotification?._id,
+                    userId: bookingForNotification?.user_id?._id || bookingForNotification?.user_id,
+                    hotelName: bookingForNotification?.hotel_room_id?.hotelId?.name,
+                    totalAmount: bookingForNotification?.total_amount
+                });
+                
+                if (bookingForNotification && bookingForNotification.user_id) {
+                    const userId = bookingForNotification.user_id._id || bookingForNotification.user_id;
+                    const hotelName = bookingForNotification.hotel_room_id?.hotelId?.name || 'N/A';
+                    const bookingNumber = `HB-${booking._id.toString().slice(-6).toUpperCase()}`;
+                    const amount = bookingForNotification.total_amount 
+                        ? (typeof bookingForNotification.total_amount === 'object' 
+                            ? parseFloat(bookingForNotification.total_amount.toString())
+                            : parseFloat(bookingForNotification.total_amount))
+                        : parseFloat(payment.amount);
+                    
+                    console.log('📧 [WEBHOOK] Creating notification with data:', {
+                        userId,
+                        type: 'hotel',
+                        bookingId: booking._id,
+                        bookingNumber,
+                        hotelName,
+                        amount
+                    });
+                    
+                    await createBookingSuccessNotification({
+                        userId: userId,
+                        type: 'hotel',
+                        bookingId: booking._id,
+                        bookingNumber: bookingNumber,
+                        hotelName: hotelName,
+                        amount: amount
+                    });
+                    console.log('✅ [WEBHOOK] Notification created for booking success');
+                } else {
+                    console.warn('⚠️ [WEBHOOK] Cannot create notification - missing booking or user_id:', {
+                        hasBooking: !!bookingForNotification,
+                        hasUserId: !!bookingForNotification?.user_id
+                    });
+                }
+            } catch (notificationError) {
+                console.error('❌ [WEBHOOK] Error creating notification:', notificationError);
+                console.error('   Error message:', notificationError.message);
+                console.error('   Error stack:', notificationError.stack);
+                // Don't fail the webhook if notification fails
             }
 
             return res.status(200).json({

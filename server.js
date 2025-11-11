@@ -34,6 +34,7 @@ const destinationRoutes = require("./routes/destination.routes");
 const fileUploadRoutes = require("./routes/fileUpload.routes");
 const imageProxyRoutes = require("./routes/imageProxy.routes");
 const travelerFeedbackRoutes = require("./routes/traveler/feedback.routes");
+const travelerNotificationRoutes = require("./routes/traveler/notification.routes");
 const chatRoutes = require("./routes/chat.routes");
 const termsPolicyRoutes = require("./routes/termsPolicy.routes");
 const webhookRoutes = require("./routes/webhook.routes");
@@ -59,6 +60,7 @@ app.use("/api/traveler/hotels", travelerHotelRoomRoutes);
 app.use("/api/traveler/bookings", travelerHotelBookingRoutes);
 app.use("/api/traveler/hotel-payments", travelerHotelPaymentRoutes);
 app.use("/api/traveler/feedbacks", travelerFeedbackRoutes);
+app.use("/api/traveler/notifications", travelerNotificationRoutes);
 // Tour traveler
 app.use("/api/traveler/tours", travelerTourRoutes);
 app.use("/api/traveler/tour-bookings", travelerTourBookingRoutes);

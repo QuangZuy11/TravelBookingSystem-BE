@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const AdPayment = require("../../models/ad-payment.model");
 const AdBooking = require("../../models/adbooking.model");
 const adPaymentPayOSService = require("../../services/ad-payment-payos.service");
+const { createAdBookingSuccessNotification } = require("../../services/notification.service");
 
 /**
  * Ad PayOS Webhook Handler
@@ -101,6 +102,43 @@ exports.handleAdPayOSWebhook = async (req, res) => {
       await session.commitTransaction();
 
       console.log("✅ Ad booking activated:", adBooking._id);
+
+      // Create notification for ad booking success (after transaction commit)
+      try {
+        // Populate ad booking to get service details
+        const adBookingWithDetails = await AdBooking.findById(adBooking._id)
+          .populate('tour_id', 'title')
+          .populate('hotel_id', 'name')
+          .lean();
+        
+        if (adBookingWithDetails && adBookingWithDetails.provider_id) {
+          let serviceName = '';
+          let serviceType = '';
+          
+          if (adBookingWithDetails.ad_type === 'tour' && adBookingWithDetails.tour_id) {
+            serviceName = adBookingWithDetails.tour_id.title || 'N/A';
+            serviceType = 'tour';
+          } else if (adBookingWithDetails.ad_type === 'hotel' && adBookingWithDetails.hotel_id) {
+            serviceName = adBookingWithDetails.hotel_id.name || 'N/A';
+            serviceType = 'hotel';
+          }
+          
+          // provider_id is already User _id (ObjectId), no need to populate
+          await createAdBookingSuccessNotification({
+            userId: adBookingWithDetails.provider_id,
+            type: serviceType,
+            adBookingId: adBooking._id,
+            serviceName: serviceName,
+            amount: parseFloat(payment.amount),
+            startDate: adBookingWithDetails.start_date,
+            endDate: adBookingWithDetails.end_date
+          });
+          console.log('✅ [WEBHOOK] Notification created for ad booking success');
+        }
+      } catch (notificationError) {
+        console.error('❌ [WEBHOOK] Error creating ad booking notification:', notificationError);
+        // Don't fail the webhook if notification fails
+      }
 
       return res.status(200).json({
         success: true,

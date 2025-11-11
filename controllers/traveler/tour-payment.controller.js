@@ -3,6 +3,7 @@ const QRCode = require("qrcode");
 const TourBooking = require("../../models/tour-booking.model");
 const TourPayment = require("../../models/tour-payment.model");
 const tourPaymentPayOSService = require("../../services/tour-payment-payos.service");
+const { createBookingSuccessNotification } = require("../../services/notification.service");
 
 /**
  * Tour Payment Controller
@@ -416,6 +417,26 @@ exports.getTourPaymentStatus = async (req, res) => {
               hasTour: !!booking?.tour_id,
               hasCustomer: !!booking?.customer_id,
             });
+          }
+
+          // Create notification for successful booking
+          if (booking && booking.customer_id) {
+            try {
+              const tourName = booking.tour_id?.title || 'N/A';
+              const bookingNumber = booking.booking_number || `T-${payment.booking_id.toString().slice(-6).toUpperCase()}`;
+              
+              await createBookingSuccessNotification({
+                userId: booking.customer_id._id,
+                type: 'tour',
+                bookingId: payment.booking_id,
+                bookingNumber: bookingNumber,
+                tourName: tourName,
+                amount: booking.pricing?.total_amount || payment.amount
+              });
+              console.log('✅ [POLLING] Notification created for tour booking success');
+            } catch (notificationError) {
+              console.error('❌ [POLLING] Error creating notification:', notificationError);
+            }
           }
         } catch (emailError) {
           console.error("❌ Error sending confirmation email:", emailError);

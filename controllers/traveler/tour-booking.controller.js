@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const TourBooking = require("../../models/tour-booking.model");
 const Tour = require("../../models/tour.model");
+const { createBookingCancellationNotification } = require("../../services/notification.service");
 const Promotion = require("../../models/promotion.model");
 
 /**
@@ -282,6 +283,30 @@ exports.cancelReservedTourBooking = async (req, res) => {
     await booking.save({ session });
 
     await session.commitTransaction();
+
+    // Create notification for booking cancellation
+    try {
+      const bookingWithDetails = await TourBooking.findById(booking._id)
+        .populate('tour_id', 'title')
+        .populate('customer_id', '_id')
+        .lean();
+      
+      if (bookingWithDetails && bookingWithDetails.customer_id) {
+        const tourName = bookingWithDetails.tour_id?.title || 'N/A';
+        const bookingNumber = bookingWithDetails.booking_number || `T-${booking._id.toString().slice(-6).toUpperCase()}`;
+        
+        await createBookingCancellationNotification({
+          userId: bookingWithDetails.customer_id._id,
+          type: 'tour',
+          bookingId: booking._id,
+          bookingNumber: bookingNumber,
+          tourName: tourName
+        });
+        console.log('✅ Notification created for tour booking cancellation');
+      }
+    } catch (notificationError) {
+      console.error('❌ Error creating cancellation notification:', notificationError);
+    }
 
     res.status(200).json({
       success: true,

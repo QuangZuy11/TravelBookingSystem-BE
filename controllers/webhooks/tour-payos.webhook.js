@@ -5,6 +5,7 @@ const tourPaymentPayOSService = require("../../services/tour-payment-payos.servi
 const {
   sendTourBookingConfirmationEmail,
 } = require("../../services/tour-booking-email.service");
+const { createBookingSuccessNotification } = require("../../services/notification.service");
 const Itinerary = require("../../models/itinerary.model");
 
 /**
@@ -155,6 +156,26 @@ exports.handleTourPayOSWebhook = async (req, res) => {
           });
 
           console.log("✅ Tour booking confirmation email sent");
+        }
+
+        // Create notification for successful booking
+        if (bookingWithDetails && bookingWithDetails.customer_id) {
+          try {
+            const tourName = bookingWithDetails.tour_id?.title || 'N/A';
+            const bookingNumber = bookingWithDetails.booking_number || `T-${booking._id.toString().slice(-6).toUpperCase()}`;
+            
+            await createBookingSuccessNotification({
+              userId: bookingWithDetails.customer_id._id,
+              type: 'tour',
+              bookingId: booking._id,
+              bookingNumber: bookingNumber,
+              tourName: tourName,
+              amount: bookingWithDetails.pricing?.total_amount || payment.amount
+            });
+            console.log('✅ [WEBHOOK] Notification created for tour booking success');
+          } catch (notificationError) {
+            console.error('❌ [WEBHOOK] Error creating notification:', notificationError);
+          }
         }
       } catch (emailError) {
         console.error(
