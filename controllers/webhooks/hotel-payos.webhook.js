@@ -105,11 +105,27 @@ exports.handleHotelPayOSWebhook = async (req, res) => {
             console.log(`💰 Updated booking.total_amount to payment amount: ${payment.amount}`);
 
             // Update room availability - giảm số phòng available
-            const room = booking.hotel_room_id;
-            if (room.available_rooms > 0) {
-                room.available_rooms -= 1;
-                await room.save({ session });
-                console.log(`Room ${room.roomNumber} available count decreased: ${room.available_rooms + 1} -> ${room.available_rooms}`);
+            const roomForUpdate = booking.hotel_room_id;
+            if (roomForUpdate.available_rooms > 0) {
+                roomForUpdate.available_rooms -= 1;
+                await roomForUpdate.save({ session });
+                console.log(`Room ${roomForUpdate.roomNumber} available count decreased: ${roomForUpdate.available_rooms + 1} -> ${roomForUpdate.available_rooms}`);
+            }
+
+            // Update hotel bookingsCount when payment is successful
+            const Hotel = mongoose.model('Hotel');
+            const Room = mongoose.model('Room');
+            const roomWithHotel = await Room.findById(booking.hotel_room_id)
+                .populate('hotelId')
+                .session(session);
+            if (roomWithHotel && roomWithHotel.hotelId) {
+                const hotelId = roomWithHotel.hotelId._id || roomWithHotel.hotelId;
+                await Hotel.findByIdAndUpdate(
+                    hotelId,
+                    { $inc: { bookingsCount: 1 } },
+                    { session }
+                );
+                console.log(`📊 Updated hotel bookingsCount for hotel: ${hotelId}`);
             }
 
             console.log('✓ Booking confirmed:', booking._id);

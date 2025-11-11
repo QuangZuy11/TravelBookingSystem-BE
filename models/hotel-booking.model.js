@@ -29,7 +29,14 @@ const hotelBookingSchema = new mongoose.Schema({
         required: [true, 'Ngày check-in là bắt buộc'],
         validate: {
             validator: function (value) {
-                return value >= new Date();
+                // Skip validation nếu booking đã completed hoặc cancelled
+                if (this.booking_status === 'completed' || this.booking_status === 'cancelled') {
+                    return true;
+                }
+                // Chỉ validate ngày tương lai cho booking mới
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                return value >= today;
             },
             message: 'Ngày check-in phải từ hôm nay trở đi'
         }
@@ -73,10 +80,20 @@ const hotelBookingSchema = new mongoose.Schema({
     booking_status: {
         type: String,
         enum: {
-            values: ['reserved', 'pending', 'confirmed', 'cancelled'],
+            values: ['reserved', 'pending', 'confirmed', 'in_use', 'completed', 'cancelled'],
             message: '{VALUE} không phải trạng thái đặt phòng hợp lệ'
         },
         default: 'pending'
+    },
+
+    // Ngày check-in thực tế (khi khách nhận phòng)
+    actual_check_in_date: {
+        type: Date
+    },
+
+    // Ngày check-out thực tế (khi khách trả phòng)
+    actual_check_out_date: {
+        type: Date
     },
 
     // Thời gian hết hạn giữ phòng (cho status 'reserved')

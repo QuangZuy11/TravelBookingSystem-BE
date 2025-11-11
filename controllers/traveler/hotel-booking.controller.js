@@ -614,4 +614,123 @@ exports.getBookingById = async (req, res) => {
     }
 };
 
+/**
+ * Complete booking (chuyển từ confirmed -> completed, reset room availability, allow review)
+ * @route POST /api/traveler/bookings/:bookingId/complete
+ * @access Private
+ */
+exports.completeBooking = async (req, res) => {
+    try {
+        const { bookingId } = req.params;
+        const userId = req.user._id;
+
+        if (!req.user || !req.user._id) {
+            return res.status(401).json({
+                success: false,
+                message: 'Người dùng chưa được xác thực. Vui lòng đăng nhập.'
+            });
+        }
+
+        const booking = await HotelBooking.findById(bookingId)
+            .populate({
+                path: 'hotel_room_id',
+                populate: {
+                    path: 'hotelId',
+                    select: '_id name'
+                }
+            });
+
+        if (!booking) {
+            return res.status(404).json({
+                success: false,
+                message: 'Không tìm thấy booking'
+            });
+        }
+
+        // Kiểm tra quyền
+        if (booking.user_id.toString() !== userId.toString()) {
+            return res.status(403).json({
+                success: false,
+                message: 'Bạn không có quyền thực hiện hành động này'
+            });
+        }
+
+        // Kiểm tra trạng thái hợp lệ để hoàn thành
+        if (booking.booking_status !== 'confirmed' && booking.booking_status !== 'reserved') {
+            return res.status(400).json({
+                success: false,
+                message: `Không thể hoàn thành với trạng thái: ${booking.booking_status}. Chỉ có thể hoàn thành khi booking đã được xác nhận.`
+            });
+        }
+
+        // Kiểm tra room có tồn tại không
+        if (!booking.hotel_room_id) {
+            return res.status(404).json({
+                success: false,
+                message: 'Không tìm thấy phòng khách sạn'
+            });
+        }
+
+        // Get hotelId before updating (since it's already populated)
+        const hotelId = booking.hotel_room_id?.hotelId?._id || booking.hotel_room_id?.hotelId || null;
+
+        if (!hotelId) {
+            return res.status(404).json({
+                success: false,
+                message: 'Không tìm thấy thông tin khách sạn'
+            });
+        }
+
+        // Update booking status to completed (WITHOUT transaction)
+        booking.booking_status = 'completed';
+        await booking.save({ validateBeforeSave: true }); // Validation sẽ skip vì status = completed
+
+        // Reset room availability - remove booking from room's bookings array
+        const Room = mongoose.model('Room');
+        const roomId = booking.hotel_room_id._id || booking.hotel_room_id;
+
+        await Room.findByIdAndUpdate(
+            roomId,
+            {
+                $pull: {
+                    bookings: { bookingId: booking._id }
+                }
+            }
+        );
+        await Room.findByIdAndUpdate(
+            roomId,
+            {
+                $pull: {
+                    bookings: { bookingId: booking._id }
+                }
+            }
+        );
+
+        res.status(200).json({
+            success: true,
+            message: 'Hoàn thành booking thành công. Bạn có thể viết đánh giá cho khách sạn này.',
+            data: {
+                booking: {
+                    _id: booking._id,
+                    booking_status: booking.booking_status,
+                    hotel_room_id: booking.hotel_room_id,
+                    check_in_date: booking.check_in_date,
+                    check_out_date: booking.check_out_date
+                },
+                hotelId: hotelId,
+                canReview: true // Cho frontend biết có thể review
+            }
+        });
+
+    } catch (error) {
+        console.error('Complete Booking Error:', error);
+        console.error('Error Stack:', error.stack);
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi khi hoàn thành booking',
+            error: error.message
+        });
+    }
+};
+
 module.exports = exports;

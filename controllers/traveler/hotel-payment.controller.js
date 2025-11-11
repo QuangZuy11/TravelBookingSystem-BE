@@ -363,6 +363,19 @@ exports.getHotelPaymentStatus = async (req, res) => {
                         await bookingForEmail.save({ session: updateSession });
                         console.log(`✅ Booking updated to confirmed: ${bookingForEmail._id}`);
                         console.log(`💰 Updated booking.total_amount to payment amount: ${payment.amount}`);
+
+                        // Update hotel bookingsCount when payment is successful
+                        const Hotel = mongoose.model('Hotel');
+                        const room = bookingForEmail.hotel_room_id;
+                        if (room && room.hotelId) {
+                            const hotelId = room.hotelId._id || room.hotelId;
+                            await Hotel.findByIdAndUpdate(
+                                hotelId,
+                                { $inc: { bookingsCount: 1 } },
+                                { session: updateSession }
+                            );
+                            console.log(`📊 Updated hotel bookingsCount for hotel: ${hotelId}`);
+                        }
                     } else {
                         console.error('❌ Booking not found:', payment.booking_id);
                     }

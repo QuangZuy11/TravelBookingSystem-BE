@@ -44,4 +44,11 @@ router.get('/', authMiddleware, hotelBookingController.getUserBookings);
  */
 router.get('/:bookingId', authMiddleware, hotelBookingController.getBookingById);
 
+/**
+ * @route   POST /api/traveler/bookings/:bookingId/complete
+ * @desc    Complete booking (chuyển từ confirmed -> completed, reset room availability)
+ * @access  Private
+ */
+router.post('/:bookingId/complete', authMiddleware, hotelBookingController.completeBooking);
+
 module.exports = router;
