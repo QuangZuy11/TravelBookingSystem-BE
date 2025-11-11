@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const hotelPayOSWebhook = require("../controllers/webhooks/hotel-payos.webhook");
 const tourPayOSWebhook = require("../controllers/webhooks/tour-payos.webhook");
+const adPayOSWebhook = require("../controllers/webhooks/ad-payos.webhook");
 
 /**
  * Webhook Routes
@@ -35,5 +36,12 @@ router.post("/tour-payos", tourPayOSWebhook.handleTourPayOSWebhook);
  * @access  Public (development only)
  */
 router.post("/tour-payos/test", tourPayOSWebhook.testTourPayOSWebhook);
+
+/**
+ * @route   POST /api/webhooks/ad-payos
+ * @desc    Webhook endpoint để PayOS gọi khi có update về ad payment
+ * @access  Public (có signature verification)
+ */
+router.post("/ad-payos", adPayOSWebhook.handleAdPayOSWebhook);
 
 module.exports = router;

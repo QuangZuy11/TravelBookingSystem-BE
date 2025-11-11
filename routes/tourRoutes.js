@@ -117,8 +117,7 @@ router.delete('/itineraries/:id',
 // No separate activity endpoints needed
 
 // Itinerary Budget Breakdown - DISABLED (use separate budgetRoutes if needed)
-// router.post('/itineraries/:id/budget', itineraryController.addBudgetBreakdown);
-// router.get('/itineraries/:id/budget', itineraryController.getBudgetBreakdown);
+
 // router.put('/itineraries/:id/budget/:budgetId', itineraryController.updateBudgetItem);  
 // router.delete('/itineraries/:id/budget/:budgetId', itineraryController.deleteBudgetItem);
 

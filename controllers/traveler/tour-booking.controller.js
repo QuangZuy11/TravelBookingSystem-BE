@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const TourBooking = require("../../models/tour-booking.model");
 const Tour = require("../../models/tour.model");
+const Promotion = require("../../models/promotion.model");
 
 /**
  * Tạo tour booking tạm thời (reserved) khi user click "Đặt tour"
@@ -76,9 +77,10 @@ exports.createReservedTourBooking = async (req, res) => {
     // Kiểm tra ngày tour hợp lệ
     const tourDate = new Date(tour_date);
     const now = new Date();
-    now.setHours(0, 0, 0, 0);
+    const today = new Date(now);
+    today.setHours(0, 0, 0, 0);
 
-    if (tourDate < now) {
+    if (tourDate < today) {
       await session.abortTransaction();
       return res.status(400).json({
         success: false,
@@ -86,12 +88,39 @@ exports.createReservedTourBooking = async (req, res) => {
       });
     }
 
-    // Tính tổng tiền
-    const basePrice = tour.price;
-    const discount = tour.discount || 0;
-    const subtotal = basePrice * guests;
-    const discountAmount = (subtotal * discount) / 100;
-    const totalAmount = subtotal - discountAmount;
+    // Tính tổng tiền với promotion
+    const originalPrice = tour.price;
+
+    // Lấy promotions active cho tour này
+    const activePromotions = await Promotion.find({
+      targetType: "tour",
+      targetId: tour_id,
+      status: "active",
+      startDate: { $lte: now },
+      endDate: { $gte: now },
+    }).lean();
+
+    let finalPrice = originalPrice;
+    let discountAmount = 0;
+    let promotionCode = null;
+
+    if (activePromotions.length > 0) {
+      // Lấy promotion đầu tiên (có thể mở rộng để chọn promotion tốt nhất)
+      const activePromotion = activePromotions[0];
+
+      if (activePromotion.discountType === "percent") {
+        discountAmount = (originalPrice * activePromotion.discountValue) / 100;
+        finalPrice = Math.max(0, originalPrice - discountAmount);
+      } else if (activePromotion.discountType === "amount") {
+        discountAmount = activePromotion.discountValue;
+        finalPrice = Math.max(0, originalPrice - discountAmount);
+      }
+      promotionCode = activePromotion.code;
+    }
+
+    const subtotal = originalPrice * guests;
+    const totalDiscount = discountAmount * guests;
+    const totalAmount = finalPrice * guests;
 
     // Tạo booking number
     const bookingNumber = await TourBooking.generateBookingNumber();
@@ -113,11 +142,12 @@ exports.createReservedTourBooking = async (req, res) => {
       },
       total_participants: guests,
       pricing: {
-        adult_price: basePrice,
+        adult_price: finalPrice,
         child_price: 0,
         infant_price: 0,
         subtotal: subtotal,
-        discount: discountAmount,
+        discount: totalDiscount,
+        discount_code: promotionCode,
         total_amount: totalAmount,
       },
       payment: {

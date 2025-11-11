@@ -22,12 +22,23 @@ const adBookingSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["active", "inactive", "expired"],
-      default: "active",
+      enum: ["pending", "active", "inactive", "expired", "cancelled"],
+      default: "pending",
     },
     price: {
       type: Number,
       required: true,
+      default: 300000, // 300,000 VND
+    },
+    payment_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "AdPayment",
+      default: null,
+    },
+    payment_status: {
+      type: String,
+      enum: ["pending", "paid", "failed", "cancelled"],
+      default: "pending",
     },
   },
   {
@@ -35,5 +46,10 @@ const adBookingSchema = new mongoose.Schema(
     collection: "AD_BOOKINGS", // ← QUAN TRỌNG: Chỉ định đúng tên collection
   }
 );
+
+// Indexes for better query performance
+adBookingSchema.index({ status: 1, start_date: 1, end_date: 1 });
+adBookingSchema.index({ tour_id: 1 });
+adBookingSchema.index({ provider_id: 1 });
 
 module.exports = mongoose.model("AdBooking", adBookingSchema);
