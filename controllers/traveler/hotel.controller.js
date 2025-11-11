@@ -83,7 +83,7 @@ exports.searchHotels = async (req, res) => {
             .populate('providerId', 'name email phone')
             .populate({
                 path: 'promotions',
-                match: { 
+                match: {
                     status: 'active',
                     startDate: { $lte: new Date() },
                     endDate: { $gte: new Date() }
@@ -123,7 +123,7 @@ exports.searchHotels = async (req, res) => {
                 if (checkIn && checkOut) {
                     const checkInDate = new Date(checkIn);
                     const checkOutDate = new Date(checkOut);
-                    
+
                     // Only filter by date if dates are valid
                     if (!isNaN(checkInDate.getTime()) && !isNaN(checkOutDate.getTime()) && checkInDate < checkOutDate) {
                         // Find rooms that don't have conflicting bookings
@@ -193,8 +193,19 @@ exports.searchHotels = async (req, res) => {
             })
         );
 
+        // Calculate bookingsCount dynamically for each hotel
+        const processedHotels = await Promise.all(
+            hotels.map(async (hotelObj) => {
+                // Use the hotel instance method to get real-time bookings count
+                const hotelInstance = await Hotel.findById(hotelObj._id);
+                if (hotelInstance) {
+                    hotelObj.bookingsCount = await hotelInstance.getBookingsCount();
+                }
+                return hotelObj;
+            })
+        );
+
         // Sort by price if needed
-        let processedHotels = hotels;
         if (sortBy === 'price') {
             processedHotels.sort((a, b) => {
                 const priceA = a.cheapestRoom?.price || a.realPriceRange?.min || Infinity;
@@ -261,7 +272,7 @@ exports.getHotelById = async (req, res) => {
             .populate('destination_id', 'name description country city image')
             .populate({
                 path: 'promotions',
-                match: { 
+                match: {
                     status: 'active',
                     startDate: { $lte: new Date() },
                     endDate: { $gte: new Date() }
@@ -282,6 +293,9 @@ exports.getHotelById = async (req, res) => {
         }
 
         const hotelObj = hotel.toObject();
+
+        // Calculate bookingsCount dynamically
+        hotelObj.bookingsCount = await hotel.getBookingsCount();
 
         // Get room information
         const rooms = await Room.find({
@@ -500,7 +514,7 @@ exports.getFeaturedHotels = async (req, res) => {
             .populate('providerId', 'name')
             .populate({
                 path: 'promotions',
-                match: { 
+                match: {
                     status: 'active',
                     startDate: { $lte: new Date() },
                     endDate: { $gte: new Date() }

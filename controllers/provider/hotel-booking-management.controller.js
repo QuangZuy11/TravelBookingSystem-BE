@@ -68,11 +68,12 @@ exports.getStatistics = async (req, res) => {
             {
                 $group: {
                     _id: null,
-                    // Tổng số bookings (không tính cancelled)
+                    // ✅ Chỉ đếm bookings CONFIRMED và COMPLETED (đã thanh toán)
+                    // Không đếm 'reserved' vì đó chỉ là booking tạm chưa thanh toán
                     total_bookings: {
                         $sum: {
                             $cond: [
-                                { $in: ['$booking_status', ['reserved', 'confirmed', 'completed']] },
+                                { $in: ['$booking_status', ['confirmed', 'completed']] },
                                 1,
                                 0
                             ]

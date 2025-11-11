@@ -152,6 +152,24 @@ hotelSchema.methods.getRoomStats = async function () {
     return result;
 };
 
+// Method: Lấy số lượt booking confirmed/completed realtime
+hotelSchema.methods.getBookingsCount = async function () {
+    const HotelBooking = mongoose.model('HotelBooking');
+    const Room = mongoose.model('Room');
+
+    // Get all room IDs for this hotel
+    const rooms = await Room.find({ hotelId: this._id }).select('_id');
+    const roomIds = rooms.map(r => r._id);
+
+    // Count confirmed and completed bookings
+    const count = await HotelBooking.countDocuments({
+        hotel_room_id: { $in: roomIds },
+        booking_status: { $in: ['confirmed', 'completed'] }
+    });
+
+    return count;
+};
+
 // Enable virtuals in JSON
 hotelSchema.set('toJSON', { virtuals: true });
 hotelSchema.set('toObject', { virtuals: true });
