@@ -2,10 +2,28 @@ const mongoose = require("mongoose");
 
 const adBookingSchema = new mongoose.Schema(
   {
+    // Type of ad: tour or hotel
+    ad_type: {
+      type: String,
+      enum: ["tour", "hotel"],
+      required: true,
+      default: "tour",
+    },
+    // Tour ID (for tour ads) - optional now
     tour_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Tour",
-      required: true,
+      required: function () {
+        return this.ad_type === "tour";
+      },
+    },
+    // Hotel ID (for hotel ads) - optional now
+    hotel_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Hotel",
+      required: function () {
+        return this.ad_type === "hotel";
+      },
     },
     provider_id: {
       type: mongoose.Schema.Types.ObjectId,
@@ -48,8 +66,9 @@ const adBookingSchema = new mongoose.Schema(
 );
 
 // Indexes for better query performance
-adBookingSchema.index({ status: 1, start_date: 1, end_date: 1 });
+adBookingSchema.index({ ad_type: 1, status: 1, start_date: 1, end_date: 1 });
 adBookingSchema.index({ tour_id: 1 });
+adBookingSchema.index({ hotel_id: 1 });
 adBookingSchema.index({ provider_id: 1 });
 
 module.exports = mongoose.model("AdBooking", adBookingSchema);

@@ -114,6 +114,12 @@ const adPaymentSchema = new mongoose.Schema(
     metadata: {
       tour_title: String,
       tour_id: mongoose.Schema.Types.ObjectId,
+      hotel_name: String,
+      hotel_id: mongoose.Schema.Types.ObjectId,
+      ad_type: {
+        type: String,
+        enum: ["tour", "hotel"],
+      },
     },
 
     // Timestamps
