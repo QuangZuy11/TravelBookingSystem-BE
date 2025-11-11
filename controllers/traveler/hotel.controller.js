@@ -543,6 +543,11 @@ exports.getFeaturedHotels = async (req, res) => {
                         min: rooms[0].pricePerNight,
                         max: rooms[rooms.length - 1].pricePerNight
                     };
+                    // Also set priceRange for consistency with search endpoint
+                    hotelObj.priceRange = {
+                        min: rooms[0].pricePerNight,
+                        max: rooms[rooms.length - 1].pricePerNight
+                    };
                     hotelObj.cheapestRoom = {
                         price: rooms[0].pricePerNight,
                         type: rooms[0].type,
@@ -550,28 +555,30 @@ exports.getFeaturedHotels = async (req, res) => {
                     };
                 }
 
-                // Process promotion if exists
-                if (hotelObj.latestPromotion) {
-                    try {
-                        const promotion = JSON.parse(hotelObj.latestPromotion);
-                        hotelObj.latestPromotion = promotion;
+                // Calculate bookingsCount dynamically (same as search endpoint)
+                hotelObj.bookingsCount = await hotel.getBookingsCount();
 
-                        if (promotion.discountType === 'percent') {
-                            const discount = promotion.discountValue / 100;
+                // Process promotions array (already populated)
+                // The promotions array is already populated and filtered by active status
+                // No need to process latestPromotion if promotions array exists
+                if (hotelObj.promotions && hotelObj.promotions.length > 0 && hotelObj.realPriceRange) {
+                    const activePromotion = hotelObj.promotions[0];
+                    try {
+                        if (activePromotion.discountType === 'percent') {
+                            const discount = activePromotion.discountValue / 100;
                             hotelObj.discountedPriceRange = {
                                 min: Math.round(hotelObj.realPriceRange.min * (1 - discount)),
                                 max: Math.round(hotelObj.realPriceRange.max * (1 - discount))
                             };
-                        } else if (promotion.discountType === 'amount' || promotion.discountType === 'fixed') {
+                        } else if (activePromotion.discountType === 'amount' || activePromotion.discountType === 'fixed') {
                             // Support both 'amount' and 'fixed' for backward compatibility
                             hotelObj.discountedPriceRange = {
-                                min: Math.max(0, hotelObj.realPriceRange.min - promotion.discountValue),
-                                max: Math.max(0, hotelObj.realPriceRange.max - promotion.discountValue)
+                                min: Math.max(0, hotelObj.realPriceRange.min - activePromotion.discountValue),
+                                max: Math.max(0, hotelObj.realPriceRange.max - activePromotion.discountValue)
                             };
                         }
                     } catch (e) {
-                        console.warn('Error parsing promotion:', e);
-                        hotelObj.latestPromotion = null;
+                        console.warn('Error processing promotion:', e);
                     }
                 }
 
