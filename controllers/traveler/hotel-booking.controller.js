@@ -236,16 +236,11 @@ exports.createReservedBooking = async (req, res) => {
  * @access Private (User đã đăng nhập)
  */
 exports.cancelReservedBooking = async (req, res) => {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
     try {
         const { bookingId } = req.params;
 
-
         // Kiểm tra xem user đã được authenticate chưa
         if (!req.user || !req.user._id) {
-            await session.abortTransaction();
             return res.status(401).json({
                 success: false,
                 message: 'Người dùng chưa được xác thực. Vui lòng đăng nhập.'
@@ -256,11 +251,9 @@ exports.cancelReservedBooking = async (req, res) => {
 
         // Tìm booking
         const booking = await HotelBooking.findById(bookingId)
-            .populate('hotel_room_id')
-            .session(session);
+            .populate('hotel_room_id');
 
         if (!booking) {
-            await session.abortTransaction();
             return res.status(404).json({
                 success: false,
                 message: 'Không tìm thấy booking'
@@ -269,60 +262,66 @@ exports.cancelReservedBooking = async (req, res) => {
 
         // Kiểm tra quyền (chỉ user tạo booking mới được hủy)
         if (booking.user_id.toString() !== userId.toString()) {
-            await session.abortTransaction();
             return res.status(403).json({
                 success: false,
                 message: 'Bạn không có quyền hủy booking này'
             });
         }
 
-        // Chỉ cho phép hủy booking có status 'reserved'
-        if (booking.booking_status !== 'reserved') {
-            await session.abortTransaction();
+        // Chỉ cho phép hủy booking có status 'reserved' hoặc 'confirmed'
+        if (!['reserved', 'confirmed'].includes(booking.booking_status)) {
             return res.status(400).json({
                 success: false,
                 message: `Không thể hủy booking với trạng thái: ${booking.booking_status}`
             });
         }
 
-        // Cập nhật booking status
+        // Cập nhật booking status (GIỮ NGUYÊN payment_status - KHÔNG hoàn tiền)
         booking.booking_status = 'cancelled';
         booking.cancelled_at = new Date();
-        await booking.save({ session });
 
-        // Xóa booking khỏi room's bookings array (không cần update status)
-        await Room.findByIdAndUpdate(
-            booking.hotel_room_id._id,
-            {
-                $pull: {
-                    bookings: { bookingId: booking._id }
+        // KHÔNG update payment_status - giữ nguyên để tracking đã thanh toán hay chưa
+        // - Nếu payment_status = 'paid' → Giữ 'paid' (không hoàn tiền)
+        // - Nếu payment_status = 'pending' → Giữ 'pending' (chưa thanh toán)
+
+        await booking.save({ validateBeforeSave: false }); // Skip validation
+
+        // Xóa booking khỏi room's bookings array
+        if (booking.hotel_room_id && booking.hotel_room_id._id) {
+            await Room.findByIdAndUpdate(
+                booking.hotel_room_id._id,
+                {
+                    $pull: {
+                        bookings: { bookingId: booking._id }
+                    }
                 }
-            },
-            { session }
-        );
-
-        await session.commitTransaction();
+            );
+        }
 
         res.status(200).json({
             success: true,
-            message: 'Hủy booking thành công.',
+            message: booking.payment_status === 'paid'
+                ? 'Hủy booking thành công. Lưu ý: Theo chính sách, tiền đã thanh toán sẽ không được hoàn lại.'
+                : 'Hủy booking thành công.',
             data: {
                 bookingId: booking._id,
                 bookingStatus: booking.booking_status,
-                cancelledAt: booking.cancelled_at
+                paymentStatus: booking.payment_status,
+                cancelledAt: booking.cancelled_at,
+                note: booking.payment_status === 'paid'
+                    ? 'Booking đã được thanh toán và không được hoàn tiền'
+                    : 'Booking chưa thanh toán'
             }
         });
 
     } catch (error) {
-        await session.abortTransaction();
         console.error('Cancel Reserved Booking Error:', error);
+        console.error('Error Stack:', error.stack);
         res.status(500).json({
             success: false,
             message: 'Lỗi hủy booking',
-            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+            error: error.message
         });
-    } finally {
-        session.endSession();
     }
 };
 
