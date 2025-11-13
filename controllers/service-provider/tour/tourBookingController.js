@@ -648,6 +648,56 @@ exports.checkInBooking = async (req, res) => {
 
     console.log("Booking saved successfully");
 
+    // Create notification for traveler
+    try {
+      const notificationService = require("../../../services/notification.service");
+
+      // Get customer_id before populate (it might be ObjectId)
+      const customerId =
+        booking.customer_id instanceof mongoose.Types.ObjectId
+          ? booking.customer_id
+          : booking.customer_id?._id || booking.customer_id;
+
+      if (!customerId) {
+        console.error("⚠️ No customer_id found in booking");
+        throw new Error("Customer ID not found");
+      }
+
+      // Populate tour to get tour name
+      await booking.populate("tour_id", "title");
+
+      const tourName =
+        booking.tour_id?.title || booking.tour_id?.name || "Tour";
+
+      console.log("Creating check-in notification:", {
+        userId: customerId.toString(),
+        bookingId: booking._id.toString(),
+        bookingNumber: booking.booking_number,
+        tourName,
+        tourDate: booking.tour_date,
+      });
+
+      await notificationService.createTourCheckInNotification({
+        userId: customerId.toString(),
+        bookingId: booking._id,
+        bookingNumber: booking.booking_number,
+        tourName: tourName,
+        tourDate: booking.tour_date,
+      });
+
+      console.log(
+        "✅ Check-in notification created for traveler:",
+        customerId.toString()
+      );
+    } catch (notificationError) {
+      // Don't fail the check-in if notification fails
+      console.error(
+        "⚠️ Failed to create check-in notification:",
+        notificationError
+      );
+      console.error("Notification error stack:", notificationError.stack);
+    }
+
     res.status(200).json({
       success: true,
       message: "Traveler checked in successfully",

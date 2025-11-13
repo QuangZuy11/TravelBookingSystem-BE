@@ -233,6 +233,86 @@ exports.createAdBookingSuccessNotification = async (data) => {
  * @param {string} data.tourName - Tên tour
  * @param {Date} data.tourDate - Ngày khởi hành tour
  */
+/**
+ * Tạo thông báo check-in tour thành công
+ * @param {Object} data - Dữ liệu thông báo
+ * @param {string} data.userId - ID người dùng (traveler)
+ * @param {string} data.bookingId - ID booking
+ * @param {string} data.bookingNumber - Số booking
+ * @param {string} data.tourName - Tên tour
+ * @param {Date} data.tourDate - Ngày tour
+ */
+exports.createTourCheckInNotification = async (data) => {
+  try {
+    const { userId, bookingId, bookingNumber, tourName, tourDate } = data;
+
+    if (!userId) {
+      console.error("❌ [NOTIFICATION] Missing userId");
+      throw new Error("userId is required");
+    }
+
+    // Convert userId to ObjectId if it's a string
+    const mongoose = require("mongoose");
+    const userIdObjectId =
+      userId instanceof mongoose.Types.ObjectId
+        ? userId
+        : new mongoose.Types.ObjectId(userId);
+
+    console.log("📧 [NOTIFICATION] Creating check-in notification:", {
+      userId: userIdObjectId.toString(),
+      bookingId,
+      bookingNumber,
+      tourName,
+      tourDate,
+    });
+
+    const tourDateFormatted = tourDate
+      ? new Date(tourDate).toLocaleDateString("vi-VN", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        })
+      : "";
+
+    const title = "Đã check-in tour";
+    const message = `Bạn đã được check-in thành công cho tour "${
+      tourName || ""
+    }" vào ngày ${tourDateFormatted}. Mã đặt tour: ${
+      bookingNumber || bookingId
+    }.`;
+
+    const notification = await Notification.createNotification({
+      user_id: userIdObjectId,
+      title,
+      message,
+      type: "success",
+      status: "unread",
+      related_id: bookingId,
+      related_type: "TourBooking",
+      metadata: {
+        bookingNumber,
+        tourName,
+        tourDate,
+        checkIn: true,
+      },
+    });
+
+    console.log("✅ [NOTIFICATION] Tour check-in notification created:", {
+      notificationId: notification._id,
+      userId: notification.user_id,
+      title: notification.title,
+    });
+
+    return notification;
+  } catch (error) {
+    console.error(
+      "❌ [NOTIFICATION] Error creating tour check-in notification:",
+      error
+    );
+    throw error;
+  }
+};
+
 exports.createTourNoShowNotification = async (data) => {
   try {
     const { userId, bookingId, bookingNumber, tourName, tourDate } = data;
@@ -325,5 +405,6 @@ module.exports = {
     exports.createBookingCancellationNotification,
   createAdBookingSuccessNotification:
     exports.createAdBookingSuccessNotification,
+  createTourCheckInNotification: exports.createTourCheckInNotification,
   createTourNoShowNotification: exports.createTourNoShowNotification,
 };
