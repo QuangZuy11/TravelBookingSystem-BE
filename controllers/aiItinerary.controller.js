@@ -266,9 +266,47 @@ exports.generateItineraryFromRequest = async (req, res) => {
 
     // Fetch POIs for each destination
     for (const dest of destinations.filter(d => d)) {
-      const destPois = await PointOfInterest.find({ destinationId: dest._id })
-        .sort({ 'ratings.average': -1 })
-        .limit(15); // Reduce per-destination limit to accommodate multiple destinations
+      // ✅ Smart POI filtering based on budget level
+      let query = { destinationId: dest._id };
+
+      console.log(`🔍 POI Query for ${dest.destination_name}:`);
+      console.log(`   Budget Level: ${request.budget_level || 'not set'}`);
+      console.log(`   Budget Total: ${request.budget_total || 0} VND`);
+
+      // Filter by entry fee based on budget level
+      if (request.budget_level === 'high' || request.budget_total >= 10000000) {
+        // High budget: prioritize premium POIs (entry fee >= 1M VND)
+        query['entryFee.adult'] = { $gte: 1000000 };
+        console.log(`   Filter: PREMIUM (>= 1M VND)`);
+      } else if (request.budget_level === 'low' || (request.budget_total > 0 && request.budget_total < 3000000)) {
+        // Low budget: only free or cheap POIs (entry fee < 500K VND)
+        query['entryFee.adult'] = { $lt: 500000 };
+        console.log(`   Filter: BUDGET (< 500K VND)`);
+      } else {
+        console.log(`   Filter: ALL POIs (no budget filter)`);
+      }
+      // Medium budget: no filter (all POIs)
+
+      let destPois = await PointOfInterest.find(query)
+        .sort({ 'entryFee.adult': -1, 'ratings.average': -1 }) // ✅ Sort by price first, then rating
+        .limit(15);
+
+      console.log(`   Found: ${destPois.length} POIs`);
+      if (destPois.length > 0) {
+        console.log(`   Top 3 POIs:`);
+        destPois.slice(0, 3).forEach((poi, i) => {
+          console.log(`     ${i + 1}. ${poi.name} - ${(poi.entryFee?.adult || 0).toLocaleString()} VND`);
+        });
+      }
+
+      // If no premium POIs found for high budget, fall back to all POIs
+      if (destPois.length === 0 && (request.budget_level === 'high' || request.budget_total >= 10000000)) {
+        console.log('⚠️  No premium POIs found, falling back to all POIs');
+        destPois = await PointOfInterest.find({ destinationId: dest._id })
+          .sort({ 'entryFee.adult': -1, 'ratings.average': -1 })
+          .limit(15);
+        console.log(`   Fallback found: ${destPois.length} POIs`);
+      }
 
       // Add destination name to each POI
       destPois.forEach(poi => {
@@ -281,10 +319,17 @@ exports.generateItineraryFromRequest = async (req, res) => {
     // If no POIs found through destination IDs, try fallback with name search
     if (pois.length === 0) {
       for (const name of destinationNames) {
-        const fallbackPois = await PointOfInterest.find({
-          name: new RegExp(name, 'i')
-        })
-          .sort({ 'ratings.average': -1 })
+        // ✅ Apply same budget-based filtering in fallback
+        let fallbackQuery = { name: new RegExp(name, 'i') };
+
+        if (request.budget_level === 'high' || request.budget_total >= 10000000) {
+          fallbackQuery['entryFee.adult'] = { $gte: 1000000 };
+        } else if (request.budget_level === 'low' || (request.budget_total > 0 && request.budget_total < 3000000)) {
+          fallbackQuery['entryFee.adult'] = { $lt: 500000 };
+        }
+
+        const fallbackPois = await PointOfInterest.find(fallbackQuery)
+          .sort({ 'entryFee.adult': -1, 'ratings.average': -1 })
           .limit(15);
 
         fallbackPois.forEach(poi => {
@@ -294,7 +339,7 @@ exports.generateItineraryFromRequest = async (req, res) => {
         pois = pois.concat(fallbackPois);
       }
     }
-    console.log('🛰️ Found POIs:', pois.length);
+    console.log('🛰️ Found POIs:', pois.length, '| Budget level:', request.budget_level || 'medium');
 
     // Determine number of days
     const days = request.duration_days || (() => {
@@ -1271,6 +1316,72 @@ exports.deleteAiItinerary = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Lỗi khi xóa lịch trình',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * ✅ Get itinerary with booking availability info
+ * GET /api/ai-itineraries/:id/booking-info
+ */
+exports.getItineraryBookingInfo = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const ServiceProvider = require('../models/service-provider.model');
+
+    // Get itinerary with preferred providers
+    const itinerary = await AiGeneratedItinerary.findById(id)
+      .populate('preferred_providers', 'company_name rating email phone booking_stats');
+
+    if (!itinerary) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy lịch trình AI'
+      });
+    }
+
+    // Check if bookable
+    const isBookable = itinerary.isAvailableForBooking();
+
+    // Get available tour providers for this destination
+    const availableProviders = await ServiceProvider.find({
+      type: 'tour',
+      admin_verified: true,
+      'booking_settings.available_destinations': {
+        $regex: new RegExp(itinerary.destination, 'i')
+      }
+    })
+      .select('company_name rating email phone booking_stats.approval_rate booking_stats.completed_bookings booking_settings.response_time_hours')
+      .limit(10)
+      .sort({ rating: -1 });
+
+    res.json({
+      success: true,
+      data: {
+        itinerary_id: itinerary._id,
+        destination: itinerary.destination,
+        duration_days: itinerary.duration_days,
+        participant_number: itinerary.participant_number,
+        is_bookable: isBookable,
+        estimated_price_range: itinerary.estimated_price_range,
+        available_providers: availableProviders.map(p => ({
+          _id: p._id,
+          company_name: p.company_name,
+          rating: p.rating,
+          approval_rate: p.booking_stats?.approval_rate || 0,
+          completed_bookings: p.booking_stats?.completed_bookings || 0,
+          response_time_hours: p.booking_settings?.response_time_hours || 48
+        })),
+        booking_count: itinerary.booking_count,
+        total_bookings: itinerary.total_bookings
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error getting booking info:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi server',
       error: error.message
     });
   }
