@@ -3,9 +3,9 @@
  * Handles all booking operations for tours
  */
 
-const TourBooking = require('../../../models/tour-booking.model');
-const Tour = require('../../../models/tour.model');
-const mongoose = require('mongoose');
+const TourBooking = require("../../../models/tour-booking.model");
+const Tour = require("../../../models/tour.model");
+const mongoose = require("mongoose");
 
 /**
  * @route   POST /api/tour-bookings
@@ -23,7 +23,7 @@ exports.createTourBooking = async (req, res) => {
       special_requests,
       dietary_requirements,
       pickup_info,
-      payment_method
+      payment_method,
     } = req.body;
 
     // Validate tour exists
@@ -31,46 +31,50 @@ exports.createTourBooking = async (req, res) => {
     if (!tour) {
       return res.status(404).json({
         success: false,
-        message: 'Tour not found'
+        message: "Tour not found",
       });
     }
 
     // Find available date entry
-    const dateEntry = tour.available_dates.find(d => 
-      d.date.toISOString().split('T')[0] === new Date(tour_date).toISOString().split('T')[0]
+    const dateEntry = tour.available_dates.find(
+      (d) =>
+        d.date.toISOString().split("T")[0] ===
+        new Date(tour_date).toISOString().split("T")[0]
     );
 
     if (!dateEntry) {
       return res.status(404).json({
         success: false,
-        message: 'Tour is not available on this date'
+        message: "Tour is not available on this date",
       });
     }
 
-    if (dateEntry.status !== 'available') {
+    if (dateEntry.status !== "available") {
       return res.status(400).json({
         success: false,
-        message: `This date is ${dateEntry.status}. Cannot create booking.`
+        message: `This date is ${dateEntry.status}. Cannot create booking.`,
       });
     }
 
     // Check if date has enough slots
-    const totalParticipants = participants.adults + participants.children + participants.infants;
+    const totalParticipants =
+      participants.adults + participants.children + participants.infants;
     const availableSlots = dateEntry.available_slots - dateEntry.booked_slots;
-    
+
     if (availableSlots < totalParticipants) {
       return res.status(400).json({
         success: false,
-        message: `Not enough slots available. Only ${availableSlots} slots left`
+        message: `Not enough slots available. Only ${availableSlots} slots left`,
       });
     }
 
     // Check booking deadline
-    const hoursUntilTour = (new Date(tour_date) - new Date()) / (1000 * 60 * 60);
+    const hoursUntilTour =
+      (new Date(tour_date) - new Date()) / (1000 * 60 * 60);
     if (hoursUntilTour < tour.booking_info.booking_deadline) {
       return res.status(400).json({
         success: false,
-        message: `Booking must be made at least ${tour.booking_info.booking_deadline} hours before the tour`
+        message: `Booking must be made at least ${tour.booking_info.booking_deadline} hours before the tour`,
       });
     }
 
@@ -82,15 +86,16 @@ exports.createTourBooking = async (req, res) => {
     const child_price = tour.pricing.child_price;
     const infant_price = tour.pricing.infant_price || 0;
 
-    const subtotal = 
-      (participants.adults * adult_price) +
-      (participants.children * child_price) +
-      (participants.infants * infant_price);
+    const subtotal =
+      participants.adults * adult_price +
+      participants.children * child_price +
+      participants.infants * infant_price;
 
     // Apply group discount if applicable
     let discount = 0;
     if (totalParticipants >= tour.pricing.group_discount.min_people) {
-      discount = (subtotal * tour.pricing.group_discount.discount_percent) / 100;
+      discount =
+        (subtotal * tour.pricing.group_discount.discount_percent) / 100;
     }
 
     const tax = (subtotal - discount) * 0.1; // 10% tax
@@ -115,16 +120,16 @@ exports.createTourBooking = async (req, res) => {
         discount,
         tax,
         service_fee,
-        total_amount
+        total_amount,
       },
       payment: {
         method: payment_method,
-        status: 'pending'
+        status: "pending",
       },
       contact_info,
       special_requests,
       dietary_requirements,
-      pickup_info
+      pickup_info,
     });
 
     await booking.save();
@@ -138,22 +143,21 @@ exports.createTourBooking = async (req, res) => {
 
     // Populate booking data
     await booking.populate([
-      { path: 'tour_id', select: 'title location image duration_hours' },
-      { path: 'customer_id', select: 'username email phone_number' }
+      { path: "tour_id", select: "title location image duration_hours" },
+      { path: "customer_id", select: "username email phone_number" },
     ]);
 
     res.status(201).json({
       success: true,
-      message: 'Booking created successfully',
-      data: booking
+      message: "Booking created successfully",
+      data: booking,
     });
-
   } catch (error) {
-    console.error('Error creating tour booking:', error);
+    console.error("Error creating tour booking:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to create booking',
-      error: error.message
+      message: "Failed to create booking",
+      error: error.message,
     });
   }
 };
@@ -173,7 +177,7 @@ exports.getMyBookings = async (req, res) => {
     }
 
     const bookings = await TourBooking.find(query)
-      .populate('tour_id', 'title location image duration_hours rating')
+      .populate("tour_id", "title location image duration_hours rating")
       .sort({ booking_date: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit);
@@ -186,16 +190,15 @@ exports.getMyBookings = async (req, res) => {
       pagination: {
         total: count,
         page: parseInt(page),
-        pages: Math.ceil(count / limit)
-      }
+        pages: Math.ceil(count / limit),
+      },
     });
-
   } catch (error) {
-    console.error('Error fetching my bookings:', error);
+    console.error("Error fetching my bookings:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch bookings',
-      error: error.message
+      message: "Failed to fetch bookings",
+      error: error.message,
     });
   }
 };
@@ -208,36 +211,38 @@ exports.getMyBookings = async (req, res) => {
 exports.getBookingById = async (req, res) => {
   try {
     const booking = await TourBooking.findById(req.params.id)
-      .populate('tour_id')
-      .populate('customer_id', 'username email phone_number')
-      .populate('provider_id', 'company_name contact_email');
+      .populate("tour_id")
+      .populate("customer_id", "username email phone_number")
+      .populate("provider_id", "company_name contact_email");
 
     if (!booking) {
       return res.status(404).json({
         success: false,
-        message: 'Booking not found'
+        message: "Booking not found",
       });
     }
 
     // Check access rights
-    if (req.user.role === 'customer' && booking.customer_id._id.toString() !== req.user._id.toString()) {
+    if (
+      req.user.role === "customer" &&
+      booking.customer_id._id.toString() !== req.user._id.toString()
+    ) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied'
+        message: "Access denied",
       });
     }
 
     res.status(200).json({
       success: true,
-      data: booking
+      data: booking,
     });
-
   } catch (error) {
-    console.error('Error fetching booking:', error);
+    console.error("Error fetching booking:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch booking',
-      error: error.message
+      message: "Failed to fetch booking",
+      error: error.message,
     });
   }
 };
@@ -254,29 +259,31 @@ exports.confirmBooking = async (req, res) => {
     if (!booking) {
       return res.status(404).json({
         success: false,
-        message: 'Booking not found'
+        message: "Booking not found",
       });
     }
 
     // Check if provider owns this booking
-    if (booking.provider_id.toString() !== req.user.service_provider_id.toString()) {
+    if (
+      booking.provider_id.toString() !== req.user.service_provider_id.toString()
+    ) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied'
+        message: "Access denied",
       });
     }
 
-    if (booking.status !== 'pending') {
+    if (booking.status !== "pending") {
       return res.status(400).json({
         success: false,
-        message: 'Only pending bookings can be confirmed'
+        message: "Only pending bookings can be confirmed",
       });
     }
 
-    booking.status = 'confirmed';
+    booking.status = "confirmed";
     booking.confirmed_at = new Date();
     booking.confirmed_by = req.user._id;
-    booking.provider_notes = req.body.notes || '';
+    booking.provider_notes = req.body.notes || "";
 
     await booking.save();
 
@@ -284,16 +291,15 @@ exports.confirmBooking = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Booking confirmed successfully',
-      data: booking
+      message: "Booking confirmed successfully",
+      data: booking,
     });
-
   } catch (error) {
-    console.error('Error confirming booking:', error);
+    console.error("Error confirming booking:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to confirm booking',
-      error: error.message
+      message: "Failed to confirm booking",
+      error: error.message,
     });
   }
 };
@@ -310,18 +316,23 @@ exports.cancelBooking = async (req, res) => {
     if (!booking) {
       return res.status(404).json({
         success: false,
-        message: 'Booking not found'
+        message: "Booking not found",
       });
     }
 
     // Check access rights
-    const isCustomer = req.user.role === 'customer' && booking.customer_id.toString() === req.user._id.toString();
-    const isProvider = req.user.role === 'ServiceProvider' && booking.provider_id.toString() === req.user.service_provider_id.toString();
+    const isCustomer =
+      req.user.role === "customer" &&
+      booking.customer_id.toString() === req.user._id.toString();
+    const isProvider =
+      req.user.role === "ServiceProvider" &&
+      booking.provider_id.toString() ===
+        req.user.service_provider_id.toString();
 
     if (!isCustomer && !isProvider) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied'
+        message: "Access denied",
       });
     }
 
@@ -329,27 +340,30 @@ exports.cancelBooking = async (req, res) => {
     if (!booking.canBeCancelled()) {
       return res.status(400).json({
         success: false,
-        message: 'This booking cannot be cancelled'
+        message: "This booking cannot be cancelled",
       });
     }
 
     // Calculate refund
     const refundInfo = booking.calculateRefund();
 
-    booking.status = 'cancelled';
+    booking.status = "cancelled";
     booking.cancellation = {
       is_cancelled: true,
       cancelled_at: new Date(),
       cancelled_by: req.user._id,
-      cancellation_reason: req.body.reason || 'No reason provided',
-      refund_percentage: refundInfo.refund_percentage
+      cancellation_reason: req.body.reason || "No reason provided",
+      refund_percentage: refundInfo.refund_percentage,
     };
 
     await booking.save();
 
     // Update tour date slots
     const tour = await Tour.findById(booking.tour_id);
-    await tour.cancelBookingSlots(booking.tour_date, booking.total_participants);
+    await tour.cancelBookingSlots(
+      booking.tour_date,
+      booking.total_participants
+    );
 
     // Update tour current participants
     tour.capacity.current_participants -= booking.total_participants;
@@ -360,19 +374,18 @@ exports.cancelBooking = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Booking cancelled successfully',
+      message: "Booking cancelled successfully",
       data: {
         booking,
-        refund_info: refundInfo
-      }
+        refund_info: refundInfo,
+      },
     });
-
   } catch (error) {
-    console.error('Error cancelling booking:', error);
+    console.error("Error cancelling booking:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to cancel booking',
-      error: error.message
+      message: "Failed to cancel booking",
+      error: error.message,
     });
   }
 };
@@ -391,38 +404,37 @@ exports.updatePayment = async (req, res) => {
     if (!booking) {
       return res.status(404).json({
         success: false,
-        message: 'Booking not found'
+        message: "Booking not found",
       });
     }
 
     booking.payment.status = status;
     booking.payment.transaction_id = transaction_id;
 
-    if (status === 'completed') {
+    if (status === "completed") {
       booking.payment.paid_at = new Date();
-      booking.status = 'paid';
+      booking.status = "paid";
     }
 
     await booking.save();
 
     res.status(200).json({
       success: true,
-      message: 'Payment status updated successfully',
-      data: booking
+      message: "Payment status updated successfully",
+      data: booking,
     });
-
   } catch (error) {
-    console.error('Error updating payment:', error);
+    console.error("Error updating payment:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to update payment',
-      error: error.message
+      message: "Failed to update payment",
+      error: error.message,
     });
   }
 };
 
 /**
- * @route   GET /api/tour-bookings/provider/bookings
+ * @route   GET /api/tour/bookings/provider/all
  * @desc    Get all bookings for provider
  * @access  Private (Provider)
  */
@@ -430,22 +442,48 @@ exports.getProviderBookings = async (req, res) => {
   try {
     const { status, date, page = 1, limit = 20 } = req.query;
 
-    const query = { provider_id: req.user.service_provider_id };
-    
+    // Get provider_id from token or find from user_id
+    let providerId = req.user.service_provider_id;
+
+    // If not in token, try to find from ServiceProvider model
+    if (!providerId) {
+      const ServiceProvider = require("../../../models/service-provider.model");
+      const userId = req.user._id || req.user.id;
+      const provider = await ServiceProvider.findOne({ user_id: userId });
+      if (provider) {
+        providerId = provider._id;
+      } else {
+        return res.status(403).json({
+          success: false,
+          message: "Không tìm thấy thông tin nhà cung cấp dịch vụ",
+          error: "Service provider not found",
+        });
+      }
+    }
+
+    // Convert to ObjectId if needed
+    if (typeof providerId === "string") {
+      providerId = new mongoose.Types.ObjectId(providerId);
+    }
+
+    const query = { provider_id: providerId };
+
     if (status) {
       query.status = status;
     }
 
     if (date) {
-      const startDate = new Date(date);
-      const endDate = new Date(date);
-      endDate.setDate(endDate.getDate() + 1);
-      query.tour_date = { $gte: startDate, $lt: endDate };
+      // Parse date string (format: YYYY-MM-DD)
+      const selectedDate = new Date(date);
+      selectedDate.setHours(0, 0, 0, 0); // Start of day
+      const nextDate = new Date(selectedDate);
+      nextDate.setDate(nextDate.getDate() + 1); // Start of next day
+      query.tour_date = { $gte: selectedDate, $lt: nextDate };
     }
 
     const bookings = await TourBooking.find(query)
-      .populate('tour_id', 'title location')
-      .populate('customer_id', 'username email phone_number')
+      .populate("tour_id", "title location image")
+      .populate("customer_id", "name email")
       .sort({ tour_date: 1, booking_date: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit);
@@ -454,14 +492,18 @@ exports.getProviderBookings = async (req, res) => {
 
     // Calculate statistics
     const stats = await TourBooking.aggregate([
-      { $match: { provider_id: new mongoose.Types.ObjectId(req.user.service_provider_id) } },
+      {
+        $match: {
+          provider_id: new mongoose.Types.ObjectId(providerId),
+        },
+      },
       {
         $group: {
-          _id: '$status',
+          _id: "$status",
           count: { $sum: 1 },
-          total_revenue: { $sum: '$pricing.total_amount' }
-        }
-      }
+          total_revenue: { $sum: "$pricing.total_amount" },
+        },
+      },
     ]);
 
     res.status(200).json({
@@ -471,16 +513,288 @@ exports.getProviderBookings = async (req, res) => {
       pagination: {
         total: count,
         page: parseInt(page),
-        pages: Math.ceil(count / limit)
-      }
+        pages: Math.ceil(count / limit),
+      },
     });
-
   } catch (error) {
-    console.error('Error fetching provider bookings:', error);
+    console.error("Error fetching provider bookings:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch bookings',
-      error: error.message
+      message: "Failed to fetch bookings",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * @route   PUT /api/tour-bookings/:id/check-in
+ * @desc    Check-in a traveler (mark as attended)
+ * @access  Private (Provider)
+ */
+exports.checkInBooking = async (req, res) => {
+  try {
+    console.log("Check-in request:", {
+      bookingId: req.params.id,
+      userId: req.user._id,
+      serviceProviderId: req.user.service_provider_id,
+    });
+
+    const booking = await TourBooking.findById(req.params.id);
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found",
+      });
+    }
+
+    // Get provider_id from token or find from user_id
+    let providerId = req.user.service_provider_id;
+
+    // If not in token, try to find from ServiceProvider model
+    if (!providerId) {
+      const ServiceProvider = require("../../../models/service-provider.model");
+      const userId = req.user._id || req.user.id;
+      const provider = await ServiceProvider.findOne({ user_id: userId });
+      if (provider) {
+        providerId = provider._id;
+      } else {
+        return res.status(403).json({
+          success: false,
+          message: "Không tìm thấy thông tin nhà cung cấp dịch vụ",
+          error: "Service provider not found",
+        });
+      }
+    }
+
+    // Convert to ObjectId if needed
+    if (typeof providerId === "string") {
+      providerId = new mongoose.Types.ObjectId(providerId);
+    }
+
+    // Ensure booking.provider_id is ObjectId for comparison
+    const bookingProviderId =
+      booking.provider_id instanceof mongoose.Types.ObjectId
+        ? booking.provider_id
+        : new mongoose.Types.ObjectId(booking.provider_id);
+
+    // Check if provider owns this booking
+    if (!bookingProviderId.equals(providerId)) {
+      console.error("Provider ID mismatch:", {
+        bookingProviderId: bookingProviderId.toString(),
+        providerId: providerId.toString(),
+        bookingId: booking._id,
+      });
+      return res.status(403).json({
+        success: false,
+        message: "Access denied",
+      });
+    }
+
+    // Validate booking can be checked in
+    if (booking.status === "cancelled" || booking.status === "refunded") {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot check-in a cancelled or refunded booking",
+      });
+    }
+
+    // Check if already checked in
+    if (booking.attendance_status === "attended") {
+      return res.status(400).json({
+        success: false,
+        message: "Traveler has already been checked in",
+      });
+    }
+
+    // Update attendance status
+    booking.attendance_status = "attended";
+    booking.checked_in_at = new Date();
+
+    // Ensure checked_in_by is ObjectId
+    if (providerId instanceof mongoose.Types.ObjectId) {
+      booking.checked_in_by = providerId;
+    } else {
+      booking.checked_in_by = new mongoose.Types.ObjectId(providerId);
+    }
+
+    // Update booking status to in_progress if it's paid/confirmed
+    if (booking.status === "paid" || booking.status === "confirmed") {
+      booking.status = "in_progress";
+    }
+
+    console.log("Saving booking with:", {
+      attendance_status: booking.attendance_status,
+      checked_in_at: booking.checked_in_at,
+      checked_in_by: booking.checked_in_by?.toString(),
+      checked_in_by_type: booking.checked_in_by?.constructor?.name,
+      status: booking.status,
+      providerId: providerId?.toString(),
+    });
+
+    // Validate before save
+    const validationError = booking.validateSync();
+    if (validationError) {
+      console.error("Validation error:", validationError);
+      return res.status(400).json({
+        success: false,
+        message: "Validation error",
+        error: validationError.message,
+        details: validationError.errors,
+      });
+    }
+
+    await booking.save();
+
+    console.log("Booking saved successfully");
+
+    res.status(200).json({
+      success: true,
+      message: "Traveler checked in successfully",
+      data: booking,
+    });
+  } catch (error) {
+    console.error("Error checking in booking:", error);
+    console.error("Error stack:", error.stack);
+    res.status(500).json({
+      success: false,
+      message: "Failed to check in booking",
+      error: error.message,
+      details: process.env.NODE_ENV === "development" ? error.stack : undefined,
+    });
+  }
+};
+
+/**
+ * @route   PUT /api/tour-bookings/:id/mark-no-show
+ * @desc    Manually mark a booking as no-show (Provider)
+ * @access  Private (Provider)
+ */
+exports.markNoShow = async (req, res) => {
+  try {
+    const booking = await TourBooking.findById(req.params.id);
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found",
+      });
+    }
+
+    // Get provider_id from token or find from user_id
+    let providerId = req.user.service_provider_id;
+
+    // If not in token, try to find from ServiceProvider model
+    if (!providerId) {
+      const ServiceProvider = require("../../../models/service-provider.model");
+      const userId = req.user._id || req.user.id;
+      const provider = await ServiceProvider.findOne({ user_id: userId });
+      if (provider) {
+        providerId = provider._id;
+      } else {
+        return res.status(403).json({
+          success: false,
+          message: "Không tìm thấy thông tin nhà cung cấp dịch vụ",
+          error: "Service provider not found",
+        });
+      }
+    }
+
+    // Convert to ObjectId if needed
+    if (typeof providerId === "string") {
+      providerId = new mongoose.Types.ObjectId(providerId);
+    }
+
+    // Ensure booking.provider_id is ObjectId for comparison
+    const bookingProviderId =
+      booking.provider_id instanceof mongoose.Types.ObjectId
+        ? booking.provider_id
+        : new mongoose.Types.ObjectId(booking.provider_id);
+
+    // Check if provider owns this booking
+    if (!bookingProviderId.equals(providerId)) {
+      console.error("Provider ID mismatch:", {
+        bookingProviderId: bookingProviderId.toString(),
+        providerId: providerId.toString(),
+        bookingId: booking._id,
+      });
+      return res.status(403).json({
+        success: false,
+        message: "Access denied",
+      });
+    }
+
+    // Check if already checked in
+    if (booking.attendance_status === "attended") {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot mark as no-show if already checked in",
+      });
+    }
+
+    // Update attendance and booking status
+    booking.attendance_status = "no-show";
+    booking.status = "no-show";
+    booking.no_show_at = new Date();
+
+    await booking.save();
+
+    // Send notifications
+    try {
+      const {
+        createTourNoShowNotification,
+      } = require("../../../services/notification.service");
+      const Notification = require("../../../models/notification.model");
+
+      const tourName = booking.tour_id?.title || "N/A";
+      const bookingNumber =
+        booking.booking_number ||
+        `T-${booking._id.toString().slice(-6).toUpperCase()}`;
+      const customerName = booking.customer_id?.name || "Khách hàng";
+
+      // Notify traveler
+      await createTourNoShowNotification({
+        userId: booking.customer_id?._id || booking.customer_id,
+        bookingId: booking._id,
+        bookingNumber: bookingNumber,
+        tourName: tourName,
+        tourDate: booking.tour_date,
+      });
+
+      // Notify provider
+      await Notification.createNotification({
+        user_id: booking.provider_id,
+        title: "Khách hàng không đến tour",
+        message: `Khách hàng ${customerName} đã không đến tour "${tourName}" vào ngày ${new Date(
+          booking.tour_date
+        ).toLocaleDateString("vi-VN")}. Mã đặt tour: ${bookingNumber}.`,
+        type: "warning",
+        status: "unread",
+        related_id: booking._id,
+        related_type: "TourBooking",
+        metadata: {
+          bookingNumber,
+          tourName,
+          tourDate: booking.tour_date,
+          customerName,
+        },
+      });
+    } catch (notificationError) {
+      console.error("Error sending no-show notifications:", notificationError);
+      // Don't fail the request if notification fails
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Booking marked as no-show successfully",
+      data: booking,
+    });
+  } catch (error) {
+    console.error("Error marking booking as no-show:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to mark booking as no-show",
+      error: error.message,
     });
   }
 };
@@ -494,12 +808,14 @@ exports.getBookingStats = async (req, res) => {
   try {
     const { start_date, end_date } = req.query;
 
-    const matchStage = { provider_id: new mongoose.Types.ObjectId(req.user.service_provider_id) };
+    const matchStage = {
+      provider_id: new mongoose.Types.ObjectId(req.user.service_provider_id),
+    };
 
     if (start_date && end_date) {
       matchStage.booking_date = {
         $gte: new Date(start_date),
-        $lte: new Date(end_date)
+        $lte: new Date(end_date),
       };
     }
 
@@ -509,20 +825,20 @@ exports.getBookingStats = async (req, res) => {
         $group: {
           _id: null,
           total_bookings: { $sum: 1 },
-          total_revenue: { $sum: '$pricing.total_amount' },
-          total_participants: { $sum: '$total_participants' },
-          average_booking_value: { $avg: '$pricing.total_amount' },
+          total_revenue: { $sum: "$pricing.total_amount" },
+          total_participants: { $sum: "$total_participants" },
+          average_booking_value: { $avg: "$pricing.total_amount" },
           confirmed_bookings: {
-            $sum: { $cond: [{ $eq: ['$status', 'confirmed'] }, 1, 0] }
+            $sum: { $cond: [{ $eq: ["$status", "confirmed"] }, 1, 0] },
           },
           cancelled_bookings: {
-            $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] }
+            $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] },
           },
           completed_bookings: {
-            $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] }
-          }
-        }
-      }
+            $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] },
+          },
+        },
+      },
     ]);
 
     res.status(200).json({
@@ -534,16 +850,15 @@ exports.getBookingStats = async (req, res) => {
         average_booking_value: 0,
         confirmed_bookings: 0,
         cancelled_bookings: 0,
-        completed_bookings: 0
-      }
+        completed_bookings: 0,
+      },
     });
-
   } catch (error) {
-    console.error('Error fetching booking stats:', error);
+    console.error("Error fetching booking stats:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch statistics',
-      error: error.message
+      message: "Failed to fetch statistics",
+      error: error.message,
     });
   }
 };
@@ -560,39 +875,40 @@ exports.completeBooking = async (req, res) => {
     if (!booking) {
       return res.status(404).json({
         success: false,
-        message: 'Booking not found'
+        message: "Booking not found",
       });
     }
 
-    if (booking.provider_id.toString() !== req.user.service_provider_id.toString()) {
+    if (
+      booking.provider_id.toString() !== req.user.service_provider_id.toString()
+    ) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied'
+        message: "Access denied",
       });
     }
 
-    if (booking.status !== 'in_progress' && booking.status !== 'paid') {
+    if (booking.status !== "in_progress" && booking.status !== "paid") {
       return res.status(400).json({
         success: false,
-        message: 'Only in-progress or paid bookings can be completed'
+        message: "Only in-progress or paid bookings can be completed",
       });
     }
 
-    booking.status = 'completed';
+    booking.status = "completed";
     await booking.save();
 
     res.status(200).json({
       success: true,
-      message: 'Booking marked as completed',
-      data: booking
+      message: "Booking marked as completed",
+      data: booking,
     });
-
   } catch (error) {
-    console.error('Error completing booking:', error);
+    console.error("Error completing booking:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to complete booking',
-      error: error.message
+      message: "Failed to complete booking",
+      error: error.message,
     });
   }
 };

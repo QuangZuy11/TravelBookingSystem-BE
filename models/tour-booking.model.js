@@ -48,6 +48,7 @@ const tourBookingSchema = new mongoose.Schema(
         "completed", // Hoàn thành
         "cancelled", // Đã hủy
         "refunded", // Đã hoàn tiền
+        "no-show", // Không đến khi tour khởi hành
       ],
       default: "pending",
     },
@@ -284,6 +285,27 @@ const tourBookingSchema = new mongoose.Schema(
     },
 
     confirmed_by: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ServiceProvider",
+    },
+
+    // No-show information
+    no_show_at: {
+      type: Date,
+    },
+
+    // Attendance information
+    attendance_status: {
+      type: String,
+      enum: ["pending", "attended", "no-show", "cancelled"],
+      default: "pending",
+    },
+
+    checked_in_at: {
+      type: Date,
+    },
+
+    checked_in_by: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "ServiceProvider",
     },

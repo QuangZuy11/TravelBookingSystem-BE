@@ -1,4 +1,4 @@
-const Notification = require('../models/notification.model');
+const Notification = require("../models/notification.model");
 
 /**
  * Notification Service
@@ -17,73 +17,90 @@ const Notification = require('../models/notification.model');
  * @param {number} data.amount - Số tiền thanh toán
  */
 exports.createBookingSuccessNotification = async (data) => {
-    try {
-        const { userId, type, bookingId, bookingNumber, hotelName, tourName, amount } = data;
+  try {
+    const {
+      userId,
+      type,
+      bookingId,
+      bookingNumber,
+      hotelName,
+      tourName,
+      amount,
+    } = data;
 
-        // Validate required fields
-        if (!userId) {
-            console.error('❌ [NOTIFICATION] Missing userId');
-            throw new Error('userId is required');
-        }
-
-        if (!type || !['hotel', 'tour'].includes(type)) {
-            console.error('❌ [NOTIFICATION] Invalid type:', type);
-            throw new Error('Invalid booking type');
-        }
-
-        console.log('📧 [NOTIFICATION] Creating booking success notification:', {
-            userId,
-            type,
-            bookingId,
-            bookingNumber,
-            hotelName,
-            tourName,
-            amount
-        });
-
-        let title, message;
-        let relatedType;
-
-        if (type === 'hotel') {
-            title = 'Đặt phòng thành công';
-            message = `Đặt phòng khách sạn ${hotelName || ''} thành công. Mã đặt phòng: ${bookingNumber || bookingId}. Số tiền thanh toán: ${formatPrice(amount)}.`;
-            relatedType = 'HotelBooking';
-        } else if (type === 'tour') {
-            title = 'Đặt tour thành công';
-            message = `Đặt tour ${tourName || ''} thành công. Mã đặt tour: ${bookingNumber || bookingId}. Số tiền thanh toán: ${formatPrice(amount)}.`;
-            relatedType = 'TourBooking';
-        } else {
-            throw new Error('Invalid booking type');
-        }
-
-        const notification = await Notification.createNotification({
-            user_id: userId,
-            title,
-            message,
-            type: 'success',
-            status: 'unread',
-            related_id: bookingId,
-            related_type: relatedType,
-            metadata: {
-                bookingNumber,
-                amount,
-                hotelName,
-                tourName
-            }
-        });
-
-        console.log('✅ [NOTIFICATION] Notification created successfully:', {
-            notificationId: notification._id,
-            userId: notification.user_id,
-            title: notification.title
-        });
-
-        return notification;
-    } catch (error) {
-        console.error('❌ [NOTIFICATION] Error creating booking success notification:', error);
-        console.error('   Error stack:', error.stack);
-        throw error;
+    // Validate required fields
+    if (!userId) {
+      console.error("❌ [NOTIFICATION] Missing userId");
+      throw new Error("userId is required");
     }
+
+    if (!type || !["hotel", "tour"].includes(type)) {
+      console.error("❌ [NOTIFICATION] Invalid type:", type);
+      throw new Error("Invalid booking type");
+    }
+
+    console.log("📧 [NOTIFICATION] Creating booking success notification:", {
+      userId,
+      type,
+      bookingId,
+      bookingNumber,
+      hotelName,
+      tourName,
+      amount,
+    });
+
+    let title, message;
+    let relatedType;
+
+    if (type === "hotel") {
+      title = "Đặt phòng thành công";
+      message = `Đặt phòng khách sạn ${
+        hotelName || ""
+      } thành công. Mã đặt phòng: ${
+        bookingNumber || bookingId
+      }. Số tiền thanh toán: ${formatPrice(amount)}.`;
+      relatedType = "HotelBooking";
+    } else if (type === "tour") {
+      title = "Đặt tour thành công";
+      message = `Đặt tour ${tourName || ""} thành công. Mã đặt tour: ${
+        bookingNumber || bookingId
+      }. Số tiền thanh toán: ${formatPrice(amount)}.`;
+      relatedType = "TourBooking";
+    } else {
+      throw new Error("Invalid booking type");
+    }
+
+    const notification = await Notification.createNotification({
+      user_id: userId,
+      title,
+      message,
+      type: "success",
+      status: "unread",
+      related_id: bookingId,
+      related_type: relatedType,
+      metadata: {
+        bookingNumber,
+        amount,
+        hotelName,
+        tourName,
+      },
+    });
+
+    console.log("✅ [NOTIFICATION] Notification created successfully:", {
+      notificationId: notification._id,
+      userId: notification.user_id,
+      title: notification.title,
+    });
+
+    return notification;
+  } catch (error) {
+    console.error(
+      "❌ [NOTIFICATION] Error creating booking success notification:",
+      error
+    );
+    console.error("   Error stack:", error.stack);
+    throw error;
+  }
 };
 
 /**
@@ -98,45 +115,59 @@ exports.createBookingSuccessNotification = async (data) => {
  * @param {string} data.reason - Lý do hủy (optional)
  */
 exports.createBookingCancellationNotification = async (data) => {
-    try {
-        const { userId, type, bookingId, bookingNumber, hotelName, tourName, reason } = data;
+  try {
+    const {
+      userId,
+      type,
+      bookingId,
+      bookingNumber,
+      hotelName,
+      tourName,
+      reason,
+    } = data;
 
-        let title, message;
-        let relatedType;
+    let title, message;
+    let relatedType;
 
-        if (type === 'hotel') {
-            title = 'Hủy đặt phòng';
-            message = `Đặt phòng khách sạn ${hotelName || ''} đã được hủy. Mã đặt phòng: ${bookingNumber || bookingId}.${reason ? ` Lý do: ${reason}` : ''}`;
-            relatedType = 'HotelBooking';
-        } else if (type === 'tour') {
-            title = 'Hủy đặt tour';
-            message = `Đặt tour ${tourName || ''} đã được hủy. Mã đặt tour: ${bookingNumber || bookingId}.${reason ? ` Lý do: ${reason}` : ''}`;
-            relatedType = 'TourBooking';
-        } else {
-            throw new Error('Invalid booking type');
-        }
-
-        const notification = await Notification.createNotification({
-            user_id: userId,
-            title,
-            message,
-            type: 'info',
-            status: 'unread',
-            related_id: bookingId,
-            related_type: relatedType,
-            metadata: {
-                bookingNumber,
-                hotelName,
-                tourName,
-                reason
-            }
-        });
-
-        return notification;
-    } catch (error) {
-        console.error('Error creating booking cancellation notification:', error);
-        throw error;
+    if (type === "hotel") {
+      title = "Hủy đặt phòng";
+      message = `Đặt phòng khách sạn ${
+        hotelName || ""
+      } đã được hủy. Mã đặt phòng: ${bookingNumber || bookingId}.${
+        reason ? ` Lý do: ${reason}` : ""
+      }`;
+      relatedType = "HotelBooking";
+    } else if (type === "tour") {
+      title = "Hủy đặt tour";
+      message = `Đặt tour ${tourName || ""} đã được hủy. Mã đặt tour: ${
+        bookingNumber || bookingId
+      }.${reason ? ` Lý do: ${reason}` : ""}`;
+      relatedType = "TourBooking";
+    } else {
+      throw new Error("Invalid booking type");
     }
+
+    const notification = await Notification.createNotification({
+      user_id: userId,
+      title,
+      message,
+      type: "info",
+      status: "unread",
+      related_id: bookingId,
+      related_type: relatedType,
+      metadata: {
+        bookingNumber,
+        hotelName,
+        tourName,
+        reason,
+      },
+    });
+
+    return notification;
+  } catch (error) {
+    console.error("Error creating booking cancellation notification:", error);
+    throw error;
+  }
 };
 
 /**
@@ -151,62 +182,148 @@ exports.createBookingCancellationNotification = async (data) => {
  * @param {Date} data.endDate - Ngày kết thúc
  */
 exports.createAdBookingSuccessNotification = async (data) => {
-    try {
-        const { userId, type, adBookingId, serviceName, amount, startDate, endDate } = data;
+  try {
+    const {
+      userId,
+      type,
+      adBookingId,
+      serviceName,
+      amount,
+      startDate,
+      endDate,
+    } = data;
 
-        const title = 'Đặt quảng cáo thành công';
-        const message = `Đặt quảng cáo ${type === 'hotel' ? 'khách sạn' : 'tour'} "${serviceName || ''}" thành công. Số tiền thanh toán: ${formatPrice(amount)}. Thời gian hiển thị: ${formatDate(startDate)} - ${formatDate(endDate)}.`;
+    const title = "Đặt quảng cáo thành công";
+    const message = `Đặt quảng cáo ${
+      type === "hotel" ? "khách sạn" : "tour"
+    } "${serviceName || ""}" thành công. Số tiền thanh toán: ${formatPrice(
+      amount
+    )}. Thời gian hiển thị: ${formatDate(startDate)} - ${formatDate(endDate)}.`;
 
-        const notification = await Notification.createNotification({
-            user_id: userId,
-            title,
-            message,
-            type: 'success',
-            status: 'unread',
-            related_id: adBookingId,
-            related_type: 'AdBooking',
-            metadata: {
-                serviceName,
-                amount,
-                startDate,
-                endDate,
-                serviceType: type
-            }
-        });
+    const notification = await Notification.createNotification({
+      user_id: userId,
+      title,
+      message,
+      type: "success",
+      status: "unread",
+      related_id: adBookingId,
+      related_type: "AdBooking",
+      metadata: {
+        serviceName,
+        amount,
+        startDate,
+        endDate,
+        serviceType: type,
+      },
+    });
 
-        return notification;
-    } catch (error) {
-        console.error('Error creating ad booking success notification:', error);
-        throw error;
+    return notification;
+  } catch (error) {
+    console.error("Error creating ad booking success notification:", error);
+    throw error;
+  }
+};
+
+/**
+ * Tạo thông báo no-show cho tour booking
+ * @param {Object} data - Dữ liệu thông báo
+ * @param {string} data.userId - ID người dùng (traveler)
+ * @param {string} data.bookingId - ID booking
+ * @param {string} data.bookingNumber - Số booking
+ * @param {string} data.tourName - Tên tour
+ * @param {Date} data.tourDate - Ngày khởi hành tour
+ */
+exports.createTourNoShowNotification = async (data) => {
+  try {
+    const { userId, bookingId, bookingNumber, tourName, tourDate } = data;
+
+    // Validate required fields
+    if (!userId) {
+      console.error(
+        "❌ [NOTIFICATION] Missing userId for no-show notification"
+      );
+      throw new Error("userId is required");
     }
+
+    const title = "Không đến tour";
+    const tourDateFormatted = tourDate
+      ? new Date(tourDate).toLocaleDateString("vi-VN", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        })
+      : "N/A";
+
+    const message = `Bạn đã không đến tour "${
+      tourName || ""
+    }" vào ngày ${tourDateFormatted}. Mã đặt tour: ${
+      bookingNumber || bookingId
+    }.`;
+
+    const notification = await Notification.createNotification({
+      user_id: userId,
+      title,
+      message,
+      type: "warning",
+      status: "unread",
+      related_id: bookingId,
+      related_type: "TourBooking",
+      metadata: {
+        bookingNumber,
+        tourName,
+        tourDate,
+        noShow: true,
+      },
+    });
+
+    console.log(
+      "✅ [NOTIFICATION] No-show notification created successfully:",
+      {
+        notificationId: notification._id,
+        userId: notification.user_id,
+        title: notification.title,
+      }
+    );
+
+    return notification;
+  } catch (error) {
+    console.error(
+      "❌ [NOTIFICATION] Error creating no-show notification:",
+      error
+    );
+    console.error("   Error stack:", error.stack);
+    throw error;
+  }
 };
 
 /**
  * Format giá tiền
  */
 function formatPrice(amount) {
-    if (!amount) return '0 VNĐ';
-    return new Intl.NumberFormat('vi-VN', {
-        style: 'currency',
-        currency: 'VND'
-    }).format(amount);
+  if (!amount) return "0 VNĐ";
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+  }).format(amount);
 }
 
 /**
  * Format ngày tháng
  */
 function formatDate(date) {
-    if (!date) return '';
-    return new Date(date).toLocaleDateString('vi-VN', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-    });
+  if (!date) return "";
+  return new Date(date).toLocaleDateString("vi-VN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
 }
 
 module.exports = {
-    createBookingSuccessNotification: exports.createBookingSuccessNotification,
-    createBookingCancellationNotification: exports.createBookingCancellationNotification,
-    createAdBookingSuccessNotification: exports.createAdBookingSuccessNotification
+  createBookingSuccessNotification: exports.createBookingSuccessNotification,
+  createBookingCancellationNotification:
+    exports.createBookingCancellationNotification,
+  createAdBookingSuccessNotification:
+    exports.createAdBookingSuccessNotification,
+  createTourNoShowNotification: exports.createTourNoShowNotification,
 };
-

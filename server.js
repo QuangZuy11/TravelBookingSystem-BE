@@ -8,6 +8,8 @@ const mongoose = require("mongoose");
 
 // Import booking cleanup service
 const bookingCleanupService = require("./services/booking-cleanup.service");
+// Import tour no-show service
+const tourNoShowService = require("./services/tour-no-show.service");
 
 // Import routes
 const tourRoutes = require("./routes/tourRoutes");
@@ -111,6 +113,9 @@ mongoose
 
     // Khởi động booking cleanup service sau khi connect DB thành công
     bookingCleanupService.start();
+
+    // Khởi động tour no-show service sau khi connect DB thành công
+    tourNoShowService.start();
   })
   .catch((err) => console.error(err));
 
