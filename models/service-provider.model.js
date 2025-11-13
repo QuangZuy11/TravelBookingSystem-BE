@@ -94,6 +94,43 @@ const serviceProviderSchema = new mongoose.Schema({
     admin_rejection_reason: {
         type: String
     },
+
+    // ✅ Booking management settings
+    booking_settings: {
+        auto_accept_bookings: { type: Boolean, default: false },
+        max_concurrent_bookings: { type: Number, default: 10 },
+        minimum_notice_days: { type: Number, default: 7 },
+        response_time_hours: { type: Number, default: 48 },
+        available_destinations: [{ type: String }],
+        blackout_dates: [{ type: Date }]
+    },
+
+    // ✅ Booking statistics
+    booking_stats: {
+        total_bookings: { type: Number, default: 0 },
+        approved_bookings: { type: Number, default: 0 },
+        rejected_bookings: { type: Number, default: 0 },
+        completed_bookings: { type: Number, default: 0 },
+        approval_rate: { type: Number, default: 0, min: 0, max: 100 },
+        average_response_time: { type: Number, default: 0 },
+        total_revenue: { type: Number, default: 0 }
+    },
+
+    // ✅ Pricing strategy
+    pricing_settings: {
+        markup_percentage: { type: Number, default: 15, min: 0, max: 100 },
+        seasonal_pricing: [{
+            season: { type: String, enum: ['peak', 'off-peak', 'shoulder'] },
+            start_date: { type: Date },
+            end_date: { type: Date },
+            adjustment_percentage: { type: Number }
+        }],
+        group_discounts: [{
+            min_participants: { type: Number },
+            discount_percentage: { type: Number, min: 0, max: 100 }
+        }]
+    },
+
     created_at: {
         type: Date,
         default: Date.now
@@ -193,6 +230,66 @@ serviceProviderSchema.methods.updateAdminVerification = function (approved, admi
         this.admin_verified_by = null;
         this.admin_rejection_reason = rejectionReason;
     }
+    return this.save();
+};
+
+// ✅ Method để calculate quote
+serviceProviderSchema.methods.calculateQuote = function (booking) {
+    let basePrice = booking.total_budget || 0;
+
+    // Apply markup percentage
+    let markup = basePrice * (this.pricing_settings.markup_percentage / 100);
+    let quotedPrice = basePrice + markup;
+
+    // Apply seasonal pricing if applicable
+    if (this.pricing_settings.seasonal_pricing && this.pricing_settings.seasonal_pricing.length > 0) {
+        const bookingDate = new Date(booking.start_date);
+        const seasonalRate = this.pricing_settings.seasonal_pricing.find(season => {
+            return bookingDate >= new Date(season.start_date) && bookingDate <= new Date(season.end_date);
+        });
+
+        if (seasonalRate) {
+            quotedPrice += quotedPrice * (seasonalRate.adjustment_percentage / 100);
+        }
+    }
+
+    // Apply group discounts if applicable
+    if (this.pricing_settings.group_discounts && this.pricing_settings.group_discounts.length > 0) {
+        const applicableDiscount = this.pricing_settings.group_discounts
+            .filter(discount => booking.participant_number >= discount.min_participants)
+            .sort((a, b) => b.discount_percentage - a.discount_percentage)[0];
+
+        if (applicableDiscount) {
+            quotedPrice -= quotedPrice * (applicableDiscount.discount_percentage / 100);
+        }
+    }
+
+    return Math.round(quotedPrice);
+};
+
+// ✅ Method để update booking statistics
+serviceProviderSchema.methods.updateBookingStats = function (action, amount = 0) {
+    switch (action) {
+        case 'approved':
+            this.booking_stats.approved_bookings += 1;
+            this.booking_stats.total_bookings += 1;
+            break;
+        case 'rejected':
+            this.booking_stats.rejected_bookings += 1;
+            this.booking_stats.total_bookings += 1;
+            break;
+        case 'completed':
+            this.booking_stats.completed_bookings += 1;
+            this.booking_stats.total_revenue += amount;
+            break;
+    }
+
+    // Calculate approval rate
+    if (this.booking_stats.total_bookings > 0) {
+        this.booking_stats.approval_rate =
+            (this.booking_stats.approved_bookings / this.booking_stats.total_bookings) * 100;
+    }
+
     return this.save();
 };
 

@@ -14,6 +14,28 @@ const userSchema = new mongoose.Schema(
     ban_reason: { type: String },
     resetPasswordToken: { type: String, default: null },
     resetPasswordExpires: { type: Date, default: null },
+
+    // ✅ Traveler profile info
+    traveler_profile: {
+      total_bookings: { type: Number, default: 0 },
+      completed_trips: { type: Number, default: 0 },
+      cancelled_bookings: { type: Number, default: 0 },
+      total_spent: { type: Number, default: 0 },
+      preferred_destinations: [{ type: String }],
+      travel_preferences: {
+        accommodation_type: { type: String, enum: ['hotel', 'hostel', 'resort', 'any'], default: 'any' },
+        transportation_type: { type: String, enum: ['private', 'shared', 'public', 'any'], default: 'any' },
+        activity_level: { type: String, enum: ['relaxed', 'moderate', 'active'], default: 'moderate' },
+        budget_level: { type: String, enum: ['budget', 'mid-range', 'luxury'], default: 'mid-range' }
+      }
+    },
+
+    // ✅ Notification preferences
+    notification_settings: {
+      email_booking_updates: { type: Boolean, default: true },
+      email_price_quotes: { type: Boolean, default: true },
+      sms_booking_updates: { type: Boolean, default: false }
+    }
   },
   {
     timestamps: true,

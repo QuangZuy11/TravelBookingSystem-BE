@@ -17,6 +17,9 @@ router.post('/generate', aiItineraryController.generateFromPayload);
 // Get AI itinerary details (general endpoint for frontend)
 router.get('/:aiGeneratedId', validateObjectId('aiGeneratedId'), aiItineraryController.getItineraryDetails);
 
+// ✅ Get booking info for itinerary
+router.get('/:id/booking-info', validateObjectId('id'), aiItineraryController.getItineraryBookingInfo);
+
 // View original AI itinerary (type='ai_gen')
 router.get('/:aiGeneratedId/original', aiItineraryController.getOriginalItinerary);
 

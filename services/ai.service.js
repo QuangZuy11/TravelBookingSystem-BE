@@ -130,15 +130,25 @@ exports.generateItinerary = async ({ request, destination, pois, days }) => {
     ? request.preferences.join(', ')
     : 'tham quan chung';
 
+  // ✅ Add budget-specific instructions
+  const budgetInstruction = request.budget_level === 'high' || request.budget_total >= 10000000
+    ? 'ƯU TIÊN các địa điểm CAO CẤP với entryFee cao (>= 1.000.000 VND), nhà hàng fine dining, spa 5 sao, trải nghiệm VIP.'
+    : request.budget_level === 'low' || (request.budget_total > 0 && request.budget_total < 3000000)
+      ? 'Chọn các địa điểm TIẾT KIỆM, miễn phí hoặc giá rẻ (<500K VND), ẩm thực bình dân.'
+      : 'Cân bằng giữa các địa điểm cao cấp và bình dân, phù hợp ngân sách trung bình.';
+
   const system = `Bạn là một chuyên gia lập kế hoạch lịch trình du lịch chuyên nghiệp. Hãy tạo lịch trình chi tiết theo từng ngày ở định dạng JSON hoàn toàn bằng tiếng Việt, dựa trên yêu cầu của khách hàng và các điểm tham quan có sẵn.`;
 
   // Compact prompt: reduce verbosity and include minified POI payload to save tokens
   const user = `Tạo lịch trình ${days} ngày cho ${request.participant_number} người ${destinations.length > 1 ? 'qua các điểm: ' + destinations.join(', ') : 'đến ' + destinationName}. Ngân sách: ${budgetText}. Ưu tiên: ${preferencesText}.
 
+${budgetInstruction}
+
 POI_JSON:${JSON.stringify(poiSummaries)}
 
 Yêu cầu:
 - Nội dung hoàn toàn bằng tiếng Việt.
+- ${budgetInstruction}
 - Trả CHỈ JSON hợp lệ theo schema: {title, total_budget, days:[{day_number,title,description,activities:[{activity_name,poi_id,start_time,duration_hours,description,cost,optional}]}]}.
 - Sắp xếp các điểm đến theo lộ trình hợp lý.
 - Không thêm text ngoài JSON.`;
