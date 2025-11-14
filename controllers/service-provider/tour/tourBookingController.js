@@ -917,7 +917,7 @@ exports.markNoShow = async (req, res) => {
  */
 exports.getBookingStats = async (req, res) => {
   try {
-    const { start_date, end_date } = req.query;
+    const { start_date, end_date, booking_date } = req.query;
 
     // Get provider_id from token or find from user_id
     let providerId = req.user.service_provider_id;
@@ -948,15 +948,28 @@ exports.getBookingStats = async (req, res) => {
     };
 
     // Filter theo thời gian
-    if (start_date || end_date) {
+    // Ưu tiên booking_date (filter theo ngày đặt tour cụ thể)
+    if (booking_date) {
+      const selectedDate = new Date(booking_date);
+      selectedDate.setHours(0, 0, 0, 0);
+      const nextDate = new Date(selectedDate);
+      nextDate.setDate(nextDate.getDate() + 1);
+      matchStage.booking_date = { $gte: selectedDate, $lt: nextDate };
+    } else if (start_date || end_date) {
+      // Nếu không có booking_date, dùng start_date và end_date
       matchStage.booking_date = {};
       if (start_date) {
-        matchStage.booking_date.$gte = new Date(start_date);
+        const start = new Date(start_date);
+        start.setHours(0, 0, 0, 0);
+        matchStage.booking_date.$gte = start;
       }
       if (end_date) {
-        matchStage.booking_date.$lte = new Date(end_date);
+        const end = new Date(end_date);
+        end.setHours(23, 59, 59, 999);
+        matchStage.booking_date.$lte = end;
       }
     }
+    // Nếu không có filter nào, lấy tất cả từ trước đến nay
 
     console.log("📊 Tour Booking Statistics Query:", matchStage);
 
@@ -994,21 +1007,13 @@ exports.getBookingStats = async (req, res) => {
               ],
             },
           },
-          // Tổng doanh thu (chỉ tính bookings đã thanh toán)
+          // Tổng doanh thu (chỉ tính bookings đã thanh toán - payment.status = "completed")
+          // Không cần kiểm tra booking status vì nếu đã thanh toán rồi thì dù booking status là gì (no-show, in_progress, completed) cũng tính
+          // Trạng thái thanh toán "pending" sẽ không tính vào doanh thu
           total_revenue: {
             $sum: {
               $cond: [
-                {
-                  $and: [
-                    { $eq: ["$payment.status", "completed"] },
-                    {
-                      $in: [
-                        "$status",
-                        ["confirmed", "paid", "in_progress", "completed"],
-                      ],
-                    },
-                  ],
-                },
+                { $eq: ["$payment.status", "completed"] },
                 { $toDouble: "$pricing.total_amount" },
                 0,
               ],
