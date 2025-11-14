@@ -95,9 +95,29 @@ Trả về CHỈ định dạng JSON này (bằng tiếng Việt):
  */
 exports.generateItinerary = async ({ request, destination, pois, days }) => {
   // Build compact POI list to send (sử dụng đúng field names từ POI model)
-  // Reduce token usage: send only top N POIs with compact fields and truncated descriptions
-  const POI_SEND_LIMIT = 12;
-  const poiSummaries = (pois || [])
+  // ✅ Ensure balanced POI sampling from all destinations
+  const POI_SEND_LIMIT = 30; // ✅ Increased from 12 to 30 for multi-destination trips
+
+  // ✅ Group POIs by destination first to ensure balanced representation
+  const poisByDestination = {};
+  (pois || []).forEach(p => {
+    const destName = p.destinationName || p.destinationId?.destination_name || 'unknown';
+    if (!poisByDestination[destName]) {
+      poisByDestination[destName] = [];
+    }
+    poisByDestination[destName].push(p);
+  });
+
+  // ✅ Sample evenly from each destination (round-robin)
+  const sampledPois = [];
+  const destinationKeys = Object.keys(poisByDestination);
+  const maxPerDestination = Math.ceil(POI_SEND_LIMIT / destinationKeys.length);
+
+  destinationKeys.forEach(dest => {
+    sampledPois.push(...poisByDestination[dest].slice(0, maxPerDestination));
+  });
+
+  const poiSummaries = sampledPois
     .slice(0, POI_SEND_LIMIT)
     .map(p => ({
       id: p._id,
@@ -107,7 +127,7 @@ exports.generateItinerary = async ({ request, destination, pois, days }) => {
       type: p.type || 'other',
       rating: p.ratings?.average || 0,
       entryFee: p.entryFee?.adult || 0,
-      destination: p.destinationId ? p.destinationName : destination?.destination_name || request.destination,
+      destination: p.destinationName || p.destinationId?.destination_name || destination?.destination_name || request.destination,
       // normalized duration in hours (float)
       recommendedDurationHours: ((p.recommendedDuration?.hours || 0) + (p.recommendedDuration?.minutes || 0) / 60) || 2
     }));
@@ -116,7 +136,7 @@ exports.generateItinerary = async ({ request, destination, pois, days }) => {
   const destinations = request.destination
     ? request.destination.split(',').map(d => d.trim())
     : [destination?.destination_name || request.ai_suggested_destination];
-  const destinationName = destinations.join(' & ');
+  const destinationName = destinations.join(', '); // ✅ Keep comma-separated for fallback splitting
   const budget = request.budget_total || 0;
   const budgetText = request.budget_total
     ? `${(request.budget_total / 1000000).toFixed(1)} triệu VND`
@@ -130,36 +150,74 @@ exports.generateItinerary = async ({ request, destination, pois, days }) => {
     ? request.preferences.join(', ')
     : 'tham quan chung';
 
-  // ✅ Add budget-specific instructions
+  // ✅ Enhanced budget instructions with STRICT rules
   const budgetInstruction = request.budget_level === 'high' || request.budget_total >= 10000000
-    ? 'ƯU TIÊN các địa điểm CAO CẤP với entryFee cao (>= 1.000.000 VND), nhà hàng fine dining, spa 5 sao, trải nghiệm VIP.'
+    ? '⚠️ QUAN TRỌNG: ƯU TIÊN POIs có entryFee >= 200.000 VND. Chọn POIs đắt nhất có sẵn. Tránh POIs miễn phí.'
     : request.budget_level === 'low' || (request.budget_total > 0 && request.budget_total < 3000000)
-      ? 'Chọn các địa điểm TIẾT KIỆM, miễn phí hoặc giá rẻ (<500K VND), ẩm thực bình dân.'
-      : 'Cân bằng giữa các địa điểm cao cấp và bình dân, phù hợp ngân sách trung bình.';
+      ? '⚠️ QUAN TRỌNG: CHỈ chọn POIs có entryFee <= 100.000 VND hoặc miễn phí. Không được chọn POIs cao cấp.'
+      : 'Cân bằng giữa POIs miễn phí, trung bình (100-300K) và cao cấp (>300K).';
 
-  const system = `Bạn là một chuyên gia lập kế hoạch lịch trình du lịch chuyên nghiệp. Hãy tạo lịch trình chi tiết theo từng ngày ở định dạng JSON hoàn toàn bằng tiếng Việt, dựa trên yêu cầu của khách hàng và các điểm tham quan có sẵn.`;
+  const system = `Bạn là chuyên gia lập kế hoạch du lịch. Tạo lịch trình JSON tiếng Việt.
 
-  // Compact prompt: reduce verbosity and include minified POI payload to save tokens
-  const user = `Tạo lịch trình ${days} ngày cho ${request.participant_number} người ${destinations.length > 1 ? 'qua các điểm: ' + destinations.join(', ') : 'đến ' + destinationName}. Ngân sách: ${budgetText}. Ưu tiên: ${preferencesText}.
+QUY TẮC BẮT BUỘC:
+1. activity_name = TÊN CHÍNH XÁC của POI từ danh sách (VD: "Nhà hát Lớn Hà Nội")
+2. cost = entryFee của POI
+3. poi_id = ID của POI
+4. MỖI NGÀY phải có 3-4 hoạt động
+5. PHÂN BỔ địa điểm: Mỗi ngày CHỈ ở MỘT địa điểm (VD: Ngày 1-2: Hà Nội, Ngày 3-4: Ninh Bình)
+6. CHỈ dùng POIs có trong danh sách
+7. ⚠️ TỔNG THỜI GIAN MỖI NGÀY: 8-10 giờ (480-600 phút), KHÔNG VƯỢT QUÁ 10 giờ`;
 
-${budgetInstruction}
+  // ✅ Enhanced prompt with strict rules
+  const user = `Tạo lịch trình ${days} ngày cho ${request.participant_number} người đi ${destinations.join(' → ')}.
+Ngân sách: ${budgetText}. Sở thích: ${preferencesText}.
 
-POI_JSON:${JSON.stringify(poiSummaries)}
+POIs CÓ SẴN:
+${JSON.stringify(poiSummaries, null, 2)}
 
-Yêu cầu:
-- Nội dung hoàn toàn bằng tiếng Việt.
+QUY TẮC:
 - ${budgetInstruction}
-- Trả CHỈ JSON hợp lệ theo schema: {title, total_budget, days:[{day_number,title,description,activities:[{activity_name,poi_id,start_time,duration_hours,description,cost,optional}]}]}.
-- Sắp xếp các điểm đến theo lộ trình hợp lý.
-- Không thêm text ngoài JSON.`;
+- MỖI NGÀY: 3-4 activities
+- ⚠️ QUAN TRỌNG: TỔNG thời gian hoạt động mỗi ngày PHẢI từ 8-10 giờ (không quá 10 giờ)
+- PHÂN BỔ: ${destinations.length > 1 ? destinations.map((d, i) => {
+    const daysForDest = Math.ceil(days / destinations.length);
+    const start = i * daysForDest + 1;
+    const end = Math.min(start + daysForDest - 1, days);
+    return `Ngày ${start}-${end}: ${d}`;
+  }).join(', ') : `Tất cả ${days} ngày ở ${destinations[0]}`}
+- activity_name = Tên POI chính xác
+- cost = entryFee của POI
+- duration_hours = Thời gian hợp lý (1-3 giờ/hoạt động)
+
+Format JSON:
+{"title":"string","total_budget":number,"days":[{"day_number":number,"title":"Ngày X - Địa điểm","description":"string","activities":[{"activity_name":"TÊN POI","poi_id":"ID","start_time":"HH:MM","duration_hours":number,"description":"string","cost":number,"optional":false}]}]}
+
+CHỈ JSON, không text khác.`;
 
   const messages = [
     { role: 'system', content: system },
     { role: 'user', content: user }
   ];
 
-  // Use shorter max_tokens for faster response and to reduce token cost
-  const content = await callGroqAI(messages, 900);
+  // 🔍 DEBUG: Log prompt to verify POI data
+  console.log('🔍 AI Prompt Debug:');
+  console.log(`   Destinations: ${destinations.join(', ')}`);
+  console.log(`   Budget Level: ${request.budget_level || 'not set'}`);
+  console.log(`   POIs Available: ${poiSummaries.length}`);
+  if (poiSummaries.length > 0) {
+    console.log(`   Sample POIs (first 3):`);
+    poiSummaries.slice(0, 3).forEach((p, i) => {
+      console.log(`     ${i + 1}. "${p.name}" (${p.destination}) - ${p.entryFee} VND - ID: ${p.id}`);
+    });
+  }
+
+  // Use increased max_tokens for better AI response quality
+  const content = await callGroqAI(messages, 1500);
+
+  // 🔍 DEBUG: Log raw AI response
+  console.log('\n🔍 RAW AI RESPONSE (first 500 chars):');
+  console.log(content.substring(0, 500));
+  console.log('...\n');
 
   // Enhanced JSON parsing with error recovery
   let parsed = null;
@@ -203,8 +261,14 @@ Yêu cầu:
         parsed = JSON.parse(repairedJson);
 
       } catch (repairErr) {
-        // Fallback: Generate a simple itinerary structure (in Vietnamese)
-        parsed = generateFallbackItinerary(destinationName || (destination && destination.destination_name) || request.destination || 'điểm đến', days || 1, budget, request.preferences || request.interests || []);
+        // Fallback: Generate a simple itinerary structure (in Vietnamese) using real POIs
+        parsed = generateFallbackItinerary(
+          destinationName || (destination && destination.destination_name) || request.destination || 'điểm đến',
+          days || 1,
+          budget,
+          request.preferences || request.interests || [],
+          poiSummaries // ✅ Pass POIs to fallback generator
+        );
       }
     }
   }
@@ -217,8 +281,8 @@ Yêu cầu:
   return parsed;
 };
 
-// Enhanced fallback itinerary generator when AI parsing fails
-const generateFallbackItinerary = (destination, duration, budget, interests) => {
+// ✅ Enhanced fallback generator using REAL POIs with proper destination splitting
+const generateFallbackItinerary = (destination, duration, budget, interests, poisParam) => {
   const dailyBudget = Math.floor((budget || 0) / Math.max(1, duration));
 
   // Split destination into multiple locations if comma-separated
@@ -229,6 +293,44 @@ const generateFallbackItinerary = (destination, duration, budget, interests) => 
     days: []
   };
 
+  // Get POIs from outer scope if available
+  const availablePois = poisParam || [];
+
+  // ✅ FIX: Group POIs by destination using fuzzy matching
+  const poisByDestination = {};
+
+  console.log(`\n📊 GROUPING ${availablePois.length} POIs FOR ${locations.length} DESTINATIONS:`);
+  console.log(`   Destinations: ${locations.join(', ')}`);
+
+  // Debug: show all POI destinations
+  const uniqueDestinations = [...new Set(availablePois.map(p => p.destinationName || p.destination || 'unknown'))];
+  console.log(`   POI destinations found: ${uniqueDestinations.join(', ')}`);
+
+  locations.forEach(loc => {
+    const locLower = loc.toLowerCase().trim();
+    poisByDestination[loc] = availablePois.filter(poi => {
+      if (!poi.destination && !poi.destinationName) return false;
+
+      // Try both destinationName and destination fields
+      let poiDestName = (poi.destinationName || poi.destination || '').toLowerCase().trim();
+
+      // Remove common suffixes to normalize
+      poiDestName = poiDestName.replace(/, việt nam$/i, '').trim();
+
+      // Strict matching: exact match or starts with the location name
+      const isExactMatch = poiDestName === locLower;
+      const isStartsWith = poiDestName.startsWith(locLower + ' ') || poiDestName.startsWith(locLower + ',');
+      const isLocationInName = locLower.length >= 4 && poiDestName.split(/[,\s]+/)[0] === locLower;
+
+      return isExactMatch || isStartsWith || isLocationInName;
+    });
+
+    console.log(`   ✅ "${loc}": ${poisByDestination[loc].length} POIs`);
+    if (poisByDestination[loc].length > 0) {
+      console.log(`      Sample: ${poisByDestination[loc].slice(0, 3).map(p => p.name).join(', ')}`);
+    }
+  });
+
   // Calculate days per location
   const daysPerLocation = Math.floor(duration / locations.length);
   const extraDays = duration % locations.length;
@@ -236,106 +338,155 @@ const generateFallbackItinerary = (destination, duration, budget, interests) => 
     daysPerLocation + (index < extraDays ? 1 : 0)
   );
 
-  // Vietnamese activity templates
-  const vietnameseActivities = {
-    'culture': ['Thăm đền chùa cổ', 'Khám phá khu phố cổ', 'Thăm làng nghề truyền thống', 'Thăm các bảo tàng văn hóa'],
-    'history': ['Tour di tích lịch sử', 'Thăm bảo tàng chiến tranh', 'Thăm thành cổ', 'Đi bộ tham quan di sản'],
-    'food': ['Tour ẩm thực đường phố', 'Lớp học nấu ăn truyền thống', 'Nhà hàng địa phương', 'Thưởng thức món chợ địa phương'],
-    'nature': ['Thăm vườn quốc gia', 'Du thuyền sông/biển', 'Khám phá hang động', 'Leo núi ngắm cảnh'],
-    'adventure': ['Tour xe máy khám phá', 'Leo núi mạo hiểm', 'Chèo thuyền kayak', 'Trekking ngắn'],
-    'entertainment': ['Xem múa rối nước', 'Chợ đêm', 'Quán bar trên mái nhà', 'Lễ hội địa phương'],
-    'relaxation': ['Trải nghiệm spa', 'Suối khoáng nóng', 'Thời gian tắm biển', 'Tham gia lớp thiền'],
-    'shopping': ['Chợ địa phương', 'Mua quà lưu niệm', 'Phòng trưng bày nghệ thuật', 'Cửa hàng thủ công'],
-    'sightseeing': ['Địa danh thành phố', 'Điểm ngắm cảnh', 'Tham quan kiến trúc', 'Đi dạo chụp ảnh'],
-    'transport': ['Đưa đón sân bay', 'Hành trình tàu/xe', 'Di chuyển bằng xe buýt địa phương', 'Thuê phương tiện địa phương']
-  };
+  // ✅ Handle destinations with insufficient POIs: borrow from neighbors
+  const allPois = availablePois; // Keep all POIs as fallback pool
+  const lowFeePoiPool = allPois.filter(p => (p.entryFee?.adult || 0) <= 100000).sort((a, b) => (a.entryFee?.adult || 0) - (b.entryFee?.adult || 0));
 
-  const validTypes = ['food', 'transport', 'sightseeing', 'entertainment', 'accommodation', 'shopping', 'nature', 'culture', 'adventure', 'relaxation', 'history', 'leisure', 'other'];
+  console.log(`\n🔄 POI BORROWING CHECK:`);
+  console.log(`   Total POIs available: ${allPois.length}`);
+  console.log(`   Low-fee POIs (<=100K): ${lowFeePoiPool.length}`);
+  if (lowFeePoiPool.length > 0) {
+    console.log(`   Sample low-fee POIs: ${lowFeePoiPool.slice(0, 3).map(p => `${p.name} (${(p.entryFee?.adult || 0).toLocaleString()} VND)`).join(', ')}`);
+  }
 
-  const mapInterestToValidType = (interest) => {
-    if (!interest) return 'sightseeing';
-    const normalizedInterest = interest.toString().toLowerCase();
-    if (validTypes.includes(normalizedInterest)) return normalizedInterest;
-    const mappings = {
-      'cultural': 'culture',
-      'historical': 'history',
-      'outdoor': 'nature',
-      'nightlife': 'entertainment',
-      'dining': 'food',
-      'recreational': 'leisure',
-      'ẩm thực': 'food',
-      'văn hóa': 'culture',
-      'thiên nhiên': 'nature',
-      'giải trí': 'entertainment',
-      'nghỉ ngơi': 'relaxation',
-      'du lịch': 'sightseeing'
-    };
-    return mappings[normalizedInterest] || 'sightseeing';
-  }; const timeSlots = ['08:00', '11:30', '14:30', '17:30'];
+  locations.forEach(loc => {
+    if ((poisByDestination[loc] || []).length === 0 && lowFeePoiPool.length > 0) {
+      const borrowedPois = lowFeePoiPool.slice(0, 6);
+      console.log(`   ⚠️  "${loc}" has 0 POIs, borrowing ${borrowedPois.length} low-fee POIs:`);
+      borrowedPois.forEach((p, i) => {
+        console.log(`      ${i + 1}. ${p.name} - ${(p.entryFee?.adult || 0).toLocaleString()} VND`);
+      });
+      poisByDestination[loc] = borrowedPois;
+    }
+  });
 
-  for (let day = 1; day <= duration; day++) {
-    const currentLocation = locations[(day - 1) % locations.length] || locations[0];
-    const dayActivities = [];
+  const timeSlots = ['08:00', '11:30', '14:30', '17:30'];
+  let dayCounter = 1;
 
-    // Morning
-    const morningType = mapInterestToValidType(interests[0] || 'culture');
-    const morningOptions = vietnameseActivities[morningType] || vietnameseActivities['culture'];
-    dayActivities.push({
-      activity_name: `${morningOptions[Math.floor(Math.random() * morningOptions.length)]} tại ${currentLocation}`,
-      poi_id: null,
-      start_time: timeSlots[0],
-      duration_hours: 2.5,
-      description: `Hoạt động buổi sáng ở ${currentLocation} phù hợp với sở thích ${interests[0] || 'văn hóa'}`,
-      cost: Math.floor(dailyBudget * 0.25),
-      optional: false
-    });
+  // Iterate through each location
+  for (let locIndex = 0; locIndex < locations.length; locIndex++) {
+    const currentLocation = locations[locIndex];
+    const daysInLocation = locationDays[locIndex];
+    const locationPois = poisByDestination[currentLocation] || [];
 
-    // Lunch
-    dayActivities.push({
-      activity_name: `Ăn trưa món Việt tại nhà hàng địa phương ở ${currentLocation}`,
-      poi_id: null,
-      start_time: '12:00',
-      duration_hours: 1.5,
-      description: `Thưởng thức ẩm thực địa phương tại ${currentLocation}`,
-      cost: Math.floor(dailyBudget * 0.15),
-      optional: false
-    });
+    console.log(`📍 ${currentLocation}: ${daysInLocation} ngày, ${locationPois.length} POIs`);
 
-    // Afternoon
-    const afternoonType = mapInterestToValidType(interests[1] || interests[0] || 'nature');
-    const afternoonOptions = vietnameseActivities[afternoonType] || vietnameseActivities['nature'];
-    dayActivities.push({
-      activity_name: `${afternoonOptions[Math.floor(Math.random() * afternoonOptions.length)]} gần ${currentLocation}`,
-      poi_id: null,
-      start_time: timeSlots[2],
-      duration_hours: 3,
-      description: `Hoạt động buổi chiều tại ${currentLocation}`,
-      cost: Math.floor(dailyBudget * 0.35),
-      optional: false
-    });
+    // ✅ ENSURE 3-4 activities per day: distribute POIs evenly
+    const MIN_ACTIVITIES_PER_DAY = 3;
+    const MAX_ACTIVITIES_PER_DAY = 4;
 
-    // Evening
-    const eveningType = mapInterestToValidType(interests[2] || 'food');
-    const eveningOptions = vietnameseActivities[eveningType] || vietnameseActivities['food'];
-    dayActivities.push({
-      activity_name: `${eveningOptions[Math.floor(Math.random() * eveningOptions.length)]} buổi tối tại ${currentLocation}`,
-      poi_id: null,
-      start_time: '18:30',
-      duration_hours: 2,
-      description: `Buổi tối thư giãn tại ${currentLocation}`,
-      cost: Math.floor(dailyBudget * 0.25),
-      optional: false
-    });
+    // Calculate how many POIs per day (aim for 3-4)
+    let poisPerDay = Math.max(MIN_ACTIVITIES_PER_DAY, Math.min(MAX_ACTIVITIES_PER_DAY, Math.floor(locationPois.length / daysInLocation)));
 
-    const dayTotal = dayActivities.reduce((s, a) => s + (a.cost || 0), 0);
+    // If not enough POIs, we'll need to fill with generic activities later
+    const needsGenericActivities = locationPois.length < (daysInLocation * MIN_ACTIVITIES_PER_DAY);
 
-    fallback.days.push({
-      day_number: day,
-      title: `Ngày ${day} - ${currentLocation}`,
-      description: `Gợi ý hoạt động cho Ngày ${day} tại ${currentLocation}`,
-      activities: dayActivities,
-      day_total: dayTotal
-    });
+    for (let dayInLoc = 0; dayInLoc < daysInLocation; dayInLoc++) {
+      const dayActivities = [];
+      let totalDayDuration = 0; // Track total duration in minutes
+      const MAX_DAY_DURATION = 600; // 10 hours max
+      const MIN_DAY_DURATION = 480; // 8 hours min
+
+      // ✅ Calculate POI slice for this day (round-robin distribution)
+      const startIdx = dayInLoc * poisPerDay;
+      const endIdx = Math.min(startIdx + poisPerDay, locationPois.length);
+      const dayPois = locationPois.slice(startIdx, endIdx);
+
+      console.log(`   Ngày ${dayCounter}: ${dayPois.length} POIs được phân bổ`);
+
+      // ✅ MIXED PRICING: Alternate between paid and free POIs for balanced budget
+      const paidPois = dayPois.filter(p => (p.entryFee?.adult || 0) > 0);
+      const freePois = dayPois.filter(p => (p.entryFee?.adult || 0) === 0);
+
+      // Strategy: 2 paid + 1-2 free per day for balanced experience
+      const selectedPois = [];
+      if (paidPois.length >= 2) {
+        selectedPois.push(paidPois[0], paidPois[1]); // 2 paid activities
+        if (freePois.length > 0) selectedPois.push(freePois[0]); // 1 free to balance
+        if (selectedPois.length < MAX_ACTIVITIES_PER_DAY && paidPois.length > 2) {
+          selectedPois.push(paidPois[2]); // 3rd paid if space and available
+        }
+      } else {
+        // Not enough paid POIs, use what we have + free ones
+        selectedPois.push(...paidPois, ...freePois.slice(0, MAX_ACTIVITIES_PER_DAY - paidPois.length));
+      }
+
+      // ✅ Add selected POI activities with duration control (max 10 hours/day)
+      selectedPois.slice(0, MAX_ACTIVITIES_PER_DAY).forEach((poi, idx) => {
+        // Calculate duration in minutes (convert hours to minutes)
+        const poiDurationHours = poi.recommendedDuration?.hours || 2;
+        const poiDurationMinutes = (poi.recommendedDuration?.minutes || 0);
+        const totalPoiMinutes = (poiDurationHours * 60) + poiDurationMinutes;
+
+        // Check if adding this POI exceeds max day duration
+        if (totalDayDuration + totalPoiMinutes <= MAX_DAY_DURATION) {
+          dayActivities.push({
+            activity_name: poi.name,
+            poi_id: poi.id,
+            start_time: timeSlots[Math.min(idx, 3)],
+            duration_hours: poiDurationHours + (poiDurationMinutes / 60), // Keep as decimal hours for compatibility
+            description: poi.description || `Tham quan ${poi.name}`,
+            cost: poi.entryFee?.adult || 0,
+            optional: false
+          });
+          totalDayDuration += totalPoiMinutes;
+        }
+      });
+
+      // ✅ ENSURE minimum 3 activities per day (but respect max duration)
+      while (dayActivities.length < MIN_ACTIVITIES_PER_DAY && totalDayDuration < MAX_DAY_DURATION) {
+        const activityIndex = dayActivities.length;
+        let activityDuration = 90; // 1.5 hours in minutes
+
+        if (activityIndex === 1 || dayActivities.length === 2) {
+          // Add lunch activity at position 1 or 2
+          if (totalDayDuration + activityDuration <= MAX_DAY_DURATION) {
+            dayActivities.push({
+              activity_name: `Ăn trưa ẩm thực địa phương ${currentLocation}`,
+              poi_id: null,
+              start_time: timeSlots[1], // 11:30
+              duration_hours: 1.5,
+              description: `Thưởng thức món ăn đặc sản ${currentLocation}`,
+              cost: Math.floor(dailyBudget * 0.15),
+              optional: false
+            });
+            totalDayDuration += activityDuration;
+          }
+        } else {
+          // Add generic exploration activity (2 hours)
+          activityDuration = 120;
+          if (totalDayDuration + activityDuration <= MAX_DAY_DURATION) {
+            dayActivities.push({
+              activity_name: `Khám phá ${currentLocation} tự do`,
+              poi_id: null,
+              start_time: timeSlots[Math.min(activityIndex, 3)],
+              duration_hours: 2,
+              description: `Thời gian tự do khám phá ${currentLocation}`,
+              cost: Math.floor(dailyBudget * 0.2),
+              optional: true
+            });
+            totalDayDuration += activityDuration;
+          } else {
+            break; // Stop if we can't fit more activities
+          }
+        }
+      }
+
+      const dayTotal = dayActivities.reduce((s, a) => s + (a.cost || 0), 0);
+      const totalHours = (totalDayDuration / 60).toFixed(1);
+
+      console.log(`      Total duration: ${totalHours} hours (${totalDayDuration} minutes)`);
+
+      fallback.days.push({
+        day_number: dayCounter,
+        title: `Ngày ${dayCounter} - ${currentLocation}`,
+        description: `Khám phá ${currentLocation} với ${dayActivities.length} hoạt động`,
+        activities: dayActivities,
+        day_total: dayTotal
+      });
+
+      dayCounter++;
+    }
   }
 
   return fallback;

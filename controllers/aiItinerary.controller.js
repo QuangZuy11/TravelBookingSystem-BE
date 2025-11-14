@@ -275,21 +275,22 @@ exports.generateItineraryFromRequest = async (req, res) => {
 
       // Filter by entry fee based on budget level
       if (request.budget_level === 'high' || request.budget_total >= 10000000) {
-        // High budget: prioritize premium POIs (entry fee >= 1M VND)
-        query['entryFee.adult'] = { $gte: 1000000 };
-        console.log(`   Filter: PREMIUM (>= 1M VND)`);
+        // High budget: get ALL PAID POIs (> 0 VND) to maximize variety for long trips
+        query['entryFee.adult'] = { $gt: 0 };
+        console.log(`   Filter: ALL PAID POIs (> 0 VND) - High Budget`);
       } else if (request.budget_level === 'low' || (request.budget_total > 0 && request.budget_total < 3000000)) {
-        // Low budget: only free or cheap POIs (entry fee < 500K VND)
-        query['entryFee.adult'] = { $lt: 500000 };
-        console.log(`   Filter: BUDGET (< 500K VND)`);
+        // Low budget: only free or cheap POIs (entry fee <= 100K VND)
+        query['entryFee.adult'] = { $lte: 100000 };
+        console.log(`   Filter: BUDGET (<= 100K VND)`);
       } else {
         console.log(`   Filter: ALL POIs (no budget filter)`);
       }
       // Medium budget: no filter (all POIs)
 
       let destPois = await PointOfInterest.find(query)
+        .populate('destinationId', 'destination_name') // ✅ Populate destinationId to get name
         .sort({ 'entryFee.adult': -1, 'ratings.average': -1 }) // ✅ Sort by price first, then rating
-        .limit(15);
+        .limit(50); // ✅ Increased from 15 to 50 for longer trips
 
       console.log(`   Found: ${destPois.length} POIs`);
       if (destPois.length > 0) {
@@ -299,44 +300,87 @@ exports.generateItineraryFromRequest = async (req, res) => {
         });
       }
 
-      // If no premium POIs found for high budget, fall back to all POIs
-      if (destPois.length === 0 && (request.budget_level === 'high' || request.budget_total >= 10000000)) {
-        console.log('⚠️  No premium POIs found, falling back to all POIs');
-        destPois = await PointOfInterest.find({ destinationId: dest._id })
-          .sort({ 'entryFee.adult': -1, 'ratings.average': -1 })
-          .limit(15);
-        console.log(`   Fallback found: ${destPois.length} POIs`);
+      // If no POIs found with strict filter, try fallback strategies
+      if (destPois.length === 0) {
+        if (request.budget_level === 'high' || request.budget_total >= 10000000) {
+          // For high budget: just get all POIs (already tried paid above)
+          console.log('⚠️  No paid POIs found, falling back to all POIs');
+          destPois = await PointOfInterest.find({ destinationId: dest._id })
+            .populate('destinationId', 'destination_name') // ✅ Populate destinationId
+            .sort({ 'entryFee.adult': -1, 'ratings.average': -1 })
+            .limit(50);
+          console.log(`   Fallback found: ${destPois.length} POIs`);
+        } else {
+          // For low/medium budget: just use all POIs
+          console.log('⚠️  No POIs found with budget filter, falling back to all POIs');
+          destPois = await PointOfInterest.find({ destinationId: dest._id })
+            .populate('destinationId', 'destination_name') // ✅ Populate destinationId
+            .sort({ 'entryFee.adult': -1, 'ratings.average': -1 })
+            .limit(50);
+          console.log(`   Fallback found: ${destPois.length} POIs`);
+        }
       }
 
-      // Add destination name to each POI
-      destPois.forEach(poi => {
-        poi.destinationName = dest.destination_name;
-      });
-
-      pois = pois.concat(destPois);
+      // ✅ Convert POIs to plain objects and add destinationName field
+      pois = pois.concat(destPois.map(poi => {
+        const plainPoi = poi.toObject ? poi.toObject() : poi;
+        plainPoi.destinationName = poi.destinationId?.destination_name || dest.destination_name;
+        return plainPoi;
+      }));
     }
 
     // If no POIs found through destination IDs, try fallback with name search
     if (pois.length === 0) {
       for (const name of destinationNames) {
-        // ✅ Apply same budget-based filtering in fallback
+        // ✅ Apply same budget-based filtering in fallback with paid POI strategy
         let fallbackQuery = { name: new RegExp(name, 'i') };
 
         if (request.budget_level === 'high' || request.budget_total >= 10000000) {
-          fallbackQuery['entryFee.adult'] = { $gte: 1000000 };
+          // High budget: get all paid POIs directly
+          let fallbackPois = await PointOfInterest.find({
+            ...fallbackQuery,
+            'entryFee.adult': { $gt: 0 }
+          })
+            .populate('destinationId', 'destination_name') // ✅ Populate destinationId
+            .sort({ 'entryFee.adult': -1, 'ratings.average': -1 })
+            .limit(50);
+
+          if (fallbackPois.length === 0) {
+            fallbackPois = await PointOfInterest.find(fallbackQuery)
+              .populate('destinationId', 'destination_name') // ✅ Populate destinationId
+              .sort({ 'entryFee.adult': -1, 'ratings.average': -1 })
+              .limit(50);
+          }
+
+          pois = pois.concat(fallbackPois.map(poi => {
+            const plainPoi = poi.toObject ? poi.toObject() : poi;
+            plainPoi.destinationName = poi.destinationId?.destination_name || name;
+            return plainPoi;
+          }));
         } else if (request.budget_level === 'low' || (request.budget_total > 0 && request.budget_total < 3000000)) {
-          fallbackQuery['entryFee.adult'] = { $lt: 500000 };
+          fallbackQuery['entryFee.adult'] = { $lte: 100000 };
+          const fallbackPois = await PointOfInterest.find(fallbackQuery)
+            .populate('destinationId', 'destination_name') // ✅ Populate destinationId
+            .sort({ 'entryFee.adult': -1, 'ratings.average': -1 })
+            .limit(50);
+
+          pois = pois.concat(fallbackPois.map(poi => {
+            const plainPoi = poi.toObject ? poi.toObject() : poi;
+            plainPoi.destinationName = poi.destinationId?.destination_name || name;
+            return plainPoi;
+          }));
+        } else {
+          const fallbackPois = await PointOfInterest.find(fallbackQuery)
+            .populate('destinationId', 'destination_name') // ✅ Populate destinationId
+            .sort({ 'entryFee.adult': -1, 'ratings.average': -1 })
+            .limit(50);
+
+          pois = pois.concat(fallbackPois.map(poi => {
+            const plainPoi = poi.toObject ? poi.toObject() : poi;
+            plainPoi.destinationName = poi.destinationId?.destination_name || name;
+            return plainPoi;
+          }));
         }
-
-        const fallbackPois = await PointOfInterest.find(fallbackQuery)
-          .sort({ 'entryFee.adult': -1, 'ratings.average': -1 })
-          .limit(15);
-
-        fallbackPois.forEach(poi => {
-          poi.destinationName = name;
-        });
-
-        pois = pois.concat(fallbackPois);
       }
     }
     console.log('🛰️ Found POIs:', pois.length, '| Budget level:', request.budget_level || 'medium');
@@ -359,6 +403,14 @@ exports.generateItineraryFromRequest = async (req, res) => {
     try {
       aiPlan = await aiService.generateItinerary({ request, destination, pois, days });
       console.log('🛰️ AI produced plan:', Array.isArray(aiPlan.days) ? `days=${aiPlan.days.length}` : 'invalid');
+
+      // 🔍 DEBUG: Log first 3 activities from AI response
+      if (aiPlan.days && aiPlan.days[0] && aiPlan.days[0].activities) {
+        console.log('🔍 AI Sample Activities (Day 1):');
+        aiPlan.days[0].activities.slice(0, 3).forEach((act, i) => {
+          console.log(`   ${i + 1}. "${act.activity_name}" - Cost: ${act.cost || 0} VND - POI_ID: ${act.poi_id || 'null'}`);
+        });
+      }
     } catch (aiErr) {
       console.warn('⚠️ AI service failed or not configured, falling back to heuristic:', aiErr.message);
     }
