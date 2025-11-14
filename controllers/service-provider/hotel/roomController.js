@@ -549,6 +549,7 @@ exports.getBookingsByDate = async (req, res) => {
             if (isNaN(targetDate.getTime())) {
                 throw new Error('Invalid date format');
             }
+            // Set về 00:00:00 để so sánh chính xác
             targetDate.setHours(0, 0, 0, 0);
         } catch (dateError) {
             console.error('Error parsing date:', dateError);
@@ -559,8 +560,12 @@ exports.getBookingsByDate = async (req, res) => {
             });
         }
 
+        // Tính nextDay (ngày tiếp theo, 00:00:00)
         const nextDay = new Date(targetDate);
         nextDay.setDate(nextDay.getDate() + 1);
+        nextDay.setHours(0, 0, 0, 0);
+
+        console.log(`📅 Filtering bookings for date: ${targetDate.toISOString().split('T')[0]} (range: ${targetDate.toISOString()} to ${nextDay.toISOString()})`);
 
         // Get all room IDs for this hotel
         let rooms = [];
@@ -588,8 +593,10 @@ exports.getBookingsByDate = async (req, res) => {
         }
 
         // Get bookings for the target date
-        // A booking overlaps with targetDate if: check_in_date < nextDay AND check_out_date > targetDate
-        // booking_status values: 'reserved', 'pending', 'confirmed', 'in_use', 'completed', 'cancelled'
+        // Logic: Booking overlap với targetDate nếu:
+        // - check_in_date < nextDay (check-in trước hoặc trong ngày targetDate)
+        // - check_out_date > targetDate (check-out sau ngày targetDate)
+        // Điều này đảm bảo chỉ lấy bookings có overlap với targetDate
         let bookings = [];
         try {
             bookings = await HotelBooking.find({
@@ -610,11 +617,21 @@ exports.getBookingsByDate = async (req, res) => {
                 })
                 .sort({ check_in_date: 1 })
                 .lean();
-            console.log('Found bookings:', bookings.length);
+            console.log(`Found ${bookings.length} bookings for date ${targetDate.toISOString().split('T')[0]}`);
+            // Log một vài booking để debug
+            if (bookings.length > 0) {
+                bookings.slice(0, 3).forEach(b => {
+                    console.log(`  - Booking: check_in=${b.check_in_date?.toISOString()?.split('T')[0]}, check_out=${b.check_out_date?.toISOString()?.split('T')[0]}, room=${b.hotel_room_id?.roomNumber || b.hotel_room_id}`);
+                });
+            }
         } catch (bookingError) {
             console.error('Error finding bookings:', bookingError);
             // If populate fails, try without populate
             try {
+                const nextDay = new Date(targetDate);
+                nextDay.setDate(nextDay.getDate() + 1);
+                nextDay.setHours(0, 0, 0, 0);
+
                 bookings = await HotelBooking.find({
                     hotel_room_id: { $in: roomIds },
                     booking_status: { $in: ['reserved', 'confirmed', 'in_use'] },
