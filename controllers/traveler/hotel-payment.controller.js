@@ -439,7 +439,22 @@ exports.getHotelPaymentStatus = async (req, res) => {
                         // Create notification for successful booking (after email sent)
                         try {
                             // Get userId from populated user object or booking
-                            const userId = user?._id || user?.id || bookingForEmail.user_id?._id || bookingForEmail.user_id;
+                            let userId = null;
+                            if (user?._id) {
+                                userId = user._id;
+                            } else if (user?.id) {
+                                userId = new mongoose.Types.ObjectId(user.id);
+                            } else if (bookingForEmail.user_id?._id) {
+                                userId = bookingForEmail.user_id._id;
+                            } else if (bookingForEmail.user_id) {
+                                // Convert to ObjectId if it's a string
+                                userId = mongoose.Types.ObjectId.isValid(bookingForEmail.user_id)
+                                    ? (bookingForEmail.user_id instanceof mongoose.Types.ObjectId 
+                                        ? bookingForEmail.user_id 
+                                        : new mongoose.Types.ObjectId(bookingForEmail.user_id))
+                                    : null;
+                            }
+                            
                             const hotelName = hotel?.name || 'N/A';
                             const bookingNumber = `HB-${bookingForEmail._id.toString().slice(-6).toUpperCase()}`;
                             const amount = bookingForEmail.total_amount 
@@ -449,11 +464,16 @@ exports.getHotelPaymentStatus = async (req, res) => {
                                 : parseFloat(payment.amount);
                             
                             console.log('📧 [POLLING] Creating notification with data:', {
-                                userId,
-                                userObject: user ? { _id: user._id, id: user.id } : null,
-                                bookingUserId: bookingForEmail.user_id ? { _id: bookingForEmail.user_id._id, id: bookingForEmail.user_id.id } : null,
+                                userId: userId ? userId.toString() : null,
+                                userIdType: userId ? typeof userId : 'null',
+                                userObject: user ? { _id: user._id?.toString(), id: user.id } : null,
+                                bookingUserId: bookingForEmail.user_id ? { 
+                                    _id: bookingForEmail.user_id._id?.toString(), 
+                                    id: bookingForEmail.user_id?.toString(),
+                                    type: typeof bookingForEmail.user_id
+                                } : null,
                                 type: 'hotel',
-                                bookingId: bookingForEmail._id,
+                                bookingId: bookingForEmail._id?.toString(),
                                 bookingNumber,
                                 hotelName,
                                 amount
@@ -472,7 +492,7 @@ exports.getHotelPaymentStatus = async (req, res) => {
                                     hotelName: hotelName,
                                     amount: amount
                                 });
-                                console.log('✅ [POLLING] Notification created for booking success');
+                                console.log('✅ [POLLING] Notification created successfully for booking:', bookingForEmail._id.toString());
                             }
                         } catch (notificationError) {
                             console.error('❌ [POLLING] Error creating notification:', notificationError);
