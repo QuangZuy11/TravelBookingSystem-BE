@@ -27,14 +27,13 @@ exports.searchHotels = async (req, res) => {
         // Base search query
         const searchQuery = { status: 'active' };
 
-        // Location filter
+        // Location filter (chỉ search theo vị trí, không search theo tên khách sạn)
         if (location) {
             const locationRegex = new RegExp(location, 'i');
             searchQuery.$or = [
                 { 'address.city': locationRegex },
                 { 'address.state': locationRegex },
-                { 'address.country': locationRegex },
-                { name: locationRegex }
+                { 'address.country': locationRegex }
             ];
         }
 
@@ -117,6 +116,11 @@ exports.searchHotels = async (req, res) => {
                         ...(roomQuery.pricePerNight || {}),
                         $lte: Number(priceMax)
                     };
+                }
+
+                // Filter by capacity (số người)
+                if (guests) {
+                    roomQuery.capacity = { $gte: Number(guests) };
                 }
 
                 // If checkIn and checkOut are provided, filter rooms by availability
