@@ -9,7 +9,7 @@ const QRCode = require("qrcode");
 
 /**
  * Helper function: Tính toán start_date và end_date cho ad booking
- * Logic: Tối đa 3 ads active PER TYPE (tour hoặc hotel), ad thứ 4 sẽ được schedule sau khi ad đầu tiên hết hạn
+ * Logic: Nếu đã có 3 tour được book trong 3 ngày, tour mới sẽ tự động chuyển sang 3 ngày tiếp theo
  * @param {String} adType - "tour" hoặc "hotel"
  */
 const calculateAdSchedule = async (adType = "tour") => {
@@ -35,9 +35,65 @@ const calculateAdSchedule = async (adType = "tour") => {
     return { startDate, endDate };
   }
 
-  // Nếu đã có 3 ads active, tìm ad sớm nhất sẽ hết hạn
-  const earliestEndDate = activeAds[0].end_date;
-  const startDate = new Date(earliestEndDate);
+  // Kiểm tra xem có 3 ads nào có start_date trong cùng một khoảng 3 ngày không
+  // Logic: Nhóm các ads theo khoảng 3 ngày, nếu có nhóm nào có 3 ads thì tour mới sẽ được schedule sau nhóm đó
+
+  // Tìm khoảng 3 ngày sớm nhất có 3 ads
+  let foundThreeDaySlot = false;
+  let latestEndDateInEarliestSlot = null;
+
+  for (let i = 0; i < activeAds.length - 2; i++) {
+    const firstAdStart = new Date(activeAds[i].start_date);
+    firstAdStart.setHours(0, 0, 0, 0);
+    const slotEndDate = new Date(firstAdStart.getTime() + threeDaysInMs);
+    slotEndDate.setHours(23, 59, 59, 999);
+
+    // Đếm số ads có start_date trong khoảng 3 ngày này
+    let countInSlot = 0;
+    let maxEndDateInSlot = null;
+
+    for (let j = i; j < activeAds.length; j++) {
+      const adStart = new Date(activeAds[j].start_date);
+      adStart.setHours(0, 0, 0, 0);
+
+      // Kiểm tra nếu ad này có start_date trong khoảng 3 ngày
+      if (adStart >= firstAdStart && adStart <= slotEndDate) {
+        countInSlot++;
+        const adEnd = new Date(activeAds[j].end_date);
+        if (!maxEndDateInSlot || adEnd > maxEndDateInSlot) {
+          maxEndDateInSlot = adEnd;
+        }
+      }
+    }
+
+    // Nếu tìm thấy 3 ads trong khoảng 3 ngày này
+    if (countInSlot >= 3) {
+      foundThreeDaySlot = true;
+      // Lưu ngày kết thúc muộn nhất của các ads trong khoảng 3 ngày sớm nhất có 3 ads
+      if (
+        !latestEndDateInEarliestSlot ||
+        maxEndDateInSlot > latestEndDateInEarliestSlot
+      ) {
+        latestEndDateInEarliestSlot = maxEndDateInSlot;
+      }
+      // Chỉ cần tìm khoảng sớm nhất, break sau khi tìm thấy
+      break;
+    }
+  }
+
+  // Nếu tìm thấy khoảng 3 ngày có 3 ads, schedule tour mới vào 3 ngày tiếp theo sau khi khoảng đó kết thúc
+  if (foundThreeDaySlot && latestEndDateInEarliestSlot) {
+    const startDate = new Date(latestEndDateInEarliestSlot);
+    startDate.setDate(startDate.getDate() + 1); // Ngày tiếp theo sau khi khoảng 3 ngày kết thúc
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(startDate.getTime() + threeDaysInMs);
+    endDate.setHours(23, 59, 59, 999);
+
+    return { startDate, endDate };
+  }
+
+  // Nếu không tìm thấy khoảng 3 ngày có 3 ads, schedule ngay từ hôm nay
+  const startDate = new Date(now);
   startDate.setHours(0, 0, 0, 0);
   const endDate = new Date(startDate.getTime() + threeDaysInMs);
   endDate.setHours(23, 59, 59, 999);
