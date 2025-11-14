@@ -65,6 +65,9 @@ const getAllToursForTraveler = async (req, res) => {
     const { search, destination, price, sortBy } = req.query;
     let query = {};
 
+    // ✅ Chỉ lấy tour có status là 'published' cho traveler
+    query.status = "published";
+
     // 🔍 Tìm kiếm theo tên tour
     if (search) {
       query.title = { $regex: search, $options: "i" };
@@ -84,7 +87,14 @@ const getAllToursForTraveler = async (req, res) => {
     }
 
     // 🧾 Truy vấn từ Mongo (destination is a string, no populate needed)
-    let tours = await Tour.find(query);
+    // ✅ Debug: Log query để kiểm tra
+    console.log("🔍 Tour query:", JSON.stringify(query, null, 2));
+    let tours = await Tour.find(query).lean();
+    console.log(`✅ Found ${tours.length} tours with status='published'`);
+
+    // ✅ Filter thêm một lần nữa để đảm bảo (defensive programming)
+    tours = tours.filter((tour) => tour.status === "published");
+    console.log(`✅ After filtering: ${tours.length} tours`);
 
     // 🔽 Sắp xếp
     if (sortBy === "price-low") {
@@ -225,11 +235,15 @@ const getAllToursForTraveler = async (req, res) => {
 // 🧭 Lấy chi tiết 1 tour theo ID
 const getTourById = async (req, res) => {
   try {
-    const tour = await Tour.findById(req.params.id);
+    // Chỉ lấy tour có status là 'published' cho traveler
+    const tour = await Tour.findOne({
+      _id: req.params.id,
+      status: "published",
+    });
     if (!tour) {
       return res.status(404).json({
         success: false,
-        message: "Không tìm thấy tour",
+        message: "Không tìm thấy tour hoặc tour chưa được xuất bản",
       });
     }
 
