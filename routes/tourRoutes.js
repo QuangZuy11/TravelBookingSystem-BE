@@ -188,7 +188,11 @@ router.put(
 );
 
 // Booking Statistics
-router.get("/bookings/stats/summary", tourBookingController.getBookingStats);
+router.get(
+  "/bookings/stats/summary",
+  authMiddleware,
+  tourBookingController.getBookingStats
+);
 
 // ===== LEGACY ROUTES (Keep for backward compatibility) =====
 

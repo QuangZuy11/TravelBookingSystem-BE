@@ -69,8 +69,9 @@ exports.getActiveAds = async (req, res) => {
     const ads = await AdBooking.find(filter)
       .populate({
         path: "tour_id",
+        match: { status: "published" }, // ✅ Chỉ populate tour có status là 'published'
         select:
-          "title highlights description provider_id price duration duration_hours location image rating total_rating included_services images created_at updated_at destination meeting_point capacity difficulty",
+          "title highlights description provider_id price duration duration_hours location image rating total_rating included_services images created_at updated_at destination meeting_point capacity difficulty status",
       })
       .populate({
         path: "hotel_id",
@@ -81,8 +82,17 @@ exports.getActiveAds = async (req, res) => {
       .lean();
 
     // Separate tours and hotels
-    const tourAds = ads.filter((ad) => ad.ad_type === "tour" && ad.tour_id).slice(0, 3);
-    const hotelAds = ads.filter((ad) => ad.ad_type === "hotel" && ad.hotel_id).slice(0, 3);
+    // ✅ Lọc tour ads: chỉ lấy những ad có tour_id (đã được populate) và tour có status = 'published'
+    const tourAds = ads
+      .filter((ad) => {
+        if (ad.ad_type !== "tour" || !ad.tour_id) return false;
+        // ✅ Đảm bảo tour có status là 'published'
+        return ad.tour_id.status === "published";
+      })
+      .slice(0, 3);
+    const hotelAds = ads
+      .filter((ad) => ad.ad_type === "hotel" && ad.hotel_id)
+      .slice(0, 3);
 
     // Format tour ads
     const formattedTours = tourAds.map((ad) => ({
@@ -106,7 +116,7 @@ exports.getActiveAds = async (req, res) => {
       meeting_point: ad.tour_id.meeting_point || null,
       capacity: ad.tour_id.capacity || null,
       difficulty: ad.tour_id.difficulty || "easy",
-      status: ad.status,
+      status: ad.tour_id.status || "draft", // ✅ Lấy status của tour, không phải status của ad
       created_at: ad.tour_id.created_at,
       updated_at: ad.tour_id.updated_at,
     }));
@@ -207,6 +217,18 @@ exports.createAdBooking = async (req, res) => {
           message: "Không tìm thấy tour",
         });
       }
+
+      // ✅ Chỉ cho phép tạo ad cho tour có status là 'published'
+      if (item.status !== "published") {
+        await session.abortTransaction();
+        return res.status(400).json({
+          success: false,
+          message:
+            "Chỉ có thể tạo quảng cáo cho tour đã được xuất bản (published). Tour này hiện đang ở trạng thái: " +
+            (item.status || "draft"),
+        });
+      }
+
       itemName = item.title;
       itemProviderIdStr = item.provider_id?.toString();
     } else {
@@ -243,7 +265,9 @@ exports.createAdBooking = async (req, res) => {
       console.error(`${adType} missing provider_id`);
       return res.status(500).json({
         success: false,
-        message: `${adType === "tour" ? "Tour" : "Khách sạn"} không có provider_id`,
+        message: `${
+          adType === "tour" ? "Tour" : "Khách sạn"
+        } không có provider_id`,
       });
     }
 
@@ -282,7 +306,9 @@ exports.createAdBooking = async (req, res) => {
       itemProviderIdStr === actualServiceProviderId
     ) {
       isAuthorized = true;
-      console.log(`✅ Authorized: ${adType} provider_id matches ServiceProvider ID`);
+      console.log(
+        `✅ Authorized: ${adType} provider_id matches ServiceProvider ID`
+      );
     }
     // Check 3: Thử convert item.provider_id sang ObjectId và so sánh lại
     else {
@@ -324,7 +350,9 @@ exports.createAdBooking = async (req, res) => {
       });
       return res.status(403).json({
         success: false,
-        message: `Bạn không có quyền quảng cáo ${adType === "tour" ? "tour" : "khách sạn"} này`,
+        message: `Bạn không có quyền quảng cáo ${
+          adType === "tour" ? "tour" : "khách sạn"
+        } này`,
       });
     }
 
@@ -346,7 +374,9 @@ exports.createAdBooking = async (req, res) => {
       await session.abortTransaction();
       return res.status(400).json({
         success: false,
-        message: `${adType === "tour" ? "Tour" : "Khách sạn"} này đã có quảng cáo đang chờ hoặc đang active`,
+        message: `${
+          adType === "tour" ? "Tour" : "Khách sạn"
+        } này đã có quảng cáo đang chờ hoặc đang active`,
       });
     }
 
@@ -459,7 +489,9 @@ exports.createAdBooking = async (req, res) => {
         ad_type: adType,
         item_name: itemName,
       },
-      message: `Tạo quảng cáo ${adType === "tour" ? "tour" : "khách sạn"} thành công. Vui lòng thanh toán trong 2 phút.`,
+      message: `Tạo quảng cáo ${
+        adType === "tour" ? "tour" : "khách sạn"
+      } thành công. Vui lòng thanh toán trong 2 phút.`,
     });
   } catch (error) {
     if (session.inTransaction()) {

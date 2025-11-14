@@ -440,7 +440,18 @@ exports.updatePayment = async (req, res) => {
  */
 exports.getProviderBookings = async (req, res) => {
   try {
-    const { status, date, page = 1, limit = 20 } = req.query;
+    const {
+      status,
+      date,
+      booking_date,
+      payment_status,
+      booking_status,
+      search,
+      page = 1,
+      limit = 10,
+      sort_by = "booking_date",
+      order = "desc",
+    } = req.query;
 
     // Get provider_id from token or find from user_id
     let providerId = req.user.service_provider_id;
@@ -468,60 +479,110 @@ exports.getProviderBookings = async (req, res) => {
 
     const query = { provider_id: providerId };
 
-    if (status) {
+    // Filter by status (booking status)
+    if (booking_status) {
+      query.status = booking_status;
+    } else if (status) {
+      // Backward compatibility
       query.status = status;
     }
 
-    if (date) {
-      // Parse date string (format: YYYY-MM-DD)
-      const selectedDate = new Date(date);
-      selectedDate.setHours(0, 0, 0, 0); // Start of day
+    // Filter by payment status
+    if (payment_status) {
+      query["payment.status"] = payment_status;
+    }
+
+    // Filter by booking_date (ngày đặt tour)
+    if (booking_date) {
+      const selectedDate = new Date(booking_date);
+      selectedDate.setHours(0, 0, 0, 0);
       const nextDate = new Date(selectedDate);
-      nextDate.setDate(nextDate.getDate() + 1); // Start of next day
+      nextDate.setDate(nextDate.getDate() + 1);
+      query.booking_date = { $gte: selectedDate, $lt: nextDate };
+    } else if (date) {
+      // Backward compatibility: filter by tour_date
+      const selectedDate = new Date(date);
+      selectedDate.setHours(0, 0, 0, 0);
+      const nextDate = new Date(selectedDate);
+      nextDate.setDate(nextDate.getDate() + 1);
       query.tour_date = { $gte: selectedDate, $lt: nextDate };
     }
 
+    // Build sort object
+    const sortOrder = order === "asc" ? 1 : -1;
+    let sortObj = {};
+    if (sort_by === "booking_date") {
+      sortObj.booking_date = sortOrder;
+    } else if (sort_by === "tour_date") {
+      sortObj.tour_date = sortOrder;
+    } else if (sort_by === "total_amount") {
+      sortObj["pricing.total_amount"] = sortOrder;
+    } else {
+      sortObj.created_at = sortOrder;
+    }
+
+    // Search by customer name or booking number
+    if (search) {
+      const User = require("../../../models/user.model");
+      const users = await User.find({
+        name: { $regex: search, $options: "i" },
+      }).select("_id");
+      const userIds = users.map((u) => u._id);
+      if (userIds.length > 0) {
+        query.$or = [
+          { booking_number: { $regex: search, $options: "i" } },
+          { customer_id: { $in: userIds } },
+        ];
+      } else {
+        // Only search by booking number if no users found
+        query.$or = [{ booking_number: { $regex: search, $options: "i" } }];
+      }
+    }
+
+    // Execute query with pagination
+    const skip = (page - 1) * limit;
     const bookings = await TourBooking.find(query)
-      .populate("tour_id", "title location image")
+      .populate("tour_id", "title destination image")
       .populate("customer_id", "name email")
-      .sort({ tour_date: 1, booking_date: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
+      .sort(sortObj)
+      .skip(skip)
+      .limit(parseInt(limit));
 
     const count = await TourBooking.countDocuments(query);
 
-    // Calculate statistics
-    const stats = await TourBooking.aggregate([
-      {
-        $match: {
-          provider_id: new mongoose.Types.ObjectId(providerId),
-        },
-      },
-      {
-        $group: {
-          _id: "$status",
-          count: { $sum: 1 },
-          total_revenue: { $sum: "$pricing.total_amount" },
-        },
-      },
-    ]);
+    // Format bookings for response (tương tự hotel bookings)
+    const formattedBookings = bookings.map((booking) => ({
+      _id: booking._id,
+      booking_number: booking.booking_number,
+      customer_name: booking.customer_id?.name || "N/A",
+      customer_email: booking.customer_id?.email || "N/A",
+      tour_title: booking.tour_id?.title || "N/A",
+      booking_date: booking.booking_date,
+      tour_date: booking.tour_date,
+      total_amount: booking.pricing?.total_amount || 0,
+      payment_status: booking.payment?.status || "pending",
+      booking_status: booking.status,
+      participants: booking.total_participants || 0,
+    }));
 
     res.status(200).json({
       success: true,
-      data: bookings,
-      statistics: stats,
-      pagination: {
-        total: count,
-        page: parseInt(page),
-        pages: Math.ceil(count / limit),
+      data: {
+        bookings: formattedBookings,
+        pagination: {
+          total: count,
+          page: parseInt(page),
+          pages: Math.ceil(count / limit),
+          limit: parseInt(limit),
+        },
       },
     });
   } catch (error) {
-    console.error("Error fetching provider bookings:", error);
+    console.error("❌ Error fetching provider tour bookings:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to fetch bookings",
-      error: error.message,
+      message: "Lỗi lấy danh sách đặt tour",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -858,57 +919,133 @@ exports.getBookingStats = async (req, res) => {
   try {
     const { start_date, end_date } = req.query;
 
-    const matchStage = {
-      provider_id: new mongoose.Types.ObjectId(req.user.service_provider_id),
-    };
+    // Get provider_id from token or find from user_id
+    let providerId = req.user.service_provider_id;
 
-    if (start_date && end_date) {
-      matchStage.booking_date = {
-        $gte: new Date(start_date),
-        $lte: new Date(end_date),
-      };
+    // If not in token, try to find from ServiceProvider model
+    if (!providerId) {
+      const ServiceProvider = require("../../../models/service-provider.model");
+      const userId = req.user._id || req.user.id;
+      const provider = await ServiceProvider.findOne({ user_id: userId });
+      if (provider) {
+        providerId = provider._id;
+      } else {
+        return res.status(403).json({
+          success: false,
+          message: "Không tìm thấy thông tin nhà cung cấp dịch vụ",
+          error: "Service provider not found",
+        });
+      }
     }
 
+    // Convert to ObjectId if needed
+    if (typeof providerId === "string") {
+      providerId = new mongoose.Types.ObjectId(providerId);
+    }
+
+    const matchStage = {
+      provider_id: providerId,
+    };
+
+    // Filter theo thời gian
+    if (start_date || end_date) {
+      matchStage.booking_date = {};
+      if (start_date) {
+        matchStage.booking_date.$gte = new Date(start_date);
+      }
+      if (end_date) {
+        matchStage.booking_date.$lte = new Date(end_date);
+      }
+    }
+
+    console.log("📊 Tour Booking Statistics Query:", matchStage);
+
+    // Aggregate để tính toán thống kê (tương tự hotel bookings)
     const stats = await TourBooking.aggregate([
       { $match: matchStage },
       {
         $group: {
           _id: null,
-          total_bookings: { $sum: 1 },
-          total_revenue: { $sum: "$pricing.total_amount" },
-          total_participants: { $sum: "$total_participants" },
-          average_booking_value: { $avg: "$pricing.total_amount" },
-          confirmed_bookings: {
-            $sum: { $cond: [{ $eq: ["$status", "confirmed"] }, 1, 0] },
+          // ✅ Chỉ đếm bookings CONFIRMED, PAID, IN_PROGRESS, và COMPLETED (đã thanh toán)
+          // Không đếm 'pending' vì đó chỉ là booking tạm chưa thanh toán
+          total_bookings: {
+            $sum: {
+              $cond: [
+                {
+                  $in: [
+                    "$status",
+                    ["confirmed", "paid", "in_progress", "completed"],
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
           },
-          cancelled_bookings: {
-            $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] },
+          // Tổng số bookings bị hủy
+          total_cancellations: {
+            $sum: {
+              $cond: [
+                {
+                  $in: ["$status", ["cancelled", "refunded"]],
+                },
+                1,
+                0,
+              ],
+            },
           },
-          completed_bookings: {
-            $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] },
+          // Tổng doanh thu (chỉ tính bookings đã thanh toán)
+          total_revenue: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $eq: ["$payment.status", "completed"] },
+                    {
+                      $in: [
+                        "$status",
+                        ["confirmed", "paid", "in_progress", "completed"],
+                      ],
+                    },
+                  ],
+                },
+                { $toDouble: "$pricing.total_amount" },
+                0,
+              ],
+            },
           },
         },
       },
     ]);
 
+    const statistics = stats[0] || {
+      total_revenue: 0,
+      total_bookings: 0,
+      total_cancellations: 0,
+    };
+
+    // Tính tỷ lệ hủy (%)
+    const totalAll = statistics.total_bookings + statistics.total_cancellations;
+    const cancellation_rate =
+      totalAll > 0
+        ? Math.round((statistics.total_cancellations / totalAll) * 100)
+        : 0;
+
     res.status(200).json({
       success: true,
-      data: stats[0] || {
-        total_bookings: 0,
-        total_revenue: 0,
-        total_participants: 0,
-        average_booking_value: 0,
-        confirmed_bookings: 0,
-        cancelled_bookings: 0,
-        completed_bookings: 0,
+      data: {
+        total_revenue: Math.round(statistics.total_revenue),
+        total_bookings: statistics.total_bookings,
+        total_cancellations: statistics.total_cancellations,
+        cancellation_rate: cancellation_rate,
       },
     });
   } catch (error) {
-    console.error("Error fetching booking stats:", error);
+    console.error("❌ Get Tour Booking Statistics Error:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to fetch statistics",
-      error: error.message,
+      message: "Lỗi lấy thống kê",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
