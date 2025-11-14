@@ -94,6 +94,13 @@ router.put('/provider/:providerId/hotels/:hotelId/rooms/:roomId/status',
     roomController.updateRoomStatus
 );
 
+// Release room from booking ("Không đến" action)
+router.put('/provider/:providerId/hotels/:hotelId/bookings/:bookingId/release-room',
+    authMiddleware,
+    checkServiceProviderVerification('hotel'),
+    roomController.releaseRoomFromBooking
+);
+
 // REMOVED: Maintenance record route - maintenanceHistory field no longer exists
 // router.post('/provider/:providerId/hotels/:hotelId/rooms/:roomId/maintenance',
 //     authMiddleware,

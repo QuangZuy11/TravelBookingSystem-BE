@@ -2,6 +2,7 @@ const Room = require('../../../models/room.model');
 const Hotel = require('../../../models/hotel.model');
 const HotelBooking = require('../../../models/hotel-booking.model');
 const googleDriveService = require('../../../services/googleDrive.service');
+const { createBookingCancellationNotification } = require('../../../services/notification.service');
 
 // Get all rooms of a hotel
 exports.getHotelRooms = async (req, res) => {
@@ -593,17 +594,17 @@ exports.getBookingsByDate = async (req, res) => {
         }
 
         // Get bookings for the target date
-        // Logic: Booking overlap với targetDate nếu:
-        // - check_in_date < nextDay (check-in trước hoặc trong ngày targetDate)
-        // - check_out_date > targetDate (check-out sau ngày targetDate)
-        // Điều này đảm bảo chỉ lấy bookings có overlap với targetDate
+        // Logic: Chỉ lấy booking có check-in trong ngày targetDate
+        // - check_in_date >= targetDate AND check_in_date < nextDay (check-in trong ngày đang xem)
+        // Ví dụ: check-in 16/11, check-out 17/11
+        // - Ngày 16/11: phòng đã đặt (check_in >= 16/11 && check_in < 17/11) ✓
+        // - Ngày 17/11: phòng trống (check_in KHÔNG >= 17/11 hoặc check_in >= 18/11) ✓
         let bookings = [];
         try {
             bookings = await HotelBooking.find({
                 hotel_room_id: { $in: roomIds },
                 booking_status: { $in: ['reserved', 'confirmed', 'in_use'] },
-                check_in_date: { $lt: nextDay },
-                check_out_date: { $gt: targetDate }
+                check_in_date: { $gte: targetDate, $lt: nextDay }
             })
                 .populate({
                     path: 'user_id',
@@ -628,15 +629,10 @@ exports.getBookingsByDate = async (req, res) => {
             console.error('Error finding bookings:', bookingError);
             // If populate fails, try without populate
             try {
-                const nextDay = new Date(targetDate);
-                nextDay.setDate(nextDay.getDate() + 1);
-                nextDay.setHours(0, 0, 0, 0);
-
                 bookings = await HotelBooking.find({
                     hotel_room_id: { $in: roomIds },
                     booking_status: { $in: ['reserved', 'confirmed', 'in_use'] },
-                    check_in_date: { $lt: nextDay },
-                    check_out_date: { $gt: targetDate }
+                    check_in_date: { $gte: targetDate, $lt: nextDay }
                 })
                     .sort({ check_in_date: 1 })
                     .lean();
@@ -722,6 +718,132 @@ exports.updateRoomStatus = async (req, res) => {
         res.status(400).json({
             success: false,
             error: error.message
+        });
+    }
+};
+
+// Release room to available (from booking - "Không đến" action)
+exports.releaseRoomFromBooking = async (req, res) => {
+    try {
+        const { providerId, hotelId, bookingId } = req.params;
+
+        // Validate hotel belongs to provider
+        const hotel = await Hotel.findOne({
+            _id: hotelId,
+            providerId: providerId
+        });
+
+        if (!hotel) {
+            return res.status(404).json({
+                success: false,
+                error: 'Hotel not found'
+            });
+        }
+
+        // Find booking to get room ID (populate để lấy user_id cho notification)
+        const booking = await HotelBooking.findById(bookingId)
+            .populate({
+                path: 'user_id',
+                select: '_id',
+                strictPopulate: false
+            });
+
+        if (!booking) {
+            return res.status(404).json({
+                success: false,
+                error: 'Booking not found'
+            });
+        }
+
+        // Get room ID from booking
+        const roomId = booking.hotel_room_id?._id || booking.hotel_room_id;
+
+        if (!roomId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Booking does not have a room assigned'
+            });
+        }
+
+        // Update room status to available
+        const room = await Room.findOneAndUpdate(
+            { _id: roomId, hotelId: hotelId },
+            { status: 'available', updatedAt: new Date() },
+            { new: true, runValidators: true }
+        );
+
+        if (!room) {
+            return res.status(404).json({
+                success: false,
+                error: 'Room not found or does not belong to this hotel'
+            });
+        }
+
+        // Update booking status to cancelled
+        booking.booking_status = 'cancelled';
+        booking.cancelled_at = new Date();
+        await booking.save({ validateBeforeSave: false });
+        
+        console.log(`✅ Booking ${bookingId} cancelled. Status: ${booking.booking_status}`);
+
+        // Verify booking was saved correctly
+        const verifyBooking = await HotelBooking.findById(bookingId);
+        if (verifyBooking.booking_status !== 'cancelled') {
+            console.error('❌ Booking status was not updated correctly!');
+            return res.status(500).json({
+                success: false,
+                error: 'Failed to update booking status'
+            });
+        }
+
+        // Get hotel name for notification
+        const hotelName = hotel.name || 'N/A';
+        const bookingNumber = `HB-${booking._id.toString().slice(-6).toUpperCase()}`;
+        const cancellationReason = 'Phòng bị hủy do quý khách không đến check-in';
+
+        // Create cancellation notification for user
+        try {
+            const userId = booking.user_id?._id || booking.user_id;
+            if (userId) {
+                await createBookingCancellationNotification({
+                    userId: userId,
+                    type: 'hotel',
+                    bookingId: booking._id,
+                    bookingNumber: bookingNumber,
+                    hotelName: hotelName,
+                    reason: cancellationReason
+                });
+                console.log('✅ Notification created for booking cancellation');
+            } else {
+                console.warn('⚠️ No user_id found for booking, skipping notification');
+            }
+        } catch (notificationError) {
+            console.error('❌ Error creating cancellation notification:', notificationError);
+            // Don't fail the request if notification fails
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Room released to available and booking cancelled successfully',
+            data: {
+                room: {
+                    _id: room._id,
+                    roomNumber: room.roomNumber,
+                    status: room.status
+                },
+                booking: {
+                    _id: booking._id,
+                    booking_status: booking.booking_status,
+                    cancelled_at: booking.cancelled_at
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error releasing room from booking:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Server Error',
+            message: error.message || 'Failed to release room'
         });
     }
 };

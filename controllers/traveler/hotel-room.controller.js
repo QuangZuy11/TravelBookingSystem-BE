@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Room = require('../../models/room.model');
 const Hotel = require('../../models/hotel.model');
+const HotelBooking = require('../../models/hotel-booking.model');
 
 /**
  * Lấy danh sách phòng của một khách sạn và phân loại theo loại phòng
@@ -67,10 +68,12 @@ exports.getRoomsByHotelId = async (req, res) => {
             searchQuery.type = { $in: types };
         }
 
-        // Kiểm tra phòng trống theo ngày check-in và check-out
+        // Validate check-in and check-out dates
+        let checkInDate = null;
+        let checkOutDate = null;
         if (checkIn && checkOut) {
-            const checkInDate = new Date(checkIn);
-            const checkOutDate = new Date(checkOut);
+            checkInDate = new Date(checkIn);
+            checkOutDate = new Date(checkOut);
 
             // Kiểm tra ngày hợp lệ
             if (isNaN(checkInDate) || isNaN(checkOutDate)) {
@@ -87,31 +90,90 @@ exports.getRoomsByHotelId = async (req, res) => {
                 });
             }
 
-            // Tìm phòng không có booking trùng ngày
-            searchQuery.$or = [
-                { 'bookings': { $size: 0 } }, // Phòng chưa có booking nào
-                {
-                    'bookings': {
-                        $not: {
-                            $elemMatch: {
-                                $or: [
-                                    // Booking bắt đầu trong khoảng thời gian tìm kiếm
-                                    {
-                                        checkIn: { $lt: checkOutDate },
-                                        checkOut: { $gt: checkInDate }
-                                    }
-                                ]
-                            }
-                        }
-                    }
-                }
-            ];
+            // NOTE: Không filter bookings trong MongoDB query vì cần populate booking_status trước
+            // Sẽ filter cancelled bookings trong logic JavaScript sau khi populate
         }
 
         // Lấy danh sách phòng
-        const rooms = await Room.find(searchQuery)
+        let rooms = await Room.find(searchQuery)
             .populate('hotelId', 'name address')
-            .sort({ type: 1, pricePerNight: 1 });
+            .sort({ type: 1, pricePerNight: 1 })
+            .lean(); // Use lean() for better performance
+
+        // Populate booking status từ HotelBooking và filter cancelled bookings
+        if (rooms.length > 0) {
+            // Lấy tất cả bookingIds từ tất cả rooms
+            const bookingIds = [];
+            rooms.forEach(room => {
+                if (room.bookings && room.bookings.length > 0) {
+                    room.bookings.forEach(booking => {
+                        if (booking.bookingId) {
+                            bookingIds.push(booking.bookingId);
+                        }
+                    });
+                }
+            });
+
+            // Lấy booking status từ HotelBooking (chỉ lấy những bookings không cancelled)
+            const activeBookings = await HotelBooking.find({
+                _id: { $in: bookingIds },
+                booking_status: { $ne: 'cancelled' } // Loại trừ cancelled bookings
+            }).select('_id booking_status').lean();
+
+            // Tạo map để lookup booking status nhanh
+            const bookingStatusMap = new Map();
+            activeBookings.forEach(booking => {
+                bookingStatusMap.set(booking._id.toString(), booking.booking_status);
+            });
+
+            // Populate booking status và filter cancelled bookings trong mỗi room
+            rooms = rooms.map(room => {
+                if (room.bookings && room.bookings.length > 0) {
+                    // Filter và populate booking status
+                    room.bookings = room.bookings
+                        .filter(booking => {
+                            // Chỉ giữ lại bookings có status và không phải cancelled
+                            if (!booking.bookingId) return false;
+                            const bookingIdStr = booking.bookingId.toString();
+                            const status = bookingStatusMap.get(bookingIdStr);
+                            // Nếu booking không có trong activeBookings (đã cancelled), loại bỏ
+                            return status !== undefined;
+                        })
+                        .map(booking => {
+                            // Populate booking status
+                            const bookingIdStr = booking.bookingId.toString();
+                            const status = bookingStatusMap.get(bookingIdStr);
+                            return {
+                                ...booking,
+                                bookingId: booking.bookingId,
+                                booking_status: status
+                            };
+                        });
+                }
+                return room;
+            });
+        }
+
+        // Filter rooms by date availability (sau khi đã populate booking status và filter cancelled)
+        // Chỉ filter khi có checkIn/checkOut
+        if (checkInDate && checkOutDate) {
+            rooms = rooms.filter(room => {
+                // Chỉ giữ lại phòng không có conflict với active bookings (đã filter cancelled ở trên)
+                if (!room.bookings || room.bookings.length === 0) {
+                    return true; // Phòng không có booking nào -> available
+                }
+
+                // Kiểm tra conflict với active bookings (đã filter cancelled)
+                const hasConflict = room.bookings.some(booking => {
+                    const bookingCheckIn = new Date(booking.checkIn);
+                    const bookingCheckOut = new Date(booking.checkOut);
+                    return bookingCheckIn < checkOutDate && bookingCheckOut > checkInDate;
+                });
+
+                // Chỉ giữ lại phòng không có conflict
+                return !hasConflict;
+            });
+        }
 
         // Phân loại theo loại phòng và đếm số lượng
         const roomsByType = rooms.reduce((acc, room) => {
@@ -137,26 +199,17 @@ exports.getRoomsByHotelId = async (req, res) => {
             // Đếm số lượng theo status
             acc[roomType].count++;
             
-            // Nếu có checkIn/checkOut, chỉ đếm phòng không có conflict
-            if (checkIn && checkOut) {
-                const checkInDate = new Date(checkIn);
-                const checkOutDate = new Date(checkOut);
-                
-                // Check if room has conflicting bookings
-                const hasConflict = room.bookings && room.bookings.some(booking => {
-                    const bookingCheckIn = new Date(booking.checkIn);
-                    const bookingCheckOut = new Date(booking.checkOut);
-                    return bookingCheckIn < checkOutDate && bookingCheckOut > checkInDate;
-                });
-                
-                // Only count as available if no conflict and status is available
-                if (room.status === 'available' && !hasConflict) {
+            // Nếu có checkIn/checkOut, phòng đã được filter ở trên, nên đếm là available
+            if (checkInDate && checkOutDate) {
+                // Phòng đã được filter để chỉ còn những phòng không có conflict
+                // Nên chỉ đếm theo room.status
+                if (room.status === 'available') {
                     acc[roomType].availableCount++;
                 } else if (room.status === 'occupied') {
                     acc[roomType].occupiedCount++;
                 } else if (room.status === 'maintenance') {
                     acc[roomType].maintenanceCount++;
-                } else if (room.status === 'reserved' || hasConflict) {
+                } else if (room.status === 'reserved') {
                     acc[roomType].reservedCount++;
                 }
             } else {
