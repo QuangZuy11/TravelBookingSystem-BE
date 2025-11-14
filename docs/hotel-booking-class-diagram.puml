@@ -1,0 +1,116 @@
+@startuml Hotel Booking Class Diagram
+!theme plain
+skinparam linetype ortho
+
+' ==================== CORE ENTITIES ====================
+
+class User {
+    - id: ObjectId
+    - name: String
+    - email: String
+    - role: String
+    --
+    + getBookings()
+}
+
+class Hotel {
+    - id: ObjectId
+    - name: String
+    - address: Object
+    - category: String
+    - rating: Number
+    --
+    + getRooms()
+    + updateRevenue()
+}
+
+class Room {
+    - id: ObjectId
+    - roomNumber: String
+    - type: String
+    - pricePerNight: Number
+    - status: String
+    --
+    + isAvailable()
+    + addBooking()
+}
+
+class HotelBooking {
+    - id: ObjectId
+    - check_in_date: Date
+    - check_out_date: Date
+    - total_amount: Number
+    - booking_status: String
+    - payment_status: String
+    --
+    + checkAvailability()
+    + confirmBooking()
+    + cancelBooking()
+}
+
+class HotelPayment {
+    - id: ObjectId
+    - amount: Number
+    - method: String
+    - status: String
+    - transaction_ref: String
+    --
+    + processPayment()
+    + refundPayment()
+}
+
+' ==================== CONTROLLERS & SERVICES ====================
+
+class BookingController {
+    + createBooking()
+    + getBookings()
+    + cancelBooking()
+}
+
+class PaymentController {
+    + createPaymentLink()
+    + handleCallback()
+}
+
+class PaymentService {
+    + createPaymentLink()
+    + processPayment()
+    + sendConfirmation()
+}
+
+' ==================== RELATIONSHIPS ====================
+
+User "1" -- "0..*" HotelBooking : makes >
+Hotel "1" -- "0..*" Room : contains >
+Room "1" -- "0..*" HotelBooking : reserved by >
+HotelBooking "1" -- "1" HotelPayment : has >
+
+BookingController .down.> HotelBooking : manages
+BookingController .down.> Room : checks
+
+PaymentController .down.> HotelPayment : manages
+PaymentController .right.> PaymentService : uses
+
+PaymentService .down.> HotelPayment : processes
+PaymentService .down.> HotelBooking : updates
+
+' ==================== WORKFLOW ====================
+
+note top of HotelBooking
+  **Booking Flow:**
+  1. Check room availability
+  2. Create booking (pending)
+  3. Generate payment link
+  4. Process payment
+  5. Confirm booking
+  6. Send notification
+end note
+
+note bottom of HotelPayment
+  **Payment Flow:**
+  pending → processing → completed
+  
+  Integration: PayOS Gateway
+end note
+
+@enduml

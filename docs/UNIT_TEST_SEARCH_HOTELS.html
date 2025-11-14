@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unit Test - searchHotels</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .header-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        .header-table td {
+            padding: 8px;
+            border: 1px solid #ddd;
+        }
+        .header-table td:first-child {
+            background-color: #34495e;
+            color: white;
+            font-weight: bold;
+            width: 150px;
+        }
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        .summary-table th {
+            background-color: #3498db;
+            color: white;
+            padding: 10px;
+            border: 1px solid #2980b9;
+        }
+        .summary-table td {
+            padding: 10px;
+            border: 1px solid #ddd;
+            text-align: center;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .summary-table td.passed {
+            background-color: #2ecc71;
+            color: white;
+        }
+        .summary-table td.failed {
+            background-color: #e74c3c;
+            color: white;
+        }
+        .test-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+            font-size: 13px;
+        }
+        .test-table th {
+            background-color: #34495e;
+            color: white;
+            padding: 10px;
+            border: 1px solid #2c3e50;
+            position: sticky;
+            top: 0;
+        }
+        .test-table td {
+            padding: 8px;
+            border: 1px solid #ddd;
+        }
+        .test-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .section-header {
+            background-color: #000080 !important;
+            color: white;
+            font-weight: bold;
+        }
+        .category-header {
+            background-color: #ecf0f1;
+            font-weight: bold;
+        }
+        .checkmark {
+            color: #27ae60;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .result-normal {
+            background-color: #3498db;
+            color: white;
+            font-weight: bold;
+        }
+        .result-abnormal {
+            background-color: #e74c3c;
+            color: white;
+            font-weight: bold;
+        }
+        .result-boundary {
+            background-color: #f39c12;
+            color: white;
+            font-weight: bold;
+        }
+        .input-row {
+            background-color: #fff9e6;
+        }
+        .return-row {
+            background-color: #e6f7ff;
+        }
+        .exception-row {
+            background-color: #ffe6e6;
+        }
+        .log-row {
+            background-color: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>UNIT TEST CASE - searchHotels Function</h1>
+        
+        <!-- Header Information -->
+        <table class="header-table">
+            <tr>
+                <td>Function Code</td>
+                <td>Function25</td>
+                <td>Function Name</td>
+                <td>searchHotels</td>
+            </tr>
+            <tr>
+                <td>Created By</td>
+                <td>Pham Quang Duy</td>
+                <td>Executed By</td>
+                <td>Pham Quang Duy</td>
+            </tr>
+            <tr>
+                <td>Lines of code</td>
+                <td>~200</td>
+                <td>Lack of test cases</td>
+                <td></td>
+            </tr>
+        </table>
+
+        <!-- Summary Statistics -->
+        <table class="summary-table">
+            <thead>
+                <tr>
+                    <th>Passed</th>
+                    <th>Failed</th>
+                    <th>Untested</th>
+                    <th colspan="3">N/A/B</th>
+                    <th>Total Test Cases</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="passed">8</td>
+                    <td class="failed">0</td>
+                    <td>0</td>
+                    <td>3</td>
+                    <td>4</td>
+                    <td>1</td>
+                    <td style="background-color: #3498db; color: white;">8</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Test Cases Table 1 -->
+        <h2>Test Cases: LTM01 - LTM04</h2>
+        <table class="test-table">
+            <thead>
+                <tr>
+                    <th rowspan="2">Condition</th>
+                    <th rowspan="2">Details</th>
+                    <th>LTM01</th>
+                    <th>LTM02</th>
+                    <th>LTM03</th>
+                    <th>LTM04</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="section-header">
+                    <td colspan="2">PRECONDITION</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                </tr>
+                <tr>
+                    <td rowspan="2">Precondition</td>
+                    <td>Server is running</td>
+                    <td class="checkmark">✓</td>
+                    <td class="checkmark">✓</td>
+                    <td class="checkmark">✓</td>
+                    <td class="checkmark">✓</td>
+                </tr>
+                <tr>
+                    <td>Hotels exist in database</td>
+                    <td class="checkmark">✓</td>
+                    <td class="checkmark">✓</td>
+                    <td class="checkmark">✓</td>
+                    <td class="checkmark">✓</td>
+                </tr>
+                <tr class="section-header">
+                    <td colspan="2">INPUT PARAMETERS</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                </tr>
+                <tr class="input-row">
+                    <td rowspan="10">Input</td>
+                    <td>location</td>
+                    <td>"Hanoi"</td>
+                    <td>""</td>
+                    <td>"Tokyo"</td>
+                    <td>"Hanoi"</td>
+                </tr>
+                <tr class="input-row">
+                    <td>checkIn</td>
+                    <td>2025-12-01</td>
+                    <td>""</td>
+                    <td>2025-12-01</td>
+                    <td>2025-12-01</td>
+                </tr>
+                <tr class="input-row">
+                    <td>checkOut</td>
+                    <td>2025-12-03</td>
+                    <td>""</td>
+                    <td>2025-12-03</td>
+                    <td>2025-12-03</td>
+                </tr>
+                <tr class="input-row">
+                    <td>guests</td>
+                    <td>2</td>
+                    <td>2</td>
+                    <td>2</td>
+                    <td>4</td>
+                </tr>
+                <tr class="input-row">
+                    <td>rooms</td>
+                    <td>1</td>
+                    <td>1</td>
+                    <td>1</td>
+                    <td>2</td>
+                </tr>
+                <tr class="input-row">
+                    <td>priceMin</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>100000</td>
+                </tr>
+                <tr class="input-row">
+                    <td>priceMax</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>5000000</td>
+                </tr>
+                <tr class="input-row">
+                    <td>amenities</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>"wifi,pool"</td>
+                </tr>
+                <tr class="input-row">
+                    <td>rating</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>4</td>
+                </tr>
+                <tr class="input-row">
+                    <td>page / limit</td>
+                    <td>1 / 10</td>
+                    <td>1 / 10</td>
+                    <td>1 / 10</td>
+                    <td>1 / 10</td>
+                </tr>
+                <tr class="section-header">
+                    <td colspan="2">RETURN</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                </tr>
+                <tr class="return-row">
+                    <td rowspan="2">Return</td>
+                    <td>Status Code</td>
+                    <td class="checkmark">200 ✓</td>
+                    <td class="checkmark">200 ✓</td>
+                    <td class="checkmark">200 ✓</td>
+                    <td class="checkmark">200 ✓</td>
+                </tr>
+                <tr class="return-row">
+                    <td>Response Body</td>
+                    <td class="checkmark">✓</td>
+                    <td class="checkmark">✓</td>
+                    <td class="checkmark">✓</td>
+                    <td class="checkmark">✓</td>
+                </tr>
+                <tr class="section-header">
+                    <td colspan="2">EXCEPTION</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                </tr>
+                <tr class="exception-row">
+                    <td rowspan="3">Exception</td>
+                    <td>400 - Invalid parameters</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                </tr>
+                <tr class="exception-row">
+                    <td>404 - No hotels found</td>
+                    <td>-</td>
+                    <td class="checkmark">✓</td>
+                    <td>-</td>
+                    <td>-</td>
+                </tr>
+                <tr class="exception-row">
+                    <td>500 - Server error</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                </tr>
+                <tr class="section-header">
+                    <td colspan="2">LOG MESSAGE</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                </tr>
+                <tr class="log-row">
+                    <td rowspan="3">Log</td>
+                    <td>Hotels retrieved successfully</td>
+                    <td class="checkmark">✓</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td class="checkmark">✓</td>
+                </tr>
+                <tr class="log-row">
+                    <td>No hotels found</td>
+                    <td>-</td>
+                    <td class="checkmark">✓</td>
+                    <td>-</td>
+                    <td>-</td>
+                </tr>
+                <tr class="log-row">
+                    <td>Insufficient data</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td class="checkmark">✓</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td rowspan="4">Result</td>
+                    <td><strong>Type (N/A/B)</strong></td>
+                    <td class="result-normal">N</td>
+                    <td class="result-abnormal">A</td>
+                    <td class="result-abnormal">A</td>
+                    <td class="result-normal">N</td>
+                </tr>
+                <tr>
+                    <td><strong>Passed/Failed</strong></td>
+                    <td style="background-color: #2ecc71; color: white;">P</td>
+                    <td style="background-color: #2ecc71; color: white;">P</td>
+                    <td style="background-color: #2ecc71; color: white;">P</td>
+                    <td style="background-color: #2ecc71; color: white;">P</td>
+                </tr>
+                <tr>
+                    <td><strong>Executed Date</strong></td>
+                    <td>14/11/2025</td>
+                    <td>14/11/2025</td>
+                    <td>14/11/2025</td>
+                    <td>14/11/2025</td>
+                </tr>
+                <tr>
+                    <td><strong>Defect ID</strong></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Test Cases Table 2 -->
+        <h2>Test Cases: LTM05 - LTM08</h2>
+        <table class="test-table">
+            <thead>
+                <tr>
+                    <th rowspan="2">Condition</th>
+                    <th rowspan="2">Details</th>
+                    <th>LTM05</th>
+                    <th>LTM06</th>
+                    <th>LTM07</th>
+                    <th>LTM08</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="section-header">
+                    <td colspan="2">PRECONDITION</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                </tr>
+                <tr>
+                    <td rowspan="2">Precondition</td>
+                    <td>Server is running</td>
+                    <td class="checkmark">✓</td>
+                    <td class="checkmark">✓</td>
+                    <td class="checkmark">✓</td>
+                    <td class="checkmark">✓</td>
+                </tr>
+                <tr>
+                    <td>Hotels exist in database</td>
+                    <td class="checkmark">✓</td>
+                    <td class="checkmark">✓</td>
+                    <td class="checkmark">✓</td>
+                    <td class="checkmark">✓</td>
+                </tr>
+                <tr class="section-header">
+                    <td colspan="2">INPUT PARAMETERS</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                </tr>
+                <tr class="input-row">
+                    <td rowspan="10">Input</td>
+                    <td>location</td>
+                    <td>"Hanoi"</td>
+                    <td>"Hanoi"</td>
+                    <td>""</td>
+                    <td>"Hanoi"</td>
+                </tr>
+                <tr class="input-row">
+                    <td>checkIn</td>
+                    <td>2025-12-01</td>
+                    <td style="background-color: #fee;">invalid-date</td>
+                    <td>2025-12-01</td>
+                    <td>2025-12-01</td>
+                </tr>
+                <tr class="input-row">
+                    <td>checkOut</td>
+                    <td>2025-12-03</td>
+                    <td>2025-12-03</td>
+                    <td>2025-12-03</td>
+                    <td style="background-color: #fee;">2025-11-30</td>
+                </tr>
+                <tr class="input-row">
+                    <td>guests</td>
+                    <td>2</td>
+                    <td>2</td>
+                    <td>2</td>
+                    <td>2</td>
+                </tr>
+                <tr class="input-row">
+                    <td>rooms</td>
+                    <td>1</td>
+                    <td>1</td>
+                    <td>1</td>
+                    <td>1</td>
+                </tr>
+                <tr class="input-row">
+                    <td>priceMin</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                </tr>
+                <tr class="input-row">
+                    <td>priceMax</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                </tr>
+                <tr class="input-row">
+                    <td>amenities</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>"wifi,spa,gym"</td>
+                    <td>-</td>
+                </tr>
+                <tr class="input-row">
+                    <td>rating</td>
+                    <td style="background-color: #ffe;">5</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                </tr>
+                <tr class="input-row">
+                    <td>page / limit</td>
+                    <td style="background-color: #ffe;">2 / 5</td>
+                    <td>1 / 10</td>
+                    <td>1 / 10</td>
+                    <td>1 / 10</td>
+                </tr>
+                <tr class="section-header">
+                    <td colspan="2">RETURN</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                </tr>
+                <tr class="return-row">
+                    <td rowspan="2">Return</td>
+                    <td>Status Code</td>
+                    <td class="checkmark">200 ✓</td>
+                    <td class="checkmark">200 ✓</td>
+                    <td class="checkmark">200 ✓</td>
+                    <td class="checkmark">200 ✓</td>
+                </tr>
+                <tr class="return-row">
+                    <td>Response Body</td>
+                    <td class="checkmark">✓</td>
+                    <td class="checkmark">✓</td>
+                    <td class="checkmark">✓</td>
+                    <td class="checkmark">✓</td>
+                </tr>
+                <tr class="section-header">
+                    <td colspan="2">EXCEPTION</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                </tr>
+                <tr class="exception-row">
+                    <td rowspan="3">Exception</td>
+                    <td>400 - Invalid parameters</td>
+                    <td>-</td>
+                    <td class="checkmark">✓</td>
+                    <td>-</td>
+                    <td class="checkmark">✓</td>
+                </tr>
+                <tr class="exception-row">
+                    <td>404 - No hotels found</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                </tr>
+                <tr class="exception-row">
+                    <td>500 - Server error</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                </tr>
+                <tr class="section-header">
+                    <td colspan="2">LOG MESSAGE</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                    <td>▼</td>
+                </tr>
+                <tr class="log-row">
+                    <td rowspan="4">Log</td>
+                    <td>Hotels retrieved successfully</td>
+                    <td class="checkmark">✓</td>
+                    <td>-</td>
+                    <td class="checkmark">✓</td>
+                    <td>-</td>
+                </tr>
+                <tr class="log-row">
+                    <td>Invalid date format</td>
+                    <td>-</td>
+                    <td class="checkmark">✓</td>
+                    <td>-</td>
+                    <td>-</td>
+                </tr>
+                <tr class="log-row">
+                    <td>Hotels filtered by amenities</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td class="checkmark">✓</td>
+                    <td>-</td>
+                </tr>
+                <tr class="log-row">
+                    <td>Invalid date range</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td class="checkmark">✓</td>
+                </tr>
+                <tr>
+                    <td rowspan="4">Result</td>
+                    <td><strong>Type (N/A/B)</strong></td>
+                    <td class="result-boundary">B</td>
+                    <td class="result-abnormal">A</td>
+                    <td class="result-normal">N</td>
+                    <td class="result-abnormal">A</td>
+                </tr>
+                <tr>
+                    <td><strong>Passed/Failed</strong></td>
+                    <td style="background-color: #2ecc71; color: white;">P</td>
+                    <td style="background-color: #2ecc71; color: white;">P</td>
+                    <td style="background-color: #2ecc71; color: white;">P</td>
+                    <td style="background-color: #2ecc71; color: white;">P</td>
+                </tr>
+                <tr>
+                    <td><strong>Executed Date</strong></td>
+                    <td>14/11/2025</td>
+                    <td>14/11/2025</td>
+                    <td>14/11/2025</td>
+                    <td>14/11/2025</td>
+                </tr>
+                <tr>
+                    <td><strong>Defect ID</strong></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Legend -->
+        <div style="margin-top: 30px; padding: 15px; background-color: #ecf0f1; border-left: 4px solid #3498db;">
+            <h3>Legend:</h3>
+            <p><span class="result-normal" style="padding: 5px 10px;">N</span> = Normal Case</p>
+            <p><span class="result-abnormal" style="padding: 5px 10px;">A</span> = Abnormal Case</p>
+            <p><span class="result-boundary" style="padding: 5px 10px;">B</span> = Boundary Case</p>
+            <p><span style="background: #2ecc71; color: white; padding: 5px 10px;">P</span> = Passed</p>
+            <p><span style="background: #e74c3c; color: white; padding: 5px 10px;">F</span> = Failed</p>
+            <p><span class="checkmark">✓</span> = Yes/Valid</p>
+        </div>
+
+        <div style="margin-top: 20px; text-align: center; color: #7f8c8d; font-size: 12px;">
+            Generated: 14/11/2025 | Function: searchHotels | Total: 8 Test Cases
+        </div>
+    </div>
+</body>
+</html>

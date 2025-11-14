@@ -1,0 +1,165 @@
+@startuml TravelBookingSystem-BE Package Diagram
+!theme plain
+skinparam packageStyle rectangle
+
+package "TravelBookingSystem-BE" {
+    
+    package "middlewares" #E1BEE7 {
+        note right
+            **Authentication & Authorization**
+            - auth.middleware
+            - admin.middleware
+            - provider-auth.middleware
+            - verificationMiddleware
+            - upload.middleware
+        end note
+    }
+    
+    package "routes" #B3E5FC {
+        note right
+            **API Routes**
+            Organize endpoints by role
+        end note
+        
+        package "admin" {
+            note bottom
+                - admin.routes
+                - adminServiceProviderRoutes
+                - termsPolicy.routes
+            end note
+        }
+        package "provider" {
+            note bottom
+                - hotel-booking-management.routes
+                - promotion.routes
+            end note
+        }
+        package "traveler" {
+            note bottom
+                - hotel.routes
+                - hotel-booking.routes
+                - hotel-payment.routes
+                - tour-booking.routes
+                - feedback.routes
+            end note
+        }
+        package "webhooks" {
+            note bottom
+                - webhook.routes (PayOS callbacks)
+            end note
+        }
+    }
+    
+    package "controllers" #FFECB3 {
+        note right
+            **Business Logic Layer**
+            Handle requests & responses
+        end note
+        
+        package "admin" as adminCtrl {
+            note bottom
+                - admin.controller
+            end note
+        }
+        package "provider" as providerCtrl {
+            note bottom
+                - hotel-booking-management.controller
+                - promotion.controller
+            end note
+        }
+        package "traveler" as travelerCtrl {
+            note bottom
+                - hotel.controller
+                - hotel-booking.controller
+                - hotel-payment.controller
+                - tour-booking.controller
+            end note
+        }
+        package "webhooks" {
+            note bottom
+                - hotel-payos.webhook
+                - tour-payos.webhook
+            end note
+        }
+        package "service-provider" {
+            note bottom
+                - hotel/hotelController
+                - hotel/roomController
+                - tour/tourController
+                - tour/tourBookingController
+            end note
+        }
+    }
+    
+    package "models" #FFCDD2 {
+        note right
+            **Mongoose Schemas**
+            Database models
+            - hotel.model
+            - room.model
+            - hotel-booking.model
+            - hotel-payment.model
+            - tour.model
+            - user.model
+            - promotion.model
+        end note
+    }
+    
+    package "services" #E3F2FD {
+        note right
+            **External Services**
+            - booking-cleanup.service
+            - email.service
+            - notification.service
+        end note
+    }
+    
+    package "config" #FFE0B2 {
+        note bottom
+            - payos.config
+        end note
+    }
+    
+    package "helpers" #F5F5F5 {
+        note bottom
+            - itinerary.helpers
+        end note
+    }
+    
+    package "constants" #FFF9C4 {
+        note bottom
+            - amenities.constants
+        end note
+    }
+}
+
+database "MongoDB" #90CAF9 {
+    note bottom
+        - hotels collection
+        - rooms collection
+        - bookings collection
+        - payments collection
+        - users collection
+        - tours collection
+    end note
+}
+
+package "External APIs" {
+    cloud "PayOS" #FFCCBC
+    cloud "Google AI" #C5E1A5
+    cloud "Email Service" #B3E5FC
+}
+
+routes --> middlewares : authenticate
+routes --> controllers : handle
+controllers --> services : process
+controllers --> models : access
+controllers --> config : use PayOS
+services --> models : query
+models --> MongoDB : store
+
+services --> PayOS : payment
+services --> "Google AI" : AI generation
+services --> "Email Service" : notifications
+
+@enduml

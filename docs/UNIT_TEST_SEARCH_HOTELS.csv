@@ -1,0 +1,45 @@
+Function Code,Function25,,,Function Name,searchHotels,
+Created By,Pham Quang Duy,,,Executed By,Pham Quang Duy,
+Lines of code,~200,,,Lack of test cases,,
+Test requirement,,,,,,
+
+Passed,Failed,Untested,,N/A/B,,Total Test Cases
+8,0,0,3,4,1,8
+
+,,,LTM01,LTM02,LTM03,LTM04,LTM05,LTM06,LTM07,LTM08
+Condition,Precondition,,▼,▼,▼,▼,▼,▼,▼,▼
+,Server is running,,O,O,O,O,O,O,O,O
+,Hotels exist in database,,O,O,O,O,O,O,O,O
+,,,,,,,,,,
+,Input Parameters,,,,,,,,,,
+,location (optional),,Hanoi,,Tokyo,Hanoi,Hanoi,Hanoi,,Hanoi
+,checkIn (optional),,2025-12-01,,2025-12-01,2025-12-01,2025-12-01,invalid-date,2025-12-01,2025-12-01
+,checkOut (optional),,2025-12-03,,2025-12-03,2025-12-03,2025-12-03,2025-12-03,2025-12-03,2025-11-30
+,guests (optional),,2,2,2,4,2,2,2,2
+,rooms (optional),,1,1,1,2,1,1,1,1
+,priceMin (optional),,,,,,100000,,,,
+,priceMax (optional),,,,,,5000000,,,,
+,amenities (optional),,,,,,wifi;pool,,,wifi;spa;gym,
+,rating (optional),,,,,4,5,,,
+,page,,1,1,1,1,2,1,1,1
+,limit,,10,10,10,10,5,10,10,10
+Confirm,Return,,▼,▼,▼,▼,▼,▼,▼,▼
+,Status Code 200,,O,O,O,O,O,O,O,O
+,Response Body,,O,O,O,O,O,O,O,O
+,,,,,,,,,,
+,Exception,,,,,,,,,,
+,400 - Invalid parameters,,,,,,,,O,,O
+,404 - No hotels found,,,O,,,,,,,
+,500 - Server error,,,,,,,,,,
+,,,,,,,,,,
+,Log message,,,,,,,,,,
+,Hotels retrieved successfully,,O,,,O,O,,O,
+,No hotels found,,,O,,,,,,,
+,Insufficient data,,,,O,,,,,,
+,Invalid date format,,,,,,,,O,,
+,Hotels filtered by amenities,,,,,,,,,O,
+,Invalid date range,,,,,,,,,,O
+Result,Type (N/A/B),,N,A,A,N,B,A,N,A
+,Passed/Failed,,P,P,P,P,P,P,P,P
+,Executed Date,,14/11/2025,14/11/2025,14/11/2025,14/11/2025,14/11/2025,14/11/2025,14/11/2025,14/11/2025
+,Defect ID,,,,,,,,,,
