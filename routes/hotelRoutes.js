@@ -49,6 +49,7 @@ router.get('/provider/:providerId/hotels/:hotelId/bookings', hotelController.get
 
 // Provider room routes
 router.get('/provider/:providerId/hotels/:hotelId/rooms', roomController.getHotelRooms);
+router.get('/provider/:providerId/hotels/:hotelId/rooms/bookings-by-date', roomController.getBookingsByDate);
 router.get('/provider/:providerId/hotels/:hotelId/rooms/:roomId', roomController.getRoomById);
 
 // CREATE rooms in bulk - Requires verified 'hotel' license

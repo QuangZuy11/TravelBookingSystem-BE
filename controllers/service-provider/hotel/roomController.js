@@ -1,5 +1,6 @@
 const Room = require('../../../models/room.model');
 const Hotel = require('../../../models/hotel.model');
+const HotelBooking = require('../../../models/hotel-booking.model');
 const googleDriveService = require('../../../services/googleDrive.service');
 
 // Get all rooms of a hotel
@@ -506,6 +507,164 @@ exports.getRoomBookings = async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Server Error'
+        });
+    }
+};
+
+// Get bookings by date for a hotel (simplified approach)
+exports.getBookingsByDate = async (req, res) => {
+    try {
+        const { hotelId, providerId } = req.params;
+        const { date } = req.query; // Format: YYYY-MM-DD
+
+        console.log('📅 Getting bookings by date:', { hotelId, providerId, date });
+
+        // Validate hotel
+        let hotel;
+        try {
+            hotel = await Hotel.findOne({
+                _id: hotelId,
+                providerId: providerId
+            });
+        } catch (hotelError) {
+            console.error('Error finding hotel:', hotelError);
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid hotel ID',
+                message: hotelError.message
+            });
+        }
+
+        if (!hotel) {
+            return res.status(404).json({
+                success: false,
+                error: 'Hotel not found'
+            });
+        }
+
+        // Parse date or use today
+        let targetDate;
+        try {
+            targetDate = date ? new Date(date) : new Date();
+            if (isNaN(targetDate.getTime())) {
+                throw new Error('Invalid date format');
+            }
+            targetDate.setHours(0, 0, 0, 0);
+        } catch (dateError) {
+            console.error('Error parsing date:', dateError);
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid date format',
+                message: dateError.message
+            });
+        }
+
+        const nextDay = new Date(targetDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+
+        // Get all room IDs for this hotel
+        let rooms = [];
+        let roomIds = [];
+        try {
+            rooms = await Room.find({ hotelId: hotelId }).select('_id').lean();
+            roomIds = rooms.map(r => r._id);
+            console.log('Found rooms:', roomIds.length);
+        } catch (roomError) {
+            console.error('Error finding rooms:', roomError);
+            return res.status(500).json({
+                success: false,
+                error: 'Error finding rooms',
+                message: roomError.message
+            });
+        }
+
+        if (roomIds.length === 0) {
+            return res.status(200).json({
+                success: true,
+                date: targetDate.toISOString().split('T')[0],
+                data: [],
+                rooms: []
+            });
+        }
+
+        // Get bookings for the target date
+        // A booking overlaps with targetDate if: check_in_date < nextDay AND check_out_date > targetDate
+        // booking_status values: 'reserved', 'pending', 'confirmed', 'in_use', 'completed', 'cancelled'
+        let bookings = [];
+        try {
+            bookings = await HotelBooking.find({
+                hotel_room_id: { $in: roomIds },
+                booking_status: { $in: ['reserved', 'confirmed', 'in_use'] },
+                check_in_date: { $lt: nextDay },
+                check_out_date: { $gt: targetDate }
+            })
+                .populate({
+                    path: 'user_id',
+                    select: 'name email phone',
+                    strictPopulate: false
+                })
+                .populate({
+                    path: 'hotel_room_id',
+                    select: 'roomNumber type floor capacity pricePerNight',
+                    strictPopulate: false
+                })
+                .sort({ check_in_date: 1 })
+                .lean();
+            console.log('Found bookings:', bookings.length);
+        } catch (bookingError) {
+            console.error('Error finding bookings:', bookingError);
+            // If populate fails, try without populate
+            try {
+                bookings = await HotelBooking.find({
+                    hotel_room_id: { $in: roomIds },
+                    booking_status: { $in: ['reserved', 'confirmed', 'in_use'] },
+                    check_in_date: { $lt: nextDay },
+                    check_out_date: { $gt: targetDate }
+                })
+                    .sort({ check_in_date: 1 })
+                    .lean();
+                console.log('Found bookings (without populate):', bookings.length);
+            } catch (retryError) {
+                console.error('Error finding bookings (retry):', retryError);
+                return res.status(500).json({
+                    success: false,
+                    error: 'Error finding bookings',
+                    message: retryError.message
+                });
+            }
+        }
+
+        // Get all rooms with details
+        let allRooms = [];
+        try {
+            allRooms = await Room.find({ hotelId: hotelId })
+                .select('_id roomNumber type floor capacity pricePerNight status')
+                .sort({ roomNumber: 1 })
+                .lean();
+            console.log('Found all rooms:', allRooms.length);
+        } catch (roomsError) {
+            console.error('Error finding all rooms:', roomsError);
+            return res.status(500).json({
+                success: false,
+                error: 'Error finding all rooms',
+                message: roomsError.message
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            date: targetDate.toISOString().split('T')[0],
+            data: bookings,
+            rooms: allRooms
+        });
+    } catch (error) {
+        console.error('Error getting bookings by date:', error);
+        console.error('Error stack:', error.stack);
+        res.status(500).json({
+            success: false,
+            error: 'Server Error',
+            message: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
 };
