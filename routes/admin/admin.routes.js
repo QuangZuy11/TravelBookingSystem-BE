@@ -9,6 +9,7 @@ router.use(authMiddleware, checkAdminRole);
 
 // Dashboard
 router.get('/dashboard/stats', adminController.getDashboardStats);
+router.get('/dashboard/active-ads', adminController.getActiveAdBookings);
 
 // User Management
 router.get('/users', adminController.getAllUsers);

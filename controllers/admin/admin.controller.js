@@ -3,6 +3,7 @@ const Role = require("../../models/role.model");
 const ServiceProvider = require("../../models/service-provider.model");
 const Tour = require("../../models/tour.model");
 const TourBooking = require("../../models/tour-booking.model");
+const AdBooking = require("../../models/adbooking.model");
 const bcrypt = require("bcryptjs");
 
 // Helper function để mã hóa mật khẩu
@@ -76,7 +77,7 @@ exports.getAllUsers = async (req, res) => {
 
 // ===== CÁC HÀM KHÁC GIỮ NGUYÊN =====
 
-// @desc    Lấy các số liệu thống kê cho Dashboard
+// @desc    Lấy các số liệu thống kê cho Dashboard (từ AD_BOOKINGS)
 exports.getDashboardStats = async (req, res) => {
   try {
     const today = new Date();
@@ -84,32 +85,163 @@ exports.getDashboardStats = async (req, res) => {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const [totalUsers, totalProviders, activeTours, bookingsToday] =
-      await Promise.all([
-        User.countDocuments({}),
-        ServiceProvider.countDocuments({}),
-        Tour.countDocuments({ status: "active" }),
-        TourBooking.countDocuments({
-          booking_date: { $gte: today, $lt: tomorrow },
-        }),
-      ]);
+    // Lấy tháng hiện tại (đầu tháng và cuối tháng)
+    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
 
-    const revenueThisMonth = 58600000;
+    // Lấy tổng người dùng (từ User model)
+    const totalUsers = await User.countDocuments({});
+    const totalProviders = await ServiceProvider.countDocuments({});
+
+    // Thống kê từ AD_BOOKINGS
+    // 1. Tổng doanh thu từ quảng cáo đã thanh toán
+    const totalRevenueResult = await AdBooking.aggregate([
+      {
+        $match: {
+          payment_status: "paid"
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: "$price" }
+        }
+      }
+    ]);
+    const totalRevenue = totalRevenueResult.length > 0 ? totalRevenueResult[0].total : 0;
+
+    // 2. Doanh thu tháng này (từ ad booking đã paid trong tháng hiện tại)
+    const revenueThisMonthResult = await AdBooking.aggregate([
+      {
+        $match: {
+          payment_status: "paid",
+          createdAt: {
+            $gte: startOfMonth,
+            $lte: endOfMonth
+          }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: "$price" }
+        }
+      }
+    ]);
+    const revenueThisMonth = revenueThisMonthResult.length > 0 ? revenueThisMonthResult[0].total : 0;
+
+    // 3. Số quảng cáo đang hoạt động
+    const activeAds = await AdBooking.countDocuments({
+      status: "active"
+    });
+
+    // 4. Tổng số quảng cáo đã thanh toán
+    const paidAds = await AdBooking.countDocuments({
+      payment_status: "paid"
+    });
+
+    // 5. Số quảng cáo đang chờ thanh toán
+    const pendingPaymentAds = await AdBooking.countDocuments({
+      payment_status: "pending"
+    });
+
+    // 6. Tổng lượt đặt quảng cáo (tổng số ad bookings)
+    const totalAdBookings = await AdBooking.countDocuments({});
+
+    // 7. Số quảng cáo đã hủy
+    const cancelledAds = await AdBooking.countDocuments({
+      status: "cancelled"
+    });
+
+    // 8. Tỷ lệ hủy (%)
+    const cancellationRate = totalAdBookings > 0 
+      ? ((cancelledAds / totalAdBookings) * 100).toFixed(1) 
+      : 0;
 
     res.status(200).json({
       success: true,
       data: {
+        // Từ User model
         totalUsers: totalUsers + totalProviders,
-        activeTours,
-        bookingsToday,
-        revenueThisMonth,
+        
+        // Từ AD_BOOKINGS - Doanh thu
+        totalRevenue, // Tổng doanh thu từ quảng cáo
+        revenueThisMonth, // Doanh thu tháng này
+        
+        // Từ AD_BOOKINGS - Số lượng
+        totalAdBookings, // Tổng lượt đặt quảng cáo
+        activeAds, // Số quảng cáo đang hoạt động
+        paidAds, // Số quảng cáo đã thanh toán
+        pendingPaymentAds, // Số quảng cáo đang chờ thanh toán
+        cancelledAds, // Số quảng cáo đã hủy
+        cancellationRate: parseFloat(cancellationRate), // Tỷ lệ hủy (%)
       },
     });
   } catch (error) {
-    console.error("Lỗi trong getDashboardStats:", error); // Thêm log chi tiết
+    console.error("Lỗi trong getDashboardStats:", error);
     res
       .status(500)
       .json({ success: false, message: "Lỗi server khi lấy thống kê" });
+  }
+};
+
+// @desc    Lấy danh sách tour/hotel đang quảng cáo
+exports.getActiveAdBookings = async (req, res) => {
+  try {
+    const activeAds = await AdBooking.find({
+      status: "active",
+      payment_status: "paid"
+    })
+      .populate("tour_id", "title description image") // Tour dùng 'image' (singular) và 'title' không phải 'name'
+      .populate("hotel_id", "name description images") // Hotel dùng 'images' (plural)
+      .populate("provider_id", "name email")
+      .sort({ createdAt: -1 })
+      .limit(50);
+
+    // Format data để frontend dễ sử dụng
+    const formattedAds = activeAds.map((ad) => {
+      const adData = {
+        id: ad._id,
+        ad_type: ad.ad_type,
+        start_date: ad.start_date,
+        end_date: ad.end_date,
+        price: ad.price,
+        provider: ad.provider_id ? {
+          name: ad.provider_id.name || ad.provider_id.email,
+          email: ad.provider_id.email
+        } : null,
+      };
+
+      if (ad.ad_type === "tour" && ad.tour_id) {
+        // Tour có 'image' (singular) và 'title' không phải 'name'
+        adData.tour = {
+          id: ad.tour_id._id,
+          name: ad.tour_id.title || ad.tour_id.name, // Dùng title làm name
+          description: ad.tour_id.description,
+          image: ad.tour_id.image || null, // Tour dùng 'image' singular
+          images: ad.tour_id.image ? [ad.tour_id.image] : [] // Convert thành array để frontend dễ xử lý
+        };
+      } else if (ad.ad_type === "hotel" && ad.hotel_id) {
+        adData.hotel = {
+          id: ad.hotel_id._id,
+          name: ad.hotel_id.name,
+          description: ad.hotel_id.description,
+          images: ad.hotel_id.images || []
+        };
+      }
+
+      return adData;
+    });
+
+    res.status(200).json({
+      success: true,
+      data: formattedAds,
+    });
+  } catch (error) {
+    console.error("Lỗi trong getActiveAdBookings:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Lỗi server khi lấy danh sách quảng cáo" });
   }
 };
 
