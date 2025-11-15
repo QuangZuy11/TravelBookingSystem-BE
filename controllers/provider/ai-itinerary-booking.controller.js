@@ -34,6 +34,12 @@ exports.getProviderBookings = async (req, res) => {
             ]
         };
 
+        // Exclude bookings where start_date is today or has passed
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1); // Move to tomorrow
+        tomorrow.setHours(0, 0, 0, 0); // Set to start of tomorrow
+        query.start_date = { $gte: tomorrow }; // Only bookings from tomorrow onwards
+
         if (status) {
             query.status = status;
         }
@@ -43,7 +49,7 @@ exports.getProviderBookings = async (req, res) => {
         }
 
         if (start_date || end_date) {
-            query.start_date = {};
+            // Merge with existing start_date filter
             if (start_date) query.start_date.$gte = new Date(start_date);
             if (end_date) query.start_date.$lte = new Date(end_date);
         }

@@ -266,22 +266,33 @@ exports.getTravelerBookings = async (req, res) => {
             .lean();
 
         // Format response
-        const formattedBookings = bookings.map(booking => ({
-            _id: booking._id,
-            destination: booking.destination,
-            duration_days: booking.duration_days,
-            start_date: booking.start_date,
-            participant_number: booking.participant_number,
-            total_budget: booking.total_budget,
-            quoted_price: booking.quoted_price,
-            status: booking.status,
-            provider_info: booking.provider_id ? {
-                business_name: booking.provider_id.company_name,
-                contact_email: booking.provider_id.email,
-                phone: booking.provider_id.phone
-            } : null,
-            created_at: booking.created_at
-        }));
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const formattedBookings = bookings.map(booking => {
+            // Check if expired: start_date <= today AND status = pending AND no provider
+            const bookingDate = new Date(booking.start_date);
+            bookingDate.setHours(0, 0, 0, 0);
+            const isExpired = bookingDate <= today && booking.status === 'pending' && !booking.provider_id;
+
+            return {
+                _id: booking._id,
+                destination: booking.destination,
+                duration_days: booking.duration_days,
+                start_date: booking.start_date,
+                participant_number: booking.participant_number,
+                total_budget: booking.total_budget,
+                quoted_price: booking.quoted_price,
+                status: isExpired ? 'expired' : booking.status,
+                is_expired: isExpired,
+                provider_info: booking.provider_id ? {
+                    business_name: booking.provider_id.company_name,
+                    contact_email: booking.provider_id.email,
+                    phone: booking.provider_id.phone
+                } : null,
+                created_at: booking.created_at
+            };
+        });
 
         return res.status(200).json({
             success: true,
